@@ -92,3 +92,26 @@ describe("H7: xai-key does not mutate process.env", () => {
     rmSync(dir, { recursive: true, force: true });
   });
 });
+
+it("migrates stored quality selections to the documented 2.0 generation and edit contracts", async () => {
+  const bodies: Record<string, unknown>[] = [];
+  const options = {
+    skipSpendControls: true, apiKey: "fixture",
+    fetchImpl: async (_url: string | URL | Request, init?: RequestInit) => {
+      bodies.push(JSON.parse(String(init?.body)));
+      return Response.json({ data: [{ b64_json: TINY_PNG.split(",")[1] }] });
+    },
+  };
+  const input = { prompt: "Use the original composition", model: "grok-imagine-image-quality" };
+  assert((await generateImagineImages(input, options)).ok);
+  assert((await editImagineImage({ ...input, imageDataUrl: TINY_PNG }, options)).ok);
+  const second = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
+  assert((await editImagineImage({ ...input, imageDataUrls: [TINY_PNG, TINY_PNG, second] }, options)).ok);
+  for (const body of bodies) {
+    assert.equal(body.model, "grok-imagine-image-2.0");
+    assert.equal(body.quality, "low");
+  }
+  const expected = { type: "image_url", url: TINY_PNG };
+  assert.deepEqual(bodies[1]?.image, expected);
+  assert.deepEqual(bodies[2]?.images, [expected, { type: "image_url", url: second }]);
+});

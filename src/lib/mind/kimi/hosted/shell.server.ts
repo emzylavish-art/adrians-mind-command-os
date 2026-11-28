@@ -22,9 +22,7 @@ export function hostedCommandRefusal(command: string): string | null {
   return null;
 }
 
-function runGit(args: string[]): Promise<{ code: number; text: string }> {
-  const workspace = adrianHostedWorkspace();
-  mkdirSync(workspace, { recursive: true });
+function runGit(args: string[], workspace = adrianHostedWorkspace()): Promise<{ code: number; text: string }> {
   return new Promise((resolve) => {
     const child = spawn("git", args, {
       cwd: workspace,
@@ -40,6 +38,11 @@ function runGit(args: string[]): Promise<{ code: number; text: string }> {
     child.on("error", (error) => resolve({ code: 1, text: error.message }));
     child.on("close", (code) => resolve({ code: code ?? 1, text }));
   });
+}
+
+export async function readHostedGitBranch(workspace: string): Promise<string | null> {
+  const branch = await runGit(["symbolic-ref", "--quiet", "--short", "HEAD"], workspace);
+  return branch.code === 0 ? branch.text.trim() || null : null;
 }
 
 export async function inspectHostedGit() {

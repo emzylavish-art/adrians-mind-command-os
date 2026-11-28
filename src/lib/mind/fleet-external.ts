@@ -95,6 +95,7 @@ export async function runExternalFleetStep(
       result: applied.result, stepResults: applied.stepResults, approvalHistory: applied.approvalHistory,
       pendingApproval: undefined, approvedActions: [], workerId: null, leaseUntil: null, updatedAt: finishedAt,
       state: canceled ? "canceled" : changed ? "paused" : succeeded ? "queued" : reviewable ? "paused" : "failed",
+      stopDispatchOutcome: canceled ? unknown ? "outcome_unknown" : succeeded || saved.stepResults?.length ? "confirmed_result" : notSent ? "not_dispatched" : saved.stopDispatchOutcome : saved.stopDispatchOutcome,
       error: canceled ? "Cancellation was requested. Review the recorded dispatch result; cancellation does not undo an external action." : changed ? "The run changed during dispatch. Its receipt is retained; review it before resuming." : succeeded ? "" : reviewable ? `${applied.error} Resume explicitly after resolving the refusal, then review a fresh tool authorization.` : applied.error,
       externalOperation: { ...saved.externalOperation, state: unknown ? "unknown" : succeeded ? "succeeded" : notSent ? "not_sent" : "failed", finishedAt },
     };

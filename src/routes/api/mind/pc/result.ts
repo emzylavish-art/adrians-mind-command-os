@@ -21,6 +21,7 @@ export const Route = createFileRoute("/api/mind/pc/result")({
           receiptId?: string;
           output?: string;
           error?: string;
+          buildArtifact?: unknown;
         };
         if (typeof body.ok !== "boolean") return json({ ok: false, error: "An explicit execution result is required." }, 400);
         if (!body.jobId) return json({ ok: false, error: "jobId required." }, 400);
@@ -31,6 +32,7 @@ export const Route = createFileRoute("/api/mind/pc/result")({
           cancelled: body.cancelled === true,
           receiptId: typeof body.receiptId === "string" ? body.receiptId : undefined,
           output: typeof body.output === "string" ? body.output : "",
+          buildArtifact: body.buildArtifact,
           error: typeof body.error === "string" ? body.error : "",
         });
         if (!job) return json({ ok: false, error: "Job not found for this agent." }, 404);

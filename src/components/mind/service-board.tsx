@@ -1,3 +1,5 @@
+import { AudioLines, Image, Monitor, Search, Cpu } from "lucide-react";
+import { ConnectorDirectory } from "./connector-directory";
 import { rememberOAuthReturn } from "@/lib/mind/connectors/oauth-return";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getBearerToken } from "@/lib/auth/client";
@@ -31,6 +33,7 @@ function ServiceMark({ name }: { name: string }) {
     Grok: "/brand/logos/grok.svg",
     Notion: "/brand/logos/notion.svg",
     GitHub: "/brand/logos/github.svg",
+    Vercel: "/brand/logos/vercel.svg",
     Gmail: "/brand/logos/gmail.svg",
     "Google Drive": "/brand/logos/drive.svg",
     "Google Docs": "/brand/logos/docs.svg",
@@ -43,31 +46,18 @@ function ServiceMark({ name }: { name: string }) {
     OpenRouter: "/brand/logos/openrouter.svg",
     MCP: "/brand/logos/mcp.svg",
   };
-  const marks: Record<string, { bg: string; fg: string; letter: string }> = {
-    Gmail: { bg: "#EA4335", fg: "#fff", letter: "M" },
-    "Google Calendar": { bg: "#4285F4", fg: "#fff", letter: "31" },
-    "Google Drive": { bg: "#0F9D58", fg: "#fff", letter: "D" },
-    "Google Docs": { bg: "#4285F4", fg: "#fff", letter: "W" },
-    YouTube: { bg: "#FF0033", fg: "#fff", letter: "▶" },
-    GitHub: { bg: "#f4f4f5", fg: "#111", letter: "GH" },
-    Notion: { bg: "#f4f4f5", fg: "#111", letter: "N" },
-    Slack: { bg: "#4A154B", fg: "#fff", letter: "#" },
-    Grok: { bg: "#111", fg: "#fff", letter: "G" },
-    OpenAI: { bg: "#10a37f", fg: "#fff", letter: "AI" },
-    Claude: { bg: "#d97757", fg: "#fff", letter: "C" },
-    Gemini: { bg: "#8ab4f8", fg: "#111", letter: "Ge" },
-    Voice: { bg: "#2f6bff", fg: "#fff", letter: "♪" },
-  };
-  const mark = marks[name] ?? { bg: "#27272a", fg: "#fff", letter: name.slice(0, 1) };
-  const file = files[name];
-  const tile = name === "OpenAI" || name === "GitHub" || name === "MCP";
+  const file = name === "Nemotron" ? "/brand/logos/nvidia.svg" : files[name];
+  const tile = ["OpenAI", "GitHub", "MCP", "Notion", "Grok"].includes(name);
   if (file) return <img className={tile ? "service-mark on-tile" : "service-mark"} src={file} alt="" width={28} height={28} />;
-  return <span className="service-mark" style={{ background: mark.bg, color: mark.fg }} aria-hidden="true">{mark.letter}</span>;
+  const symbols = { Voice: AudioLines, "Image and video": Image, "Local computer": Monitor, "Web search": Search, "Local model": Cpu };
+  const Symbol = symbols[name as keyof typeof symbols];
+  return Symbol ? <Symbol aria-hidden="true" className="size-7 shrink-0 text-muted" /> : null;
 }
 
 const SERVICES: Service[] = [
   { name: "Notion", state: "Not connected", detail: "No Notion OAuth. Nothing can be searched or updated." },
   { name: "GitHub", state: "Not connected", detail: "No repository connection. Nothing can be pushed." },
+  { name: "Vercel", state: "Not connected", detail: "Connect to review the projects and tools available to your Vercel account." },
   { name: "Gmail", state: "Not connected", detail: "No mailbox is connected. Nothing is read or sent." },
   { name: "Google Drive", state: "Not connected", detail: "No Drive connection. No files are listed." },
   { name: "Google Docs", state: "Not connected", detail: "No Docs connection." },
@@ -98,6 +88,7 @@ const OAUTH_BOARD: Record<string, { connector: string; path: string; messageType
   YouTube: { connector: "youtube", path: "youtube", messageType: "youtube-oauth" },
   Slack: { connector: "slack", path: "slack", messageType: "slack-oauth" },
   GitHub: { connector: "github", path: "github", messageType: "github-oauth" },
+  Vercel: { connector: "vercel", path: "vercel", messageType: "vercel-oauth" },
 };
 
 function boardForOauth(name: string, oauth: OauthStatus | null | undefined, legacy?: { state: string; detail: string } | null) {
@@ -116,6 +107,9 @@ export function ServiceBoard({
   onDisconnect,
   onFailure,
   onOpenConnect,
+  onChooseRemote,
+  oauthReturnTo,
+  temporaryDraft,
 }: {
   grokConfigured: boolean | null;
   providers?: { id: string; label: string; defaultModel: string; host: string; hasKey: boolean; status: string }[];
@@ -129,6 +123,9 @@ export function ServiceBoard({
   onFailure?: (message: string, retry: () => void) => void;
   /** Opens the paste form for a card. Setup must not only repeat a sentence. */
   onOpenConnect?: (name: string) => void;
+  onChooseRemote?: (label: string, url: string) => void;
+  oauthReturnTo?: string;
+  temporaryDraft?: boolean;
 }) {
   const [oauthByName, setOauthByName] = useState<Record<string, OauthStatus | null | undefined>>({});
   const [busy, setBusy] = useState<string | null>(null);
@@ -208,6 +205,10 @@ export function ServiceBoard({
   });
 
   function runOauthAction(params: ReturnType<typeof snapshotOauthBoardActionParams>, returnTo?: string) {
+    if (params.action === "connect" && temporaryDraft) {
+      setNote({ name: params.name, text: "Finish your temporary draft before connecting an account. The provider sign-in reloads this tab." });
+      return;
+    }
     setBusy(params.name);
     setNote(null);
     setOauthActionState({ status: "running", action: params.action, name: params.name });
@@ -223,7 +224,7 @@ export function ServiceBoard({
         if (result.ok) {
           setOauthActionState({ status: "ok", note: result.note, name: result.name, redirectUrl: result.redirectUrl });
           if (params.action === "connect" && result.redirectUrl) {
-            try { rememberOAuthReturn(window.sessionStorage, params.path, result.redirectUrl, returnTo || window.location.pathname + window.location.search); } catch { /* OAuth still works when browser storage is denied; return to app manually. */ }
+            try { rememberOAuthReturn(window.sessionStorage, params.path, result.redirectUrl, returnTo || oauthReturnTo || window.location.pathname + window.location.search); } catch { /* The provider callback can still return home. */ }
             window.location.assign(result.redirectUrl);
             return;
           }
@@ -307,9 +308,17 @@ export function ServiceBoard({
       return (
         <>
           <div className="flex flex-wrap gap-2">
-            <input aria-label="Search plugins" value={catalogQuery} onChange={(event) => setCatalogQuery(event.target.value)} placeholder="Search plugins" className="min-h-11 flex-1 rounded-panel border border-line bg-transparent px-3 text-sm" />
+            <input aria-label="Search plugins" value={catalogQuery} onChange={(event) => setCatalogQuery(event.target.value)} placeholder="Search plugins, providers and APIs" className="min-h-11 flex-1 rounded-panel border border-line bg-transparent px-3 text-sm" />
             <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => onOpenConnect?.("MCP")}>Add custom MCP</button>
           </div>
+          <ConnectorDirectory query={catalogQuery} choose={onChooseRemote} openProvider={() => onOpenConnect?.("OpenAI")} oauthAction={(name) => {
+            const status = oauthByName[name];
+            if (!status || isStatusUnavailable(status)) return <button type="button" className="min-h-11 text-accent" disabled={refreshing === name} onClick={() => refreshOne(name)}>Check status</button>;
+            if (status.state === "connected") return <button type="button" className="min-h-11 text-accent" onClick={() => openSavedRow(`connection-${OAUTH_BOARD[name].connector}`)}>Review connection</button>;
+            if (status.state !== "not_connected") return <span className="text-xs text-muted">{status.detail}</span>;
+            return <button type="button" className="min-h-11 font-semibold text-accent" disabled={busy === name} onClick={() => connectOauth(name)}>Connect</button>;
+          }} />
+          {note && temporaryDraft && <p role="status" className="text-sm text-muted">{note.text}</p>}
           <section className="intelligence-group" aria-label="Connected" data-testid="connected-services">
             <h3>Saved connections</h3>
             <p className="mb-2 text-sm text-muted">{connected.length || savedMcp.length ? "Check each service’s status before using it." : rows.some((r) => unresolved(r.state)) ? "Some connection statuses are pending or unavailable." : "No saved connections yet."}</p>
@@ -343,7 +352,7 @@ export function ServiceBoard({
             {showWaiting || needle ? (
               <div className="mt-3 space-y-3">
 
-                {bands.length === 0 && !connected.some(matchesSearch) && !checking.length && !foundProviders.length && !foundMcp.length && !matchesSearch(grok) ? <p className="text-sm text-muted">No plugin matches that search.</p> : bands.map((band) => (
+                {bands.length === 0 && !connected.some(matchesSearch) && !checking.length && !foundProviders.length && !foundMcp.length && !matchesSearch(grok) ? <p className="text-sm text-muted">No saved or built-in service matches that search.</p> : bands.map((band) => (
                   <details key={band.label} className="rounded-panel border border-line p-3" open={needle.length > 0}>
                     <summary className="cursor-pointer text-sm font-semibold">{band.label}</summary>
                     <div className="service-board plugin-links mt-3">{band.items.map((service) => renderService(service))}</div>
@@ -361,7 +370,7 @@ export function ServiceBoard({
   function catalogBand(name: string) {
     if (name === "Gmail" || name === "Slack") return "Communication";
     if (name === "Notion" || name === "Google Drive" || name === "Google Docs" || name === "Google Calendar") return "Productivity";
-    if (name === "GitHub" || name === "Local computer") return "Developer";
+    if (name === "GitHub" || name === "Vercel" || name === "Local computer") return "Developer";
     if (name === "Grok" || name === "OpenAI" || name === "Claude" || name === "Gemini" || name === "OpenRouter" || name === "Nemotron" || name === "Local model") return "Models";
     if (name === "YouTube" || name === "Web search" || name === "Image and video") return "Research and media";
     if (name === "MCP") return "Custom MCP";

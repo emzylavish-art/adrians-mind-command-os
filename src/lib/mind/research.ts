@@ -179,7 +179,7 @@ export function fairResearchCitations(groups: ResearchCitation[][], limit = 8): 
       const safe = parseSafeHttpUrl(item.url);
       if (!safe || seen.has(safe.key)) continue;
       seen.add(safe.key);
-      out.push({ title: item.title, url: safe.href });
+      out.push({ ...item, url: safe.href });
       if (out.length === limit) break;
     }
   }
@@ -380,12 +380,23 @@ export async function performDeepResearch(input: {
   const configError = searchConfigError(input.endpoint, input.key);
   if (configError) return { ok: false, configured: false, citations: [], error: configError };
 
+  return runDeepResearchPlan(input, (query, signal) => performSingleSearch({
+    ...input, query, signal, timeoutMs: input.timeoutMs ?? searchTimeoutMs(),
+  }));
+}
+
+export async function runDeepResearchPlan(
+  input: { query: string; signal?: AbortSignal; deepTimeoutMs?: number; retryQueries?: string[] },
+  search: (query: string, signal: AbortSignal) => Promise<ResearchResult>,
+): Promise<ResearchResult> {
+  const text = input.query.trim();
   const overall = combineSignals(input.signal, input.deepTimeoutMs ?? deepSearchTimeoutMs());
-  const perQuery = input.timeoutMs ?? searchTimeoutMs();
   const queries = planDeepQueries(text).filter((q) => !input.retryQueries || input.retryQueries.includes(q));
   const steps: ResearchStep[] = [];
   const collected: ResearchCitation[][] = [];
   const evidence: ResearchSource[] = [];
+  const answers: string[] = [];
+  const claims: NonNullable<ResearchResult["claims"]> = [];
   let sawTimeout = false;
   try {
     for (const q of queries) {
@@ -395,12 +406,9 @@ export async function performDeepResearch(input: {
         if (!collected.length) { for (const query of queries.slice(steps.length)) steps.push({ query, ok: false, count: 0, status: "unattempted" }); return { ok: false, configured: true, citations: [], error: timedOut ? SEARCH_TIMEOUT_REPLY : "Research stopped.", steps }; }
         break;
       }
-      const one = await performSingleSearch({
-        ...input,
-        query: q,
-        signal: overall.signal,
-        timeoutMs: perQuery,
-      });
+      const one = await search(q, overall.signal);
+      if (one.providerAnswer) answers.push(`${q}\n${one.providerAnswer.slice(0, 4000)}`);
+      if (one.claims) claims.push(...one.claims);
       steps.push({ query: q, ok: one.ok, count: one.citations.length, status: one.ok ? "succeeded" : "failed", ...(one.error ? { error: one.error } : {}) });
       evidence.push(...(one.evidence ?? []));
       if (one.error === SEARCH_TIMEOUT_REPLY) {
@@ -441,6 +449,8 @@ export async function performDeepResearch(input: {
   const summary = researchSummary({ citations, steps: coveredSteps, evidence: distinct });
   return {
     ok: true, configured: true, citations, error: "", steps: coveredSteps, summary, evidence: distinct,
+    ...(answers.length ? { providerAnswer: answers.join("\n\n") } : {}),
+    ...(claims.length ? { claims } : {}),
     ...(failed.length ? { partial: true as const } : {}),
   };
 }

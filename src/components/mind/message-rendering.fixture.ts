@@ -39,6 +39,7 @@ export function renderer(sourceOverride?: string) {
     react, "react/jsx-runtime": { jsx, jsxs: jsx, Fragment: "fragment" },
     "@/lib/mind/blocks": { splitBlocks: (text: string) => { counts.blocks++; return splitBlocks(text); } },
     "@/components/mind/markdown-prose": { MarkdownProse: ({ text }: { text: string }) => { counts.markdown++; return jsx("prose", { children: JSON.stringify(parseMarkdownBlocks(text)) }); } },
+    "@/components/mind/run-activity": {},
     "@/components/mind/media/inline-image": { InlineImage: (props: Record<string, unknown>) => jsx("image-actions", props) },
     "@/lib/mind/copy-code-action": copyCode,
   };

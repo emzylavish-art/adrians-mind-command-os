@@ -7,24 +7,35 @@
  * only protect a single machine.
  */
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
-import { dirname } from "node:path";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 import type { ImagineRateLimitStore } from "./harden.ts";
 
 export type { ImagineRateLimitStore };
 
 export function createFileRateLimitStore(filePath: string): ImagineRateLimitStore {
+  let fallback: Record<string, number[]> = {};
+
   function readAll(): Record<string, number[]> {
     try {
-      if (!existsSync(filePath)) return {};
+      if (!existsSync(filePath)) return fallback;
       const parsed = JSON.parse(readFileSync(filePath, "utf8")) as Record<string, number[]>;
-      return parsed && typeof parsed === "object" ? parsed : {};
+      if (parsed && typeof parsed === "object") fallback = parsed;
     } catch {
-      return {};
+      // A warm server process still enforces its local limit if the filesystem
+      // becomes unavailable between requests.
     }
+    return fallback;
   }
   function writeAll(data: Record<string, number[]>) {
-    mkdirSync(dirname(filePath), { recursive: true });
-    writeFileSync(filePath, JSON.stringify(data), "utf8");
+    fallback = data;
+    try {
+      mkdirSync(dirname(filePath), { recursive: true });
+      writeFileSync(filePath, JSON.stringify(data), "utf8");
+    } catch {
+      // Keep the in-process limiter active. Durable daily spend controls remain
+      // authoritative and must not be replaced by a filesystem failure.
+    }
   }
   return {
     get(key) {
@@ -38,4 +49,13 @@ export function createFileRateLimitStore(filePath: string): ImagineRateLimitStor
   };
 }
 
-export const DEFAULT_IMAGINE_RATE_LIMIT_PATH = ".data/media-imagine-rate-limit.json";
+export const LOCAL_IMAGINE_RATE_LIMIT_PATH = ".data/media-imagine-rate-limit.json";
+
+export function resolveImagineRateLimitPath(
+  env: Readonly<{ VERCEL?: string }> = process.env,
+  temporaryDirectory = tmpdir(),
+): string {
+  return env.VERCEL
+    ? join(temporaryDirectory, "adrians-mind", "media-imagine-rate-limit.json")
+    : LOCAL_IMAGINE_RATE_LIMIT_PATH;
+}

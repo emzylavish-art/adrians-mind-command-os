@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   STORAGE_KEY, LIMITS, emptyLibrary, loadLibrary, serializeLibrary,
   createDraft, reviseDraft, reviewDraft, suggestCuration,
@@ -9,7 +9,11 @@ import { useAccountPreferences } from "@/components/mind/account-preferences-con
 import { SKILL_ACTIVATIONS_KEY, loadSkillActivations, validateSkillFixture, activateReviewedSkill, activeAccountSkills, type SkillActivation, type SkillValidation, type SkillScope } from "@/lib/mind/skill-activation";
 import type { Skill, Decision } from "@/lib/mind/decision-router";
 
+import { LEARN_WORKFLOWS_KEY, learnedWorkflows, learningEnabled, workflowMarkdown, type LearnedWorkflow } from "@/lib/mind/workflow-skills";
+import type { Chat } from "@/lib/mind/types";
+
 type Props = {
+  chats: readonly Chat[];
   skills: readonly Skill[];
   enabledSkills: Record<string, boolean>;
 };
@@ -18,8 +22,17 @@ const blank: DraftContent = { title: "", summary: "", body: "" };
 const message = (error: unknown) =>
   error instanceof Error ? error.message : "Operation failed";
 
-export default function LocalSkillsTools({ skills, enabledSkills }: Props) {
+export default function LocalSkillsTools({ skills, enabledSkills, chats }: Props) {
   const storage = useAccountPreferences();
+  const updates = useMemo(() => learnedWorkflows(chats), [chats]);
+  const [learning, setLearning] = useState(false);
+  const libraryPanel = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    const refresh = () => setLearning(learningEnabled(storage));
+    refresh();
+    window.addEventListener("storage", refresh);
+    return () => window.removeEventListener("storage", refresh);
+  }, [storage]);
   const [activationBaseline, setActivationBaseline] = useState<string | null>(null);
   const [activations, setActivations] = useState<SkillActivation[]>([]);
   const [validation, setValidation] = useState<SkillValidation | null>(null);
@@ -142,7 +155,63 @@ export default function LocalSkillsTools({ skills, enabledSkills }: Props) {
   const full = !!target && target.versions.length >= LIMITS.versions;
   const fieldClass = "w-full rounded-panel border border-line bg-bg p-2";
 
-  return (
+  function openWorkflow(draft: LearnedWorkflow) {
+    if (locked || saving || editorDirty) return;
+    const existing = library.drafts.find(item => item.versions.some(version =>
+      version.content.title === draft.content.title && version.content.body === draft.content.body));
+    try {
+      const next = existing ? library : createDraft(library, draft.content);
+      const entry = existing ?? next.drafts[next.drafts.length - 1];
+      const latest = entry.versions[entry.versions.length - 1].content;
+      if (!existing) change(() => next, "Draft ready. Save locally to keep this version for review.");
+      setSelected(entry.id);
+      setContent(latest);
+      setEditorBaseline(latest);
+      setValidation(null);
+      setActivationApproved(false);
+      if (libraryPanel.current) {
+        libraryPanel.current.open = true;
+        libraryPanel.current.querySelector("summary")?.focus();
+      }
+    } catch (cause) { setError(message(cause)); }
+  }
+
+  function downloadWorkflow(draft: LearnedWorkflow) {
+    const url = URL.createObjectURL(new Blob([workflowMarkdown(draft)], { type: "text/markdown" }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "SKILL.md";
+    anchor.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  return (<>
+    <section className="dense-card space-y-3" aria-label="Skill updates">
+      <h2 className="font-semibold">Skill updates</h2>
+      <label className="flex min-h-11 items-center gap-2">
+        <input type="checkbox" checked={learning} onChange={event => {
+          try {
+            storage.setItem(LEARN_WORKFLOWS_KEY, event.target.checked ? "on" : "off");
+            setLearning(event.target.checked);
+          } catch (cause) { setError(message(cause)); }
+        }} /> Learn workflows from completed chats
+      </label>
+      <p className="text-sm text-muted">Eligible chats contribute procedure names when memory and history are enabled. Your prompts and retrieved content stay out of the skill.</p>
+      {updates.length === 0 && <p className="text-sm text-muted">Completed workflows appear here as reusable drafts.</p>}
+      {updates.map(item => <article key={item.id} className="space-y-2 rounded-panel border border-line p-3">
+        <h3 className="font-semibold">{item.content.title}</h3>
+        <p className="text-sm">{item.content.summary}</p>
+        <p className="text-xs text-muted">{item.count} recorded {item.count === 1 ? "completion" : "completions"} · Updated <time dateTime={item.latest}>{new Date(item.latest).toLocaleDateString()}</time></p>
+        <details><summary className="cursor-pointer text-sm">View instructions</summary><p className="mt-2 text-sm">{item.content.body}</p></details>
+        <div className="local-skills-actions flex flex-wrap gap-3">
+          <button type="button" disabled={locked || saving || editorDirty} onClick={() => openWorkflow(item)}>Open in draft library</button>
+          <button type="button" onClick={() => downloadWorkflow(item)}>Download SKILL.md</button>
+        </div>
+      </article>)}
+      {error && <p role="alert">{error}</p>}
+    </section>
+    <details className="owner-fold" ref={libraryPanel}>
+      <summary>Draft library</summary>
     <section className="dense-card space-y-4">
       <header>
         <h2 className="font-semibold">Local skills tools</h2>
@@ -325,5 +394,6 @@ export default function LocalSkillsTools({ skills, enabledSkills }: Props) {
         )}
       </div>
     </section>
-  );
+    </details>
+  </>);
 }

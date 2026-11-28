@@ -359,6 +359,7 @@ button:focus, button:focus-visible, input:focus, input:focus-visible, textarea:f
   </div>
   <div class="controls">
     <p id="model-current">Current: unknown</p>
+    <p id="model-result" role="status"></p>
     <div class="row"><button id="see-models" type="button">See models</button></div>
     <div id="models" class="row"></div>
   </div>
@@ -488,7 +489,7 @@ function setGuide(mode) {
     banner.textContent = "ChatGPT Logged In";
     banner.className = "login-banner ok";
     $("next-step").textContent = "The bridge is running and ChatGPT is signed in. Next, copy the three API Reference values. A tunnel and Telegram are optional.";
-    paintMast("Live", "ok");
+    paintMast("Browser signed in", "ok");
     return;
   }
   banner.textContent = "ChatGPT Not Logged In – Action Required";
@@ -514,7 +515,7 @@ async function call(path, options) {
   let body = {};
   try { body = text ? JSON.parse(text) : {}; } catch (err) { body = { detail: text }; }
   $("raw").textContent = path + " " + response.status + "\n" + JSON.stringify(body, null, 2);
-  if (!response.ok) throw new Error(body.detail || String(response.status));
+  if (!response.ok) throw new Error(body.detail || body.reason || body.error || String(response.status));
   return body;
 }
 function paint(data) {
@@ -587,6 +588,64 @@ function paintTelegram(body) {
 }
 let misses = 0;
 let controlsLoaded = false;
+let modelRevision = 0;
+let selectingModel = false;
+function resetModels() {
+  modelRevision++;
+  selectingModel = false;
+  controlsLoaded = false;
+  $("see-models").disabled = false;
+  $("model-current").textContent = "Current: unknown";
+  $("model-result").textContent = "";
+  $("models").replaceChildren();
+}
+async function readModels() {
+  if (selectingModel) return;
+  const revision = ++modelRevision;
+  try {
+    const body = await call("/v1/browser-models");
+    if (revision === modelRevision) paintModels(body);
+  } catch (error) {
+    if (revision !== modelRevision) return;
+    resetModels();
+    $("model-result").textContent = error.message;
+    throw error;
+  }
+}
+async function selectModel(name) {
+  if (selectingModel) return;
+  const revision = ++modelRevision;
+  selectingModel = true;
+  $("see-models").disabled = true;
+  $("models").querySelectorAll("button").forEach(button => { button.disabled = true; });
+  $("model-current").textContent = "Current: checking";
+  $("model-result").textContent = "Requesting " + name + "…";
+  let failure = "";
+  try {
+    const body = await call("/v1/browser-models/select", { method: "POST", body: JSON.stringify({ name }) });
+    if (body.ok === false || body.success === false || body.switched === false || body.error) throw new Error(body.reason || body.detail || body.error || "The bridge declined the change.");
+  } catch (error) {
+    failure = error.message;
+  }
+  if (revision !== modelRevision) return;
+  try {
+    const state = await call("/v1/browser-models");
+    if (revision !== modelRevision) return;
+    paintModels(state);
+    $("model-result").textContent = failure || "Model menu checked after the request.";
+  } catch (error) {
+    if (revision !== modelRevision) return;
+    resetModels();
+    $("model-result").textContent = [failure, "Current model could not be verified.", error.message].filter(Boolean).join(" ");
+  } finally {
+    if (revision === modelRevision) {
+      selectingModel = false;
+      $("see-models").disabled = false;
+    }
+  }
+}
+$("bridge").addEventListener("input", resetModels);
+$("secret").addEventListener("input", resetModels);
 function explainSecret(err) {
   const message = err && err.message ? err.message : String(err || "");
   if (!message.includes("missing internal secret")) return false;
@@ -605,7 +664,7 @@ function refreshControls() {
   loadAccounts();
   if (controlsLoaded) return;
   controlsLoaded = true;
-  call("/v1/browser-models").then(paintModels).catch((err) => {
+  readModels().catch((err) => {
     controlsLoaded = false;
     if (!explainSecret(err)) show(err);
   });
@@ -645,7 +704,7 @@ async function notifyDown(reason) {
 function save() {
   store.setItem("gpt_bridge_url", $("bridge").value.trim());
   store.setItem("gpt_bridge_secret", $("secret").value.trim());
-  controlsLoaded = false;
+  resetModels();
   paintReach();
   poll();
 }
@@ -736,14 +795,11 @@ function paintModels(body) {
     const button = document.createElement("button");
     button.type = "button";
     button.textContent = item.selected ? item.name + " (on)" : item.name;
-    button.onclick = () => run("/v1/browser-models/select", {
-      method: "POST",
-      body: JSON.stringify({ name: item.name })
-    }).then(() => { $("model-current").textContent = "Current: " + item.name; });
+    button.onclick = () => selectModel(item.name);
     $("models").appendChild(button);
   }
 }
-$("see-models").onclick = () => call("/v1/browser-models").then(paintModels).catch(show);
+$("see-models").onclick = () => readModels().catch(show);
 $("prove").onclick = () => call("/v1/chat/completions", {
   method: "POST",
   body: JSON.stringify({ model: "gpt-subscription", messages: [{ role: "user", content: "Reply with the single word pong." }] })

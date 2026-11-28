@@ -27,6 +27,7 @@ function dashboardFixture() {
   const scrolls: any[] = [];
   let mounted = false;
   let focusedElement = false;
+  const workspace = { scope: null as string | null, graph: null as null | Record<string, unknown>, summary: "", checking: false, refresh() {} };
   const now = Date.now();
   const current = { id: "dashboard", name: "Dashboard", health: "blocked", reason: "Latest blocked", branch: "dashboard-3d", notes: "" };
   const data = {
@@ -48,6 +49,7 @@ function dashboardFixture() {
   const modules: Record<string, any> = {
     react,
     "react/jsx-runtime": { jsx: (type: unknown, props: any) => ({ type, props }), jsxs: (type: unknown, props: any) => ({ type, props }), Fragment: "Fragment" },
+    "./use-workspace-graph": { useWorkspaceGraph: () => workspace },
     "./use-dashboard-status": { useDashboardStatus: () => ({ state: { status: "ready", data }, refresh() {} }) },
     "./mobile-structure": { MobileChrome: "MobileChrome", MobilePanelCard: "MobilePanelCard", useMobilePanelFocus: () => ({ focused, setFocused(value: string | null) { focused = value; }, clear() { focused = null; } }) },
     "./operator-console": { OperatorConsole: "OperatorConsole", loadInitialOperatorPrefs: () => ({ layers: { sound: false, labels: true, charts: false, feed: true, time: true }, healthFilter: "all" }), useOperatorHotkey() {}, persistOperatorPrefs() {} },
@@ -67,8 +69,30 @@ function dashboardFixture() {
   const compiled = ts.transpileModule(source("dashboard-app.tsx"), { compilerOptions: { jsx: ts.JsxEmit.ReactJSX, module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
   runInNewContext(compiled, { exports, require: (name: string) => modules[name] ?? new Proxy({}, { get: (_o, key) => key }), Date, document, HTMLElement: class {}, window: { matchMedia: () => ({ matches: true, addEventListener() {}, removeEventListener() {} }) } });
   function render() { cursor = 0; effects = []; const tree = exports.DashboardApp({ embedded: true }); mounted = descendants(tree).some((node) => node.props["data-testid"] === "dash3d-panel-stack"); return descendants(tree); }
-  return { render, effects: () => effects, data, now, scrolls, focused: () => focusedElement };
+  return { render, effects: () => effects, data, workspace, now, scrolls, focused: () => focusedElement };
 }
+
+test("the signed-in Notion graph stays available when switching renderers and is hidden on account change", () => {
+  const h = dashboardFixture();
+  const page = { id: "private-page", title: "Workspace page", kind: "page" };
+  h.workspace.scope = "owner-a";
+  h.workspace.graph = { ...h.data.notionGraph, available: true, pages: [page] };
+  let nodes = h.render();
+  nodes.find((n) => n.type === "LazyGraph")!.props.onSelectNotion(page.id);
+  nodes.find((n) => n.props["data-testid"] === "switch-painterly-universe")!.props.onClick();
+  nodes = h.render();
+  const scene = nodes.find((n) => typeof n.type === "function" && n.type.name === "ClientUniverseScene");
+  assert.equal(scene?.props.data.notionGraph.pages[0], page);
+  assert.equal(nodes.find((n) => n.type === "NodeDetailPanel")!.props.notionPage, page);
+
+  h.workspace.scope = "owner-b";
+  h.workspace.graph = null;
+  h.workspace.checking = true;
+  nodes = h.render();
+  assert.equal(nodes.find((n) => typeof n.type === "function" && n.type.name === "ClientUniverseScene")!.props.data.notionGraph.pages.length, 0);
+  assert.equal(nodes.find((n) => n.type === "NodeDetailPanel")!.props.notionPage, null);
+  assert.equal(nodes.find((n) => n.props.children === "Refresh Notion")!.props.disabled, true);
+});
 
 test("C2 AA008/009: fallback, search and selected details retain historical health and filters through retry", () => {
   const h = dashboardFixture();
@@ -101,6 +125,30 @@ test("C2 AA008/009: fallback, search and selected details retain historical heal
   nodes.find((n) => n.type === "TimeScrubber")!.props.onScrubMs(null);
   nodes = h.render();
   assert.equal(nodes.find((n) => n.type === "NodeDetailPanel")!.props.bot.health, "blocked");
+  assert.equal(nodes.find((n) => n.type === "NodeDetailPanel")!.props.hiddenByFilters, true);
+});
+
+test("L01 P03/P06: chosen Fleet List preserves the selected record, updates its health and explains filter exclusion", () => {
+  const h = dashboardFixture();
+  h.data.bots[0] = { ...h.data.bots[0], health: "healthy", reason: "Latest healthy" };
+  let nodes = h.render();
+  nodes.find((n) => n.type === "button" && n.props.children === "List")!.props.onClick();
+  nodes = h.render();
+  assert.equal(nodes.some((node) => node.type === "LazyGraph"), false);
+  const list = nodes.find((n) => n.props["aria-label"] === "Operations list")!;
+  descendants(list).find((n) => n.type === "button" && n.props.children.includes("Dashboard"))!.props.onClick();
+  nodes = h.render();
+  nodes.find((n) => n.type === "GraphFiltersPanel")!.props.onFilterChange({ ...DEFAULT_GRAPH_FILTER, health: "healthy" });
+  h.data.bots[0] = { ...h.data.bots[0], health: "blocked", reason: "Latest blocked" };
+  nodes = h.render();
+  assert.equal(nodes.find((n) => n.type === "NodeDetailPanel")!.props.bot.health, "blocked");
+  assert.equal(nodes.find((n) => n.type === "NodeDetailPanel")!.props.hiddenByFilters, true);
+  nodes.find((n) => n.props["data-testid"] === "switch-force-graph")!.props.onClick();
+  nodes = h.render();
+  assert.equal(nodes.find((n) => n.type === "LazyGraph")!.props.filter.health, "healthy");
+  assert.equal(nodes.find((n) => n.type === "NodeDetailPanel")!.props.bot.id, "dashboard");
+  nodes.find((n) => n.type === "GraphFiltersPanel")!.props.onFilterChange(DEFAULT_GRAPH_FILTER);
+  assert.equal(h.render().find((n) => n.type === "NodeDetailPanel")!.props.hiddenByFilters, false);
 });
 
 test("C2 AA010: mobile navigation mounts support content before focus, including hidden-layer explanation", () => {
@@ -181,7 +229,7 @@ test("C2 AA009: graph recovery initializes from the current filter without an ev
     highlighted: { current: new Set() }, hoverId: { current: null }, allowRef: { current: null },
     filterBotIds, sanitizeLabelText: (value: string) => value,
     document: new EventTarget(), window: { innerWidth: 800, innerHeight: 600 }, ResizeObserver: class { observe() {} disconnect() {} },
-    importGraph: async () => ({ default: () => () => { if (fail) throw new Error("Synthetic WebGL rejection"); return graph; } }),
+    importGraph: async () => ({ default: function Graph() { if (fail) throw new Error("Synthetic WebGL rejection"); return graph; } }),
   };
   runInNewContext(stripTypeScriptTypes(`${helpers}\nfunction mountEffect() {${effect}\n}\nglobalThis.cleanup = mountEffect();`), state);
   await new Promise((resolve) => setImmediate(resolve));

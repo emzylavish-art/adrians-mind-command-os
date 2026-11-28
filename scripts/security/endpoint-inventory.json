@@ -3,6 +3,19 @@
   "scope": "all AST-discovered direct route methods and exported createServerFn handlers under src; background worker internal functions retain service/owner checks at their dispatch boundary",
   "routes": [
     {
+      "file": "src/routes/api/mind/account-photo.ts",
+      "path": "/api/mind/account-photo",
+      "methods": ["GET", "POST"],
+      "policy": "owner_origin",
+      "notes": "Reads bind to the verified account. Same-origin edits require the account and saved photo revision.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/account-photo.ts",
+          "requires": ["assertSameOrigin(request)", "requireUserId", "searchParams.get(\"owner\") !== owner", "body.owner !== owner", "saveAccountPhoto(await getSql(), owner"]
+        }
+      ]
+    },
+    {
       "file": "src/routes/api/auth/$.ts",
       "path": "/api/auth/$",
       "methods": [
@@ -10,12 +23,20 @@
         "POST"
       ],
       "policy": "framework_auth",
-      "notes": "Better Auth handler and explicit trustedOrigins own login/session/callback policy.",
+      "notes": "Better Auth and explicit trusted origins own login and callbacks. Passkey routes check the configured origin and protect account credential changes with a fresh verified session. Authenticator changes use the canonical account and login challenges are verified by Better Auth. Account email is origin-bound, and address verification is scoped to the signed-in credential account.",
       "evidence": [
         {
           "file": "src/routes/api/auth/$.ts",
           "requires": [
-            "auth.handler(request)"
+            "auth.handler(request)",
+            "passkeyConfiguration",
+            "assertSameOrigin(request)",
+            "session.user.id !== owner.id",
+            "freshPasskeySession",
+            "guardAuthenticator(request",
+            "guardAccountMail(request",
+            "parsed.body.email !== session.user.email",
+            "session.user.id !== canonical.id"
           ]
         },
         {
@@ -582,6 +603,35 @@
       ]
     },
     {
+      "file": "src/routes/api/mind/managed-browser.ts",
+      "path": "/api/mind/managed-browser",
+      "methods": [
+        "POST"
+      ],
+      "policy": "owner_origin",
+      "notes": "Verified same-origin browser operations scoped to the signed-in owner, a saved session revision and an operator-approved destination.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/managed-browser.ts",
+          "requires": [
+            "assertSameOrigin(request)",
+            "requireUserId",
+            "parsed.body.owner !== owner",
+            "managedBrowserRequest(await getSql(), owner"
+          ]
+        },
+        {
+          "file": "src/lib/mind/managed-browser.server.ts",
+          "requires": [
+            "workerId(owner, id)",
+            "where user_id=$1 and session_id=$2",
+            "options.origins.has(target.origin)",
+            "pending=$3"
+          ]
+        }
+      ]
+    },
+    {
       "file": "src/routes/api/mind/mcp/builtin.ts",
       "path": "/api/mind/mcp/builtin",
       "methods": [
@@ -781,6 +831,67 @@
             "assertSameOrigin",
             "readOwnerMemoryPolicy",
             "writeOwnerMemoryPolicy"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/notifications.ts",
+      "path": "/api/mind/notifications",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "policy": "owner_origin",
+      "notes": "The current owner manages consent and inbox marks, and may confirm only their own current push receipt. Email is derived from the verified account.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/notifications.ts",
+          "requires": [
+            "assertSameOrigin(request)",
+            "requireUserId",
+            "payload.body.owner !== owner",
+            "mayDisplayScheduledPush(sql, owner",
+            "listNotificationMarks(sql, owner)",
+            "saveNotificationMarks(sql, owner"
+          ]
+        },
+        {
+          "file": "src/lib/mind/notification-delivery.server.ts",
+          "requires": [
+            "t.user_id=$1",
+            "account.emailVerified",
+            "parseDeviceSubscription(body.subscription)",
+            "device_id is not distinct from $3::uuid and preference_revision=$5::uuid",
+            "d.preference_revision=t.preference_revision"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/notifications/tick.ts",
+      "path": "/api/mind/notifications/tick",
+      "methods": [
+        "POST"
+      ],
+      "policy": "notification_worker",
+      "notes": "A dedicated token authorizes delivery only after account consent, current destination, halt state and event deduplication are checked.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/notifications/tick.ts",
+          "requires": [
+            "MIND_NOTIFICATION_WORKER_TOKEN",
+            "timingSafeEqual",
+            "runNotificationPass"
+          ]
+        },
+        {
+          "file": "src/lib/mind/notification-delivery.server.ts",
+          "requires": [
+            "for update",
+            "mind_control",
+            "on conflict do nothing returning target_id",
+            "account.email !== target.destination"
           ]
         }
       ]
@@ -1223,12 +1334,14 @@
         "POST"
       ],
       "policy": "paired_device",
-      "notes": "Agent token and exact device/job association required; job transitions preserve halt/cancel/outcome authority.",
+      "notes": "Agent token and device/job binding protect delivery. Branch-checked jobs require the reviewed-source protocol and honor halt and cancellation.",
       "evidence": [
         {
           "file": "src/routes/api/mind/pc/jobs.ts",
           "requires": [
-            "findAgentByToken"
+            "findAgentByToken",
+            "x-adrian-build-review",
+            "offeredJob?.agentId === agent.id"
           ]
         }
       ]
@@ -1304,6 +1417,34 @@
           "requires": [
             "requireUserId",
             "assertSameOrigin"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/queue-transfer.ts",
+      "path": "/api/mind/queue-transfer",
+      "methods": [
+        "POST"
+      ],
+      "policy": "owner_origin",
+      "notes": "Authenticated same-origin transfer of held drafts inside the original owner and workspace scope. It confers no execution or connector permission.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/queue-transfer.ts",
+          "requires": [
+            "assertSameOrigin(request)",
+            "requireUserId",
+            "parsed.body.owner !== owner",
+            "runQueueTransfer(await getSql(), owner"
+          ]
+        },
+        {
+          "file": "src/lib/mind/queue-transfer.server.ts",
+          "requires": [
+            "readSnapshot(sql, owner)",
+            "where user_id=$1 and scope=$2",
+            "claim_id=$4"
           ]
         }
       ]
@@ -1412,7 +1553,7 @@
         "POST"
       ],
       "policy": "owner_origin",
-      "notes": "Lists the verified owner’s Better Auth devices and revokes only a reviewed session after the same-origin check.",
+      "notes": "Lists the verified owner’s Better Auth devices and supports reviewed revocation of a specific device or all other sessions.",
       "evidence": [
         {
           "file": "src/routes/api/mind/sessions.ts",
@@ -1420,7 +1561,31 @@
             "requireUserId",
             "assertSameOrigin",
             "session.user.id !== owner",
+            "auth.api.revokeOtherSessions",
+            "body.currentId !== currentId",
             "sessionToRevoke"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/shared-chats.ts",
+      "path": "/api/mind/shared-chats",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "policy": "owner_origin",
+      "notes": "Owners list, issue and revoke their own grants. Signed-in readers must present a live link for the exact reviewed text.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/shared-chats.ts",
+          "requires": [
+            "assertSameOrigin(request)",
+            "requireUserId",
+            "ownerId !== owner",
+            "revoked_at is null",
+            "chatTextDigest(text) === row.content_hash"
           ]
         }
       ]
@@ -1685,6 +1850,25 @@
       "method": "POST",
       "policy": "owner_rpc",
       "notes": "Verified owner and isolation via authMiddleware; handler scopes records/dispatch by context.userId.",
+      "evidence": [
+        {
+          "file": "src/lib/auth/middleware.ts",
+          "requires": [
+            "assertSameSiteRequest()",
+            "requireUserId(context.bearerToken)"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        ".middleware([authMiddleware])"
+      ]
+    },
+    {
+      "file": "src/lib/mind/dashboard/owner-connections.ts",
+      "name": "ownerNotionGraph",
+      "method": "POST",
+      "policy": "owner_rpc",
+      "notes": "The verified owner supplies the active workspace grant. Shared demo users are rejected and the public dashboard never receives this response.",
       "evidence": [
         {
           "file": "src/lib/auth/middleware.ts",

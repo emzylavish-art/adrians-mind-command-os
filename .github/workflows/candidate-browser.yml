@@ -26,6 +26,15 @@ jobs:
           FIXTURE_SCRIPT=scripts/visual/paired-chat.mjs node scripts/visual/run-c3-fixture.mjs
         env:
           VISUAL_ARTIFACT_DIR: ${{ runner.temp }}/browser-fixtures
+      - name: Verify managed browser controls and screenshots
+        run: |
+          export MIND_BROWSER_FIXTURE_CHROMIUM="$(command -v google-chrome)"
+          test -x "$MIND_BROWSER_FIXTURE_CHROMIUM"
+          node --test scripts/managed-browser/runtime.test.mjs
+          node scripts/managed-browser/app-fixture.mjs
+          node scripts/auth/passkey-fixture.mjs
+        env:
+          VISUAL_ARTIFACT_DIR: ${{ runner.temp }}/browser-fixtures
       - uses: actions/upload-artifact@v4
         if: always()
         with:

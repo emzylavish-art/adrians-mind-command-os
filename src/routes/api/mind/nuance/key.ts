@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { requireUserId } from "@/lib/auth/verify.server";
 import { assertSameOrigin } from "@/lib/mind/connectors/oauth-csrf";
 import { allowSharedMindRequest as allowMindRequest } from "@/lib/mind/rate-limit.server";
-import { saveNuanceKey } from "@/lib/mind/nuance-live.server";
+import { saveOwnerNuanceKey } from "@/lib/mind/nuance-live.server";
 
 function reply(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -35,7 +35,7 @@ export const Route = createFileRoute("/api/mind/nuance/key")({
         } catch {
           return reply({ ok: false, error: "The key was not understood. Nothing was saved." }, 400);
         }
-        const saved = saveNuanceKey(key);
+        const saved = await saveOwnerNuanceKey(user, key);
         if (!saved.ok) return reply({ ok: false, error: saved.error }, 400);
         return reply({ ok: true, configured: true });
       },

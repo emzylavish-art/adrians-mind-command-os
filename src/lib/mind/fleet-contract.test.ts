@@ -263,8 +263,22 @@ test("AA112: clearing selected finished history preserves active work and unreso
   const finished = ws.runs[0]!;
   const next = enqueueRun(ws, ws.agents[0]!.id, "Continue", NOW); assert.ok(next.ok); ws = next.ws;
   ws.runs.push({ ...finished, id: "unknown", state: "failed", externalOperation: { id: "operation", stepId: "step-1", state: "unknown", startedAt: NOW } });
+  ws.runs.push({ ...finished, id: "model-unknown", state: "canceled", modelOperation: { id: "model-op", state: "uncertain", provider: "gemini" } });
+  ws.runs.push({ ...finished, id: "stop-unknown", state: "canceled", stopDispatchOutcome: "outcome_unknown" });
   const cleared = clearFinishedRuns(ws, ws.runs.map(run => run.id));
   assert.equal(cleared.runs.some(run => run.id === finished.id), false);
   assert.equal(cleared.runs.some(run => run.id === next.run.id), true);
   assert.equal(cleared.runs.some(run => run.id === "unknown"), true);
+  assert.equal(cleared.runs.some(run => run.id === "model-unknown"), true);
+  assert.equal(cleared.runs.some(run => run.id === "stop-unknown"), true);
+});
+
+test("an unresolved model dispatch cannot be resumed or deleted after a local stop", () => {
+  const ws = queued(["model"]);
+  const run = ws.runs[0]!;
+  ws.runs[0] = { ...run, state: "waiting_external", modelOperation: { id: "pending-model", state: "uncertain", provider: "gemini" } };
+  assert.equal(resumeRun(ws, run.id).runs[0]!.state, "waiting_external");
+  const stopped = cancelRun(ws, run.id, NOW);
+  assert.equal(stopped.runs[0]!.stopDispatchOutcome, "outcome_unknown");
+  assert.equal(clearFinishedRuns(stopped, [run.id]).runs[0]?.id, run.id);
 });

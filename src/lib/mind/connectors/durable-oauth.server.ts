@@ -1,3 +1,4 @@
+import { vercelMcpRecord, vercelRegistryPrefix } from "./vercel-mcp.ts";
 /** Durable, owner-scoped OAuth store for serverless production.
  * Never stores plaintext access/refresh tokens or PKCE verifier.
  * The local filesystem store remains available for isolated tests.
@@ -47,7 +48,7 @@ function restore(row: ConnRow): StoredConnection | null {
 export async function readDurableConnection(ownerId: string, connector: ConnectorId, tx?: Sql): Promise<StoredConnection | null> {
   const sql = tx ?? await getSql();
   const rows = await sql.query<ConnRow>(
-    "SELECT owner_id, connector, access_token_enc, refresh_token_enc, workspace_name, workspace_id, bot_id, account_label, connected_at, token_type, scopes, grant_generation, external_account_id FROM mind_oauth_connections WHERE owner_id = $1 AND connector = $2",
+    "SELECT owner_id, connector, access_token_enc, refresh_token_enc, workspace_name, workspace_id, bot_id, account_label, connected_at, token_type, scopes, grant_generation, external_account_id, expires_at, scope_source FROM mind_oauth_connections WHERE owner_id = $1 AND connector = $2",
     [ownerId, connector],
   );
   return rows.length ? restore(rows[0]) : null;
@@ -56,6 +57,7 @@ export async function saveDurableConnection(input: {
   ownerId: string; connector: ConnectorId; accessToken: string; refreshToken?: string;
   workspaceName?: string; workspaceId?: string; botId?: string;
   accountLabel?: string; externalAccountId?: string; tokenType?: string; scopes?: string;
+  expiresAt?: string; scopeEvidence?: StoredConnection["scopeEvidence"];
 }, claim: string): Promise<StoredConnection> {
   if (!input.ownerId || !isConnectorId(input.connector) || !input.accessToken) throw new Error("Invalid OAuth connection.");
   const accessTokenEnc = encryptSecret(input.accessToken).ciphertext;
@@ -75,12 +77,18 @@ export async function saveDurableConnection(input: {
       ownerId: input.ownerId, connector: input.connector, accessTokenEnc, grantGeneration: randomUUID(), externalAccountId: input.externalAccountId, connectedAt: new Date().toISOString(),
       ...(refreshTokenEnc ? { refreshTokenEnc } : {}), workspaceName: input.workspaceName, workspaceId: input.workspaceId,
       botId: input.botId, accountLabel: input.accountLabel, tokenType: input.tokenType, scopes: input.scopes,
+      expiresAt: input.expiresAt, scopeEvidence: input.scopeEvidence,
     };
     if (input.connector === "notion" && input.workspaceId) {
       await archiveWorkspace(sql, conn);
       if (active && active.workspaceId !== input.workspaceId) return conn;
     }
     await writeActive(sql, conn);
+    if (input.connector === "vercel") {
+      const record = vercelMcpRecord(conn);
+      await sql.query("DELETE FROM mind_mcp_registry WHERE user_id=$1 AND id LIKE $2", [conn.ownerId, vercelRegistryPrefix + "%"]);
+      await sql.query("INSERT INTO mind_mcp_registry(user_id,id,record) VALUES ($1,$2,$3::jsonb)", [conn.ownerId, record.id, JSON.stringify(record)]);
+    }
     return conn;
   });
 }
@@ -111,13 +119,13 @@ export async function selectDurableNotionWorkspace(owner: string, id: string) {
 }
 async function writeActive(sql: Sql, conn: StoredConnection) {
     await sql.query(
-      "INSERT INTO mind_oauth_connections (owner_id, connector, access_token_enc, refresh_token_enc, workspace_name, workspace_id, bot_id, account_label, connected_at, token_type, scopes, grant_generation, external_account_id)" +
-      " VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)" +
+      "INSERT INTO mind_oauth_connections (owner_id, connector, access_token_enc, refresh_token_enc, workspace_name, workspace_id, bot_id, account_label, connected_at, token_type, scopes, grant_generation, external_account_id, expires_at, scope_source)" +
+      " VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)" +
       " ON CONFLICT (owner_id,connector) DO UPDATE SET access_token_enc=excluded.access_token_enc, refresh_token_enc=excluded.refresh_token_enc," +
       " workspace_name=excluded.workspace_name, workspace_id=excluded.workspace_id, bot_id=excluded.bot_id," +
-      " account_label=excluded.account_label, connected_at=excluded.connected_at, token_type=excluded.token_type, scopes=excluded.scopes, grant_generation=excluded.grant_generation, external_account_id=excluded.external_account_id",
+      " account_label=excluded.account_label, connected_at=excluded.connected_at, token_type=excluded.token_type, scopes=excluded.scopes, grant_generation=excluded.grant_generation, external_account_id=excluded.external_account_id, expires_at=excluded.expires_at, scope_source=excluded.scope_source",
       [conn.ownerId,conn.connector,conn.accessTokenEnc,conn.refreshTokenEnc ?? null,conn.workspaceName ?? null,conn.workspaceId ?? null,
-        conn.botId ?? null,conn.accountLabel ?? null,conn.connectedAt,conn.tokenType ?? null,conn.scopes ?? null,conn.grantGeneration ?? randomUUID(),conn.externalAccountId ?? null],
+        conn.botId ?? null,conn.accountLabel ?? null,conn.connectedAt,conn.tokenType ?? null,conn.scopes ?? null,conn.grantGeneration ?? randomUUID(),conn.externalAccountId ?? null,conn.expiresAt ?? null,conn.scopeEvidence ?? null],
     );
 }
 async function lockConnection(sql: Sql, owner: string, connector: ConnectorId) {
@@ -136,6 +144,7 @@ export async function clearDurableConnection(ownerId: string, connector: Connect
       await tx.query("DELETE FROM mind_notion_workspaces WHERE owner_id=$1 AND workspace_id=(SELECT workspace_id FROM mind_oauth_connections WHERE owner_id=$1 AND connector=$2)", [ownerId, connector]);
     }
     await tx.query("DELETE FROM mind_oauth_pending WHERE owner_id=$1 AND connector=$2", [ownerId, connector]);
+    if (connector === "vercel") await tx.query("DELETE FROM mind_mcp_registry WHERE user_id=$1 AND id LIKE $2", [ownerId, vercelRegistryPrefix + "%"]);
     await tx.query("DELETE FROM mind_oauth_connections WHERE owner_id=$1 AND connector=$2", [ownerId, connector]);
     return active;
   });

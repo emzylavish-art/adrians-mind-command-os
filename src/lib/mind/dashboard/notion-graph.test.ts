@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, it } from "node:test";
+import { encryptSecret } from "../connectors/crypto.ts";
+import { clearConnection, connectorDirectory, saveConnection, setConnectorDirectory } from "../connectors/store.ts";
+import { fetchNotionGraph } from "./notion.ts";
 import { parseNotionSnapshot, pageStarPositions, pageForBot } from "./notion-graph-core.ts";
+import { readOwnerNotionGraph } from "./owner-notion-graph.server.ts";
 
 describe("notion-graph", () => {
   it("parses snapshot pages/edges/bot map and ignores junk", () => {
@@ -43,5 +50,89 @@ describe("notion-graph", () => {
     };
     assert.equal(pageForBot(graph, "dashboard")?.title, "Dash");
     assert.equal(pageForBot(graph, "logic"), null);
+  });
+});
+
+
+describe("owner workspace graph", () => {
+  it("drops a graph if the selected workspace changes, reconnects, or disconnects during the read", async (t) => {
+    const originalDirectory = connectorDirectory();
+    const directory = mkdtempSync(join(tmpdir(), "adrian-notion-graph-"));
+    const secret = "fixture-only-connector-secret";
+    const previousEnv = process.env;
+    process.env = { ...previousEnv, DATABASE_URL: "", POSTGRES_URL: "", CONNECTOR_TOKEN_SECRET: secret };
+    setConnectorDirectory(directory);
+    t.after(() => {
+      process.env = previousEnv;
+      setConnectorDirectory(originalDirectory);
+      rmSync(directory, { recursive: true, force: true });
+    });
+    const ownerId = "owner-a";
+    const grant = { ownerId, connector: "notion" as const, workspaceId: "space-a",
+      accessTokenEnc: encryptSecret("fixture-token", secret).ciphertext,
+      connectedAt: "2026-11-28T12:00:00.000Z", grantGeneration: "original" };
+    const records: typeof fetch = async (input) => Response.json({ results: String(input).endsWith("/search")
+      ? [{ object: "page", id: "original-private-page", properties: {} }] : [] });
+
+    saveConnection(grant);
+    const allowed = await readOwnerNotionGraph(ownerId, records);
+    assert.equal(allowed.graph?.pages[0]?.id, "original-private-page");
+    const other = await readOwnerNotionGraph("owner-b", async () => assert.fail("No request without a grant"));
+    assert.equal(other.graph, null);
+
+    for (const change of [
+      () => saveConnection({ ...grant, workspaceId: "space-b" }),
+      () => saveConnection({ ...grant, grantGeneration: "reconnected" }),
+      () => clearConnection(ownerId, "notion"),
+    ]) {
+      saveConnection(grant);
+      const rejected = await readOwnerNotionGraph(ownerId, async (input, init) => {
+        change();
+        return records(input, init);
+      });
+      assert.equal(rejected.graph, null);
+      assert.match(rejected.summary, /changed during this check/);
+    }
+  });
+
+  it("maps only shared records and links visible instructions to the actual Notion agent", async () => {
+    const calls: string[] = [];
+    const fetchImpl: typeof fetch = async (input, init) => {
+      assert.equal(new Headers(init?.headers).get("Authorization"), "Bearer account-token");
+      assert.equal(init?.cache, "no-store");
+      const agentQuery = String(input).endsWith("/agents/query");
+      calls.push(String(input));
+      const body = JSON.parse(String(init?.body));
+      assert.equal(body.query, undefined);
+      const results = agentQuery ? [
+        { object: "agent", id: "custom", name: "My Notion AI", agent_type: "custom_agent", instructions_page_id: "child" },
+        { object: "agent", id: "personal", name: "Personal", agent_type: "personal_agent", instructions_page_id: "hidden" },
+      ] : [
+        { object: "page", id: "root", properties: {} },
+        { object: "page", id: "child", parent: { page_id: "root" }, properties: { title: { title: [{ plain_text: "Instructions" }] } } },
+      ];
+      return Response.json({ results, has_more: !agentQuery });
+    };
+    const graph = await fetchNotionGraph("account-token", fetchImpl);
+    assert.equal(calls.length, 2);
+    assert.deepEqual(graph.stats, { pages: 2, agents: 2, edges: 2, botsMapped: 0 });
+    assert.deepEqual(graph.edges, [{ from: "root", to: "child", kind: "parent" }, { from: "agent:custom", to: "child", kind: "instructions" }]);
+    assert.equal(graph.pages.find((n) => n.id === "agent:personal")?.kind, "Notion personal agent");
+    assert.match(graph.reason || "", /recent Notion pages/);
+  });
+
+  it("distinguishes a valid empty workspace, partial access, and total failure", async () => {
+    const empty = () => Response.json({ results: [] });
+    const graph = await fetchNotionGraph("t", async (route) => String(route).endsWith("/search") ? empty() : new Response(null, { status: 403 }));
+    assert.equal(graph.mode, "live");
+    assert.match(graph.reason || "", /0 Notion pages.*lacks access to agents/);
+    assert.deepEqual(graph.pages, []);
+    const broken = await fetchNotionGraph("t", async () => new Response(null, { status: 401 }));
+    assert.equal(broken.available, false);
+    assert.equal(broken.mode, "unavailable");
+    assert.match(broken.reason || "", /Reconnect/);
+    const emptyGraph = await fetchNotionGraph("t", async () => empty());
+    assert.equal(emptyGraph.available, true);
+    assert.match(emptyGraph.reason || "", /0 Notion AI agents/);
   });
 });

@@ -179,6 +179,8 @@ test("C5 AA003 rendered Plugins badges distinguish sign-in, unavailable and a co
       "react/jsx-runtime": jsxRuntime,
       "@/lib/auth/client": { getBearerToken: () => null },
       "@/lib/mind/connectors/oauth-return": { rememberOAuthReturn: () => undefined },
+      "lucide-react": { AudioLines: () => null, Image: () => null, Monitor: () => null, Search: () => null, Cpu: () => null },
+      "./connector-directory": { ConnectorDirectory: () => null },
       "./focus-connection": { focusConnection: () => undefined },
       "./notion-workspaces": { NotionWorkspaces: () => null },
       "@/components/mind/kimi-device-connect": { KimiDeviceConnect: () => null },

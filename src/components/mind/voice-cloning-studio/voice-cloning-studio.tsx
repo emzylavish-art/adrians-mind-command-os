@@ -81,17 +81,17 @@ export function VoiceCloningStudioPage({ onBack }: { onBack?: () => void }) {
   );
 
   const refresh = useCallback(async () => {
-    try {
-      const [st, list] = await Promise.all([
-        vcsProviderStatus(),
-        vcsListProfiles(),
-      ]);
-      setStatus(st);
-      setProfiles(list.profiles);
+    const [provider, list] = await Promise.allSettled([vcsProviderStatus(), vcsListProfiles()]);
+    if (provider.status === "fulfilled") setStatus(provider.value);
+    if (list.status === "fulfilled") {
+      setProfiles(list.value.profiles);
       setProfilesLoaded(true);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not load Voice Cloning Studio.");
+    } else {
+      setProfilesLoaded(false);
     }
+    if (list.status === "rejected") setError("Saved voice profiles could not be read. Check the profile store before enrolling a voice.");
+    else if (provider.status === "rejected") setError("The voice provider status could not be verified.");
+    else setError("");
   }, []);
 
   useEffect(() => {

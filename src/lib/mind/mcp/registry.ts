@@ -668,7 +668,11 @@ export async function callRegistryTool(input: {
   if (server.protocol === "http") {
     return { status: "error", ok: false, code: "incompatible", serverId: server.id, tool: input.tool, text: "This connection is a custom HTTP call, not JSON-RPC. Nothing was called.", transport: null, rpc: null };
   }
-  const opened = await registryRpc(fetchImpl, server.url, server.token ?? "", null, {
+  const credential = server.id.startsWith("oauth-vercel-")
+    ? await (await import("../connectors/vercel-mcp.ts")).vercelMcpCredential(input.userId, server)
+    : { ok: true as const, token: server.token ?? "" };
+  if (!credential.ok) return { status: "error", ok: false, code: "missing_config", serverId: server.id, tool: input.tool, text: credential.error, transport: null, rpc: null };
+  const opened = await registryRpc(fetchImpl, server.url, credential.token, null, {
     jsonrpc: "2.0",
     id: 1,
     method: "initialize",
@@ -680,7 +684,7 @@ export async function callRegistryTool(input: {
   let stopped = true;
   try { stopped = await (input.isHalted ?? haltIsOn)(input.userId); } catch { /* fail closed */ }
   if (stopped) return { status: "error", ok: false, serverId: server.id, tool: input.tool, text: "Emergency stop is on or unavailable. No MCP tool was called.", transport: null, rpc: null };
-  const called = await registryRpc(fetchImpl, server.url, server.token ?? "", opened.session, {
+  const called = await registryRpc(fetchImpl, server.url, credential.token, opened.session, {
     jsonrpc: "2.0",
     id: 3,
     method: "tools/call",

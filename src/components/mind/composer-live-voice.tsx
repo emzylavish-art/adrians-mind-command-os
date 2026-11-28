@@ -132,7 +132,7 @@ export type ComposerLiveVoiceProps = {
   onError?: (message: string) => void;
   onNotice?: (message: string) => void;
   disabled?: boolean;
-  getVoiceProfile?: () => Pick<VoiceProfileInput, "personalityId" | "customPersonality" | "characterId"> | null;
+  getVoiceProfile?: () => Pick<VoiceProfileInput, "personalityId" | "customPersonality" | "characterId" | "modeInstruction"> | null;
 };
 
 /** Wired composer mount: logic hook + presentational LiveSpeakControl. */

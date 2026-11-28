@@ -16,6 +16,21 @@ async function save(connector: ConnectorId, subject: string, refreshToken?: stri
   return saveDurableConnection({ ownerId: owner, connector, accessToken: "access-" + subject, externalAccountId: subject, accountLabel, refreshToken }, claim);
 }
 
+test("durable OAuth grants retain provider expiry and scope evidence across reloads", async () => {
+  assert.equal(dbSource, "pglite");
+  process.env.CONNECTOR_TOKEN_SECRET = "c1-fixture-not-a-real-secret";
+  const { state, codeVerifier } = newOAuthState();
+  const claim = newOAuthState().state;
+  const connector = "github";
+  await saveDurablePendingOAuth({ ownerId: owner, connector, state, codeVerifier, redirectUri: "https://fixture.invalid", createdAt: new Date().toISOString() });
+  assert.ok(await takeDurablePendingOAuth(state, claim));
+  const expiresAt = new Date(Date.now() + 3600000).toISOString();
+  await saveDurableConnection({ ownerId: owner, connector, accessToken: "access", refreshToken: "refresh", scopes: "read:user", expiresAt, scopeEvidence: "provider" }, claim);
+  const restored = await readDurableConnection(owner, connector);
+  assert.equal(restored?.expiresAt, expiresAt);
+  assert.equal(restored?.scopeEvidence, "provider");
+});
+
 test("C1 AA002: delayed Google identity cannot overwrite any replacement grant, even at one timestamp", async () => {
   assert.equal(dbSource, "pglite", "isolated embedded database only");
   process.env.CONNECTOR_TOKEN_SECRET = "c1-fixture-not-a-real-secret";

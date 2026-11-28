@@ -88,8 +88,7 @@ export type UniverseMotionSignatureInput = {
   bots: Array<{ id: string; health: string; reason: string }>;
   commitShas: string[];
   feedIds: string[];
-  pageCount: number;
-  edgeCount: number;
+  notionKey: string;
   projectKey: string;
 };
 
@@ -98,9 +97,7 @@ export function universeMotionSignature(input: UniverseMotionSignatureInput): st
   const bots = input.bots.map((b) => `${b.id}:${b.health}:${b.reason}`).join(",");
   const commits = input.commitShas.join(",");
   const feed = input.feedIds.join(",");
-  const pages = Number.isFinite(input.pageCount) ? input.pageCount : 0;
-  const edges = Number.isFinite(input.edgeCount) ? input.edgeCount : 0;
-  return `${bots}|${commits}|${feed}|p${pages}|e${edges}|${input.projectKey}`;
+  return `${bots}|${commits}|${feed}|${input.notionKey}|${input.projectKey}`;
 }
 
 /** Effective motion scale: 0 when reduced, else 1 (or caller override). */

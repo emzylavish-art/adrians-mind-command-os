@@ -2,6 +2,8 @@ import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync, linkSync, renameSync, statSync, unlinkSync, utimesSync } from "node:fs";
 import { join } from "node:path";
 import { localDataPath } from "../../local-data.ts";
+import { completionBuildArtifact } from "../kimi/build-artifact.server.ts";
+import type { StoredBuildArtifact } from "../kimi/build-artifact.ts";
 
 export type PairedAgent = {
   id: string;
@@ -36,6 +38,7 @@ export type PcJob = {
   createdAt: string;
   updatedAt: string;
   output?: string;
+  buildArtifact?: StoredBuildArtifact;
   error?: string;
   receiptId?: string;
   acceptedAt?: string;
@@ -256,7 +259,7 @@ export function enqueueJob(input: {
   return job;
 }
 
-export type JobTransition = Pick<PcJob, "status"> & Partial<Pick<PcJob, "receiptId" | "error" | "output" | "acceptedAt" | "cancellationRequestedAt" | "communicationTimedOutAt" | "lateOutcome">>;
+export type JobTransition = Pick<PcJob, "status"> & Partial<Pick<PcJob, "receiptId" | "error" | "output" | "buildArtifact" | "acceptedAt" | "cancellationRequestedAt" | "communicationTimedOutAt" | "lateOutcome">>;
 
 function snapshot(jobId: string) {
   const path = jobPath(jobId);
@@ -327,6 +330,7 @@ export function claimNextJob(agentId: string): PcJob | null {
   const offered = offerNextJob(agentId);
   if (!offered) return null;
   const payload = offered.payload;
+  if (offered.kind === "kimi-acp" && (payload?.expectedBranch || payload?.artifactName)) return null;
   if (offered.kind === "file-op" && (payload?.expectedContent !== undefined || payload?.expectedMissing === true || payload?.expectedRevision !== undefined)) {
     changeJob(offered.id, (job) => job.status === "queued" ? { status: "error", error: "Update the paired Companion before making reviewed changes. Nothing was executed." } : null);
     return null;
@@ -430,11 +434,12 @@ export function listJobEvents(ownerId: string, jobId: string, limit = 200): PcJo
     .slice(-Math.max(1, Math.min(limit, 500)));
 }
 
-export type JobCompletionInput = { jobId: string; agentId: string; ok: boolean; output?: string; error?: string; cancelled?: boolean; receiptId?: string };
+export type JobCompletionInput = { jobId: string; agentId: string; ok: boolean; output?: string; error?: string; cancelled?: boolean; receiptId?: string; buildArtifact?: unknown };
 /** A stop/timeout is an observation; authenticated execution evidence remains authoritative. */
 export function jobCompletionTransition(current: PcJob, input: JobCompletionInput): JobTransition | "unchanged" | null {
   if (current.agentId !== input.agentId || current.status === "queued") return null;
   if (current.receiptId && input.receiptId && current.receiptId !== input.receiptId) return null;
+  if (current.payload?.artifactName && (!current.receiptId || current.receiptId !== input.receiptId)) return null;
   if (!["running", "cancel_requested", "timeout"].includes(current.status)) return "unchanged";
   if (current.status === "timeout" && !current.acceptedAt) return "unchanged";
   if (input.cancelled === true && !input.ok) return { status: "cancelled", output: (input.output ?? "").slice(0, 8000), error: "Companion confirmed cancellation. Completed effects, if any, were not reversed." };
@@ -447,7 +452,9 @@ export function jobCompletionTransition(current: PcJob, input: JobCompletionInpu
     }
     return { status: "error", error: "PC reported completion but its file result is unreadable. Check the workspace before retrying." };
   }
-  return { status: input.ok ? "done" : "error", output: output.slice(0, 8000), error: (input.error ?? "").slice(0, 2000), lateOutcome };
+  const buildArtifact = current.kind === "kimi-acp" && input.ok
+    ? completionBuildArtifact(current.payload?.artifactName, current.status === "cancel_requested" ? undefined : input.buildArtifact) : undefined;
+  return { status: input.ok ? "done" : "error", output: output.slice(0, 8000), error: (input.error ?? "").slice(0, 2000), lateOutcome, ...(buildArtifact ? { buildArtifact } : {}) };
 }
 export function completeJob(input: JobCompletionInput): PcJob | null {
   const job = changeJob(input.jobId, (current) => jobCompletionTransition(current, input));

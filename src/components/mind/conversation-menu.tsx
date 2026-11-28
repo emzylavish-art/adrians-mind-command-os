@@ -5,7 +5,7 @@ import { finishMenu, MenuCluster, MenuMotion, MenuShelf, menuChip } from "@/comp
 
 const GROUPS: { label: string; ids: ConversationAction[] }[] = [
   { label: "Move", ids: ["project"] },
-  { label: "Edit", ids: ["copy", "rename", "files", "scheduled"] },
+  { label: "Edit", ids: ["copy", "share-text", "rename", "files", "scheduled"] },
   { label: "Keep", ids: ["pin", "favorite", "archive", "quote"] },
   { label: "Remove", ids: ["delete"] },
 ];
@@ -27,7 +27,7 @@ export function ActionsIcon() {
 function RowIcon({ id }: { id: ConversationAction }) {
   const common = { fill: "none", stroke: "currentColor", strokeWidth: 1.6, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
   if (id === "project") return <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M3 5.5h4l1.2 1.5H15v7.2H3z" {...common} /></svg>;
-  if (id === "copy") return <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M7.2 10.8a3.2 3.2 0 0 0 4.6.2l1.8-1.8a3.2 3.2 0 0 0-4.5-4.5L8 5.8" {...common} /><path d="M10.8 7.2a3.2 3.2 0 0 0-4.6-.2L4.4 8.8a3.2 3.2 0 0 0 4.5 4.5L10 12.2" {...common} /></svg>;
+  if (id === "copy" || id === "share-text") return <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M7.2 10.8a3.2 3.2 0 0 0 4.6.2l1.8-1.8a3.2 3.2 0 0 0-4.5-4.5L8 5.8" {...common} /><path d="M10.8 7.2a3.2 3.2 0 0 0-4.6-.2L4.4 8.8a3.2 3.2 0 0 0 4.5 4.5L10 12.2" {...common} /></svg>;
   if (id === "rename") return <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M10.5 4.2 13.8 7.5 6.2 15.1H3v-3.2z" {...common} /></svg>;
   if (id === "files") return <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M4 3.5h6.2L14 7.2V14.5H4z" {...common} /><path d="M10 3.6V7.4h3.6" {...common} /></svg>;
   if (id === "scheduled") return <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><circle cx="9" cy="9" r="5.5" {...common} /><path d="M9 6.2V9l2 1.4" {...common} /></svg>;

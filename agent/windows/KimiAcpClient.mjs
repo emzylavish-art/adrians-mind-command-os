@@ -1,9 +1,11 @@
 #!/usr/bin/env node
-import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { lstat, mkdir, open, readdir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
-import { spawn } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
+import { promisify } from "node:util";
 import { createInterface } from "node:readline";
 import { isAbsolute, relative, resolve } from "node:path";
+import { once } from "node:events";
 
 const args = new Map();
 for (let i = 2; i < process.argv.length; i += 1) {
@@ -27,6 +29,7 @@ const root = resolve(String(payload.cwd || allowedRoots[0] || process.cwd()));
 const kimiCommand = String(config.kimiPath || "kimi");
 const dashboardUrl = String(config.dashboardUrl || "").replace(/\/$/, "");
 const token = String(config.jobToken || (!config.tokenId && config.token) || "");
+const exec = promisify(execFile);
 
 function isWithin(candidate, allowed) {
   const rel = relative(allowed, candidate);
@@ -44,13 +47,16 @@ async function post(path, body) {
     method: "POST",
     headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(10_000),
   });
   if (!response.ok) throw new Error(`${path} returned HTTP ${response.status}`);
   return response.json().catch(() => ({}));
 }
 
 async function jobStatus() {
-  const response = await fetch(`${dashboardUrl}/api/mind/pc/jobs?jobId=${encodeURIComponent(job.id)}`, { headers: { authorization: `Bearer ${token}` } });
+  const response = await fetch(`${dashboardUrl}/api/mind/pc/jobs?jobId=${encodeURIComponent(job.id)}`, {
+    headers: { authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(5_000),
+  });
   if (!response.ok) return null;
   return response.json();
 }
@@ -67,6 +73,55 @@ async function event(type, payloadValue = {}) {
 // edits and inode reuse. Keep the token opaque to the editor.
 function fileRevision(info) {
   return createHash("sha256").update([info.dev, info.ino, info.birthtimeNs, info.ctimeNs, info.size].join(":")).digest("hex");
+}
+
+const artifactLimit = 1024 * 1024;
+let reviewedArtifact;
+
+async function artifactDirectory(workspace) {
+  const directory = resolve(workspace, "artifacts");
+  const info = await lstat(directory);
+  if (!info.isDirectory() || relative(directory, await realpath(directory)) !== "") throw Error("Build output directory must be a real folder.");
+  return directory;
+}
+
+async function prepareBuildArtifact(name) {
+  if (typeof name !== "string" || name.length > 80 || !/^[a-z0-9][a-z0-9_-]*\.(?:bin|pdf|zip|png|jpe?g|webp|gif|wasm)$/i.test(name) ||
+    /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])\./i.test(name)) throw Error("The reviewed Build output name is invalid.");
+  const workspace = await realpath(root);
+  const allowed = await Promise.all(allowedRoots.map(path => realpath(resolve(path)).catch(() => null)));
+  if (!allowed.some(path => path && isWithin(workspace, path))) throw Error("The Build output workspace is outside the approved roots.");
+  try {
+    const directory = await artifactDirectory(workspace);
+    await lstat(resolve(directory, name));
+    throw Error("The Build output file already exists. Choose a new filename.");
+  } catch (error) { if (error.code !== "ENOENT") throw error; }
+  return { workspace, name };
+}
+
+async function readBuildArtifact({ workspace, name }) {
+  const unavailable = { name, status: "unavailable" };
+  if (stopRequested) return unavailable;
+  try {
+    if (relative(workspace, await realpath(root)) !== "") return unavailable;
+    const directory = await artifactDirectory(workspace);
+    const path = resolve(directory, name);
+    const before = await lstat(path, { bigint: true });
+    if (!before.isFile() || before.nlink !== 1n || before.size < 1n || before.size > BigInt(artifactLimit)) return unavailable;
+    const revision = fileRevision(before);
+    const file = await open(path, "r");
+    try {
+      if (fileRevision(await file.stat({ bigint: true })) !== revision) return unavailable;
+      const buffer = Buffer.alloc(Number(before.size) + 1);
+      const { bytesRead } = await file.read(buffer, 0, buffer.length, 0);
+      await artifactDirectory(workspace);
+      if (stopRequested || bytesRead !== Number(before.size) ||
+        fileRevision(await file.stat({ bigint: true })) !== revision ||
+        fileRevision(await lstat(path, { bigint: true })) !== revision) return unavailable;
+      const bytes = buffer.subarray(0, bytesRead);
+      return { name, status: "saved", bytes: bytesRead, sha256: createHash("sha256").update(bytes).digest("hex"), base64: bytes.toString("base64") };
+    } finally { await file.close(); }
+  } catch { return unavailable; }
 }
 
 async function listWorkspace(directory, prefix = "", output = []) {
@@ -186,6 +241,49 @@ let output = "";
 let child;
 let closed = false;
 let cancellationTimer;
+let cancellationPollPending = false;
+let stopRequested = false;
+let stopConfirmed = false;
+let forceStopTimer;
+
+function rejectPending(error) {
+  for (const item of pending.values()) {
+    clearTimeout(item.timer);
+    item.reject(error);
+  }
+  pending.clear();
+}
+
+function stopCodingProcess() {
+  if (closed || stopRequested || !child?.pid) return;
+  stopRequested = true;
+  if (process.platform === "win32") {
+    void exec("taskkill.exe", ["/PID", String(child.pid), "/T", "/F"], { timeout: 5000, windowsHide: true })
+      .catch(() => { if (!closed) child.kill(); });
+  } else {
+    child.kill();
+    forceStopTimer = setTimeout(() => { if (!closed) child.kill("SIGKILL"); }, 2000);
+  }
+}
+
+async function checkCancellation() {
+  if (cancellationPollPending || closed || stopRequested) return;
+  cancellationPollPending = true;
+  try {
+    if ((await jobStatus())?.job?.status === "cancel_requested") stopCodingProcess();
+  } catch { /* A transient dashboard failure will be checked at the next poll. */ }
+  finally { cancellationPollPending = false; }
+}
+
+async function requirePromptAuthorization() {
+  const status = (await jobStatus())?.job?.status;
+  if (!closed && (stopRequested || status === "cancel_requested")) {
+    const exit = once(child, "exit");
+    stopCodingProcess();
+    await exit;
+  }
+  if (closed || status !== "running") throw Error("Job authorization changed before the coding prompt was submitted.");
+}
 
 function send(message) {
   if (!child?.stdin.writable) throw new Error("Kimi ACP stdin is closed.");
@@ -200,7 +298,13 @@ function request(method, params, timeoutMs = 120_000) {
       reject(new Error(`Timed out waiting for ACP method ${method}.`));
     }, timeoutMs);
     pending.set(id, { resolve: resolvePromise, reject, timer, method });
-    send({ jsonrpc: "2.0", id, method, params });
+    try {
+      send({ jsonrpc: "2.0", id, method, params });
+    } catch (error) {
+      clearTimeout(timer);
+      pending.delete(id);
+      reject(error);
+    }
   });
 }
 
@@ -259,6 +363,7 @@ async function main() {
     await event("session_complete", { kind: "file-op" });
     return result;
   }
+  await verifyReviewedSource();
   await event("runtime_start", { command: "kimi acp", cwd: root });
   child = spawn(kimiCommand, ["acp"], {
     cwd: root,
@@ -268,16 +373,16 @@ async function main() {
   });
   child.stderr.setEncoding("utf8");
   child.stderr.on("data", (chunk) => console.error(String(chunk).trimEnd()));
-  child.on("error", (error) => {
-    for (const item of pending.values()) { clearTimeout(item.timer); item.reject(error); }
-    pending.clear();
-  });
+  child.on("error", rejectPending);
+  child.stdin.on("error", error => { if (!stopRequested) rejectPending(error); });
   child.on("exit", (code, signal) => {
     closed = true;
     if (cancellationTimer) clearInterval(cancellationTimer);
-    if (code !== 0) for (const item of pending.values()) { clearTimeout(item.timer); item.reject(new Error(`Kimi ACP exited with code=${code} signal=${signal || "none"}.`)); }
-    if (code !== 0) console.error(`kimi acp exited with code=${code} signal=${signal || "none"}`);
+    if (forceStopTimer) clearTimeout(forceStopTimer);
+    stopConfirmed = stopRequested && (Boolean(signal) || code !== 0);
+    rejectPending(new Error(`Kimi ACP exited with code=${code} signal=${signal || "none"}.`));
   });
+  cancellationTimer = setInterval(() => void checkCancellation(), 1_000);
 
   const lines = createInterface({ input: child.stdout, crlfDelay: Infinity });
   lines.on("line", async (line) => {
@@ -312,21 +417,73 @@ async function main() {
   const sessionId = session?.sessionId;
   if (!sessionId) throw new Error("Kimi ACP did not return a sessionId.");
   await event("session_created", { sessionId });
-  cancellationTimer = setInterval(async () => {
-    try {
-      const status = await jobStatus();
-      if (status?.job?.status === "cancel_requested" && child && !closed) {
-        await event("session_cancelled", { sessionId });
-        child.kill();
-      }
-    } catch { /* transient dashboard failure; the next poll retries */ }
-  }, 1_000);
-  await request("session/prompt", { sessionId, prompt: [{ type: "text", text: prompt }] }, 900_000);
+  await requirePromptAuthorization();
+  const review = await verifyReviewedSource();
+  if (review) {
+    const acknowledgement = await post("/api/mind/pc/events", { jobId: job.id, type: "source_verified", payload: review });
+    if (acknowledgement.ok !== true) throw Error("The dashboard did not acknowledge the reviewed source.");
+    await requirePromptAuthorization();
+    const finalReview = await verifyReviewedSource();
+    if (finalReview?.head !== review.head) throw Error("The checkout commit changed after source verification.");
+  }
+  if (closed || stopRequested) throw Error("The coding process stopped before the prompt was submitted.");
+  if (payload.artifactName !== undefined) reviewedArtifact = await prepareBuildArtifact(payload.artifactName);
+  if (closed || stopRequested) throw Error("The coding process stopped before the prompt was submitted.");
+  const reviewedPrompt = reviewedArtifact ? prompt + "\n\nSave the approved output as a new file at artifacts/" + reviewedArtifact.name + " (up to 1 MiB)." : prompt;
+  await request("session/prompt", { sessionId, prompt: [{ type: "text", text: reviewedPrompt }] }, 900_000);
   await event("session_complete", { sessionId, outputChars: output.length });
   try { await request("session/close", { sessionId }, 30_000); } catch { /* best effort */ }
   child.stdin.end();
   if (!closed) child.kill();
   return output || "Kimi completed without an assistant text chunk.";
+}
+
+async function verifyReviewedSource() {
+  const receipt = payload.sourceReceipt;
+  if (receipt == null) {
+    if (payload.expectedBranch !== undefined) throw Error("The branch-checked job lacks its reviewed checkout.");
+    return null;
+  }
+  if ((job.agentId != null && receipt.workspace !== job.agentId) || typeof receipt.cwd !== "string" || (receipt.cwd && resolve(receipt.cwd) !== root)
+    || !["saved", "save"].includes(receipt.policy) || !Array.isArray(receipt.files) || receipt.files.length > 100) {
+    throw Error("The reviewed source does not match this coding workspace.");
+  }
+  const resolvedRoot = await realpath(root);
+  const resolvedAllowed = await Promise.all(allowedRoots.map(path => realpath(resolve(path)).catch(() => null)));
+  if (!resolvedAllowed.some(path => path && isWithin(resolvedRoot, path))) throw Error("The reviewed workspace resolves outside the approved roots.");
+  let branch;
+  let head;
+  if (payload.expectedBranch !== undefined) {
+    if (!job.agentId || !receipt.cwd || receipt.policy !== "saved" || !receipt.files.length) throw Error("The branch-checked job lacks its reviewed checkout.");
+    try {
+      const result = await exec("git", ["-C", resolvedRoot, "symbolic-ref", "--quiet", "--short", "HEAD"], { timeout: 2500, windowsHide: true });
+      branch = result.stdout.trim();
+      head = (await exec("git", ["-C", resolvedRoot, "rev-parse", "--verify", "HEAD"], { timeout: 2500, windowsHide: true })).stdout.trim();
+    } catch { throw Error("The active Git branch could not be verified."); }
+    if (branch !== payload.expectedBranch) throw Error("The active Git branch changed before the coding prompt.");
+  }
+  const files = [];
+  for (const file of receipt.files) {
+    if (!file || typeof file.path !== "string" || typeof file.sha256 !== "string" || !/^[a-f0-9]{64}$/.test(file.sha256)) {
+      throw Error("The reviewed source receipt is invalid.");
+    }
+    const selected = safePath(file.path);
+    const path = selected ? await realpath(selected).catch(() => null) : null;
+    if (!path || !isWithin(path, resolvedRoot)) throw Error("A reviewed file is missing or outside the approved workspace.");
+    const info = await stat(path);
+    if (!info.isFile() || info.size > 2_000_000) throw Error("A reviewed file could not be checked.");
+    const content = await readFile(path, "utf8");
+    if (createHash("sha256").update(content).digest("hex") !== file.sha256) {
+      throw Error("A reviewed file changed before the coding prompt. Review its current contents.");
+    }
+    files.push({ path: file.path, sha256: file.sha256 });
+  }
+  return files.length ? {
+    branch,
+    head,
+    fileCount: files.length,
+    sourceDigest: createHash("sha256").update(JSON.stringify({ workspace: receipt.workspace, cwd: receipt.cwd, policy: receipt.policy, files })).digest("hex"),
+  } : null;
 }
 
 async function getReceipt(path) {
@@ -360,19 +517,30 @@ async function deliver() {
     if (!result) {
       try {
         const status = await jobStatus();
-        if (status?.job?.status !== "running") throw new Error("Job is no longer active or its status could not be verified.");
-        result = { jobId: job.id, ok: true, output: await main() };
+        if (status?.job?.status === "cancel_requested") {
+          result = { jobId: job.id, ok: false, cancelled: true };
+        } else {
+          if (status?.job?.status !== "running") throw new Error("Job is no longer active or its status could not be verified.");
+          result = { jobId: job.id, ok: true, output: await main() };
+          if (reviewedArtifact) result.buildArtifact = await readBuildArtifact(reviewedArtifact);
+        }
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        await event("runtime_error", { error: message });
-        result = { jobId: job.id, ok: false, error: message };
+        if (cancellationTimer) clearInterval(cancellationTimer);
+        if (child && !closed) child.kill();
+        if (stopConfirmed) {
+          result = { jobId: job.id, ok: false, cancelled: true, output };
+        } else {
+          const message = error instanceof Error ? error.message : String(error);
+          await event("runtime_error", { error: message });
+          result = { jobId: job.id, ok: false, error: message };
+        }
       }
     }
     await writeFile(resultPath + ".new", JSON.stringify(result), { mode: 0o600, flush: true });
     await rename(resultPath + ".new", resultPath);
   }
-  const ack = await post("/api/mind/pc/result", result);
-  if (!ack.ok) throw new Error("Dashboard did not acknowledge the saved outcome.");
+  const ack = await post("/api/mind/pc/result", { ...result, receiptId: job.receiptId });
+  if (ack.ok !== true) throw new Error("Dashboard did not acknowledge the saved outcome.");
 }
 
 try { await deliver(); }

@@ -5,10 +5,11 @@ import type { MonetaryDispatchContext } from "../financial-policy.ts";
 import { IMAGINE_MAX_N, checkImagineRateLimit, imagineRateLimitKey, mapImagineHttpError } from "./harden.ts";
 import { imagineUsage, reserveImagine } from "./spend-ledger.ts";
 import { fetchPinnedUrl, resolveAndPinUrl, type LookupFn } from "./ssrf.ts";
-import { resolveImageApiKey, resolveXaiInferenceApiKey } from "./xai-key.ts";
+import { resolveImageApiKey } from "./xai-key.ts";
 import { MAX_DATA_URL_CHARS, MAX_IMAGES_PER_TURN } from "./types.ts";
 import {
   GROK_IMAGINE_MODEL,
+  GROK_IMAGINE_QUALITY_MODEL,
   normalizeImaginePrompt,
   resolveImagineModel,
   XAI_IMAGES_EDITS_URL,
@@ -205,6 +206,7 @@ export async function generateImagineImages(
       },
       body: JSON.stringify({
         model,
+        ...(model === GROK_IMAGINE_QUALITY_MODEL ? { quality: "low" } : {}),
         prompt: normalized.prompt,
         n,
         response_format: responseFormat,
@@ -301,12 +303,12 @@ export function collectEditImageUrls(input: ImagineEditRequest): string[] {
   if (typeof input.imageDataUrl === "string" && input.imageDataUrl.startsWith("data:image/")) {
     if (!urls.includes(input.imageDataUrl)) urls.unshift(input.imageDataUrl);
   }
-  return urls.slice(0, 4);
+  return [...new Set(urls)].slice(0, 4);
 }
 
 /**
  * Edit one or more images with Grok Imagine via POST /v1/images/edits.
- * Single: `{ image_url }`. Multi (live-probed): `{ image_urls: [...] }`.
+ * Imagine 2.0 uses typed image objects. The original model uses the legacy URL fields.
  * Multipart and raw-string `image` fields are rejected by the API.
  */
 export async function editImagineImage(
@@ -340,7 +342,7 @@ export async function editImagineImage(
 
   const rejected = options.skipSpendControls ? null : checkOwnerRate(options.meter);
   if (rejected) return rejected;
-  const apiKey = options.apiKey ?? resolveXaiInferenceApiKey();
+  const apiKey = options.apiKey ?? resolveImageApiKey();
   if (!apiKey) {
     return {
       ok: false,
@@ -359,7 +361,12 @@ export async function editImagineImage(
     prompt: normalized.prompt,
     response_format: responseFormat,
   };
-  if (imageUrls.length === 1) requestBody.image_url = imageUrls[0];
+  if (model === GROK_IMAGINE_QUALITY_MODEL) {
+    requestBody.quality = "low";
+    const images = imageUrls.map((url) => ({ type: "image_url", url }));
+    if (images.length === 1) requestBody.image = images[0];
+    else requestBody.images = images;
+  } else if (imageUrls.length === 1) requestBody.image_url = imageUrls[0];
   else requestBody.image_urls = imageUrls;
 
   const attempt = imagineUsageAttempt({ ownerId: options.meter?.ownerId, chatId: options.meter?.chatId,

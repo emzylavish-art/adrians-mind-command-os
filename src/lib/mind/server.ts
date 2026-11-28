@@ -1,4 +1,4 @@
-import { performSearch } from "./research";
+import { performSearch, researchRetryAllowed, runDeepResearchPlan, shouldRunDeepResearch, withResearchProvenance } from "./research";
 import { authorizeExternalResource, externalResourceCall } from "./external-resource-call.server";
 import { createMiddleware, createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
@@ -162,7 +162,9 @@ export const workerHealth = createServerFn({ method: "GET" }).handler(async () =
 
 export const searchWeb = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: { query: string; freeOnly?: boolean; retryQueries?: string[]; operationId?: string; projectId?: string | null }) => ({
+  .validator((input: { query: string; freeOnly?: boolean; retryQueries?: string[]; operationId?: string; projectId?: string | null; deep?: boolean; routeFingerprint?: string }) => ({
+    deep: typeof input.deep === "boolean" ? input.deep : undefined,
+    routeFingerprint: typeof input.routeFingerprint === "string" ? input.routeFingerprint.slice(0, 64) : undefined,
     operationId: input.operationId, projectId: typeof input.projectId === "string" ? input.projectId : undefined, query: typeof input.query === "string" ? input.query.trim() : "", freeOnly: input.freeOnly === true, retryQueries: Array.isArray(input.retryQueries) ? input.retryQueries.filter((q) => typeof q === "string" && q.length <= 330).slice(0, 3) : undefined,
   }))
   .handler(async ({ data, context }) => {
@@ -198,13 +200,29 @@ export const searchWeb = createServerFn({ method: "POST" })
       return null;
     };
     try {
-      if (endpoint && key) {
-        return { ...await performSearch({ query: data.query, retryQueries: data.retryQueries,
-          deep: data.retryQueries ? true : undefined, endpoint, key, beforeDispatch }), operationId };
+      const { researchRouteIdentity } = await import("./research-route.server");
+      const { SEARCH_MODEL, searchWithGrok } = await import("./xai-search");
+      const { resolveXaiInferenceApiKey } = await import("./media/xai-key");
+      const deep = Boolean(data.retryQueries) || shouldRunDeepResearch(data.query, data.deep);
+      const strategy = deep ? "multi_query" as const : "single_query" as const;
+      const xaiKey = endpoint && key ? undefined : resolveXaiInferenceApiKey();
+      const route = endpoint && key
+        ? researchRouteIdentity({ provider: "configured-search", endpoint, key, strategy })
+        : researchRouteIdentity({ provider: "xai", endpoint: "https://api.x.ai/v1/responses", key: xaiKey || "", model: SEARCH_MODEL, strategy });
+      if (!researchRetryAllowed(data.retryQueries, data.routeFingerprint, route)) {
+        return { ok: false as const, configured: false, citations: [], error: "The original search configuration could not be confirmed. Start a new report to search with the current provider.", operationId };
       }
-      if (data.retryQueries) return { ok: false as const, configured: false, citations: [], error: "The original research service is unavailable.", operationId };
-      const { searchWithGrok } = await import("./xai-search");
-      return { ...await searchWithGrok(data.query, { beforeDispatch }), operationId };
+      const options = { query: data.query, retryQueries: data.retryQueries };
+      const result = endpoint && key
+        ? await performSearch({ ...options, deep, endpoint, key, beforeDispatch })
+        : deep && xaiKey
+          ? await runDeepResearchPlan(options, (query, signal) => searchWithGrok(query, { apiKey: xaiKey, signal, beforeDispatch }))
+          : await searchWithGrok(data.query, { apiKey: xaiKey, beforeDispatch });
+      const attributed = withResearchProvenance(result, route, data.query);
+      const summary = result.providerAnswer && deep
+        ? `${result.providerAnswer}\n\n${attributed.summary || ""}`.trim()
+        : result.providerAnswer || result.summary || attributed.summary;
+      return { ...attributed, summary, operationId };
     } finally {
       // Search adapters do not return actual dollar charges; keep every dispatched sub-query reserved.
       await Promise.allSettled(reservations.map((id) => settleOwnerDispatch(context.userId, id, { outcome: "unknown" })));
@@ -249,16 +267,26 @@ export const notionDisconnect = createServerFn({ method: "POST" })
 
 export const notionCommand = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: { text?: string; confirmed?: boolean; pageId?: string | null; workspaceId?: string; cursor?: string | null; operationId?: string; chatId?: string }) => ({
+  .validator((input: { text?: string; confirmed?: boolean; pageId?: string | null; workspaceId?: string; cursor?: string | null; operationId?: string; chatId?: string; recoverOnly?: boolean; ownerId?: string }) => ({
     text: typeof input.text === "string" ? input.text.slice(0, 8001) : "",
     chatId: typeof input.chatId === "string" ? input.chatId.slice(0, 80) : undefined,
     workspaceId: typeof input.workspaceId === "string" ? input.workspaceId : undefined,
     cursor: typeof input.cursor === "string" ? input.cursor.slice(0, 200) : null,
     operationId: typeof input.operationId === "string" ? input.operationId.slice(0, 128) : undefined,
     confirmed: input.confirmed === true,
+    recoverOnly: input.recoverOnly === true,
+    ownerId: typeof input.ownerId === "string" ? input.ownerId.slice(0, 128) : undefined,
     pageId: typeof input.pageId === "string" ? input.pageId.slice(0, 80) : null,
   }))
   .handler(async ({ data, context }): Promise<NotionTurn> => {
+    if (data.recoverOnly && data.ownerId !== context.userId) return {
+      ok: false, state: "disconnected", action: "none", needsConfirmation: false, ambiguous: false,
+      pages: [], content: "", error: "The signed-in account changed. Reopen the saved Notion operation.", wrote: false, verified: false,
+    };
+    if (data.recoverOnly && (!data.workspaceId || !data.pageId || !data.operationId)) return {
+      ok: false, state: "connected", action: "none", needsConfirmation: false, ambiguous: false,
+      pages: [], content: "", error: "The existing operation, workspace and exact page are required for this check.", wrote: false, verified: false,
+    };
     const { haltIsOn } = await import("./halt.server");
     if (await haltIsOn(context.userId)) {
       return {
@@ -319,7 +347,8 @@ export const notionCommand = createServerFn({ method: "POST" })
       workspaceId: data.workspaceId,
       disabled: false,
       text: data.text,
-      confirmed: data.confirmed,
+      confirmed: data.confirmed && !data.recoverOnly,
+      recoverOnly: data.recoverOnly,
       pageId: data.pageId,
       cursor: data.cursor,
       fetch: globalThis.fetch,

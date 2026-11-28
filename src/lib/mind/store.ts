@@ -22,10 +22,10 @@ async function withOwnerSnapshot<T>(sql: Sql, userId: string, fn: (tx: Sql, raw:
   });
 }
 
-export function updateOwnerWorkspace<T>(sql: Sql, userId: string, change: (current: Workspace, raw: unknown) => { workspace?: Workspace; result: T }): Promise<T> {
+export function updateOwnerWorkspace<T>(sql: Sql, userId: string, change: (current: Workspace, raw: unknown, tx: Sql) => { workspace?: Workspace; result: T } | Promise<{ workspace?: Workspace; result: T }>): Promise<T> {
   return withOwnerSnapshot(sql, userId, async (tx, raw) => {
     const current = normalizeWorkspace(raw);
-    const { workspace, result } = change(current, raw);
+    const { workspace, result } = await change(current, raw, tx);
     if (workspace) await persistSnapshot(tx, userId, workspace, current);
     return result;
   });
@@ -202,7 +202,7 @@ export async function readSnapshot(sql: Sql, userId: string): Promise<unknown | 
   return parsedPayload(rows[0]?.payload);
 }
 
-function parsedPayload(payload: unknown): unknown {
+export function parsedPayload(payload: unknown): unknown {
   return typeof payload === "string" ? JSON.parse(payload) : payload ?? null;
 }
 

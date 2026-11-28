@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { BlockNode, InlineNode } from "@/lib/mind/markdown-safe";
 import { parseMarkdownBlocks } from "@/lib/mind/markdown-safe";
+import { isWorkRunLink } from "@/lib/mind/app-location";
 
 function renderInlines(nodes: InlineNode[], keyPrefix: string): ReactNode[] {
   return nodes.map((node, i) => {
@@ -31,7 +32,7 @@ function renderInlines(nodes: InlineNode[], keyPrefix: string): ReactNode[] {
             key={key}
             className="md-link"
             href={node.href}
-            target="_blank"
+            target={isWorkRunLink(node.href) ? undefined : "_blank"}
             rel="noopener noreferrer"
           >
             {renderInlines(node.children, key)}

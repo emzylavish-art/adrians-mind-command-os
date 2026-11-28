@@ -65,7 +65,8 @@ export async function dispatchTranscription(owner: string, body: Record<string, 
       } catch { return { ok: false as const, dispatched: false as const, code: "resource_policy", error: "Account resource approval is unavailable for the selected transcription service." }; }
       let sent = false;
       try {
-        const heard = await transcribeSelected({ selected, ...audio, fetchImpl: tracker.fetch("transcription", () => { sent = true; attempted = true; }) });
+        const language = typeof body.language === "string" && /^[a-z]{2,3}(?:-[a-zA-Z]{2,4})?$/.test(body.language) ? body.language.split("-")[0] : undefined;
+        const heard = await transcribeSelected({ selected, ...audio, language, fetchImpl: tracker.fetch("transcription", () => { sent = true; attempted = true; }) });
         if (tracker.error) return { ok: false as const, dispatched: false as const, code: "record_unavailable", error: tracker.error };
         await settle(heard.ok, undefined, sent);
         settle = undefined;

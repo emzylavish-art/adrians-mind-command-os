@@ -299,6 +299,24 @@ const notionProvider: OAuthProvider = {
     "Notion OAuth is not configured. Set NOTION_OAUTH_CLIENT_ID, NOTION_OAUTH_CLIENT_SECRET, and NOTION_OAUTH_REDIRECT_URI. Nothing was started.",
 };
 
+const vercelProvider: OAuthProvider = {
+  id: "vercel", displayName: "Vercel",
+  envKeys: { clientId: "VERCEL_MCP_CLIENT_ID", clientSecret: "", redirectUri: "VERCEL_MCP_REDIRECT_URI" },
+  defaults: { authorizeUrl: "https://vercel.com/oauth/authorize", tokenUrl: "https://vercel.com/api/login/oauth/token", revokeUrl: "https://vercel.com/api/login/oauth/token/revoke" },
+  scopes: ["openid", "offline_access"], pkce: true, tokenAuth: "public", revokeStyle: "form_token",
+  resource: "https://mcp.vercel.com/",
+  readEnv(env = process.env) {
+    const production = env.VERCEL_ENV === "production";
+    return {
+      clientId: trim(env, "VERCEL_MCP_CLIENT_ID") || (production ? "https://adrians-mind.vercel.app/oauth/vercel-client.json" : undefined),
+      redirectUri: trim(env, "VERCEL_MCP_REDIRECT_URI") || (production ? "https://adrians-mind.vercel.app/api/mind/oauth/vercel/callback" : undefined),
+      ...this.defaults,
+    };
+  },
+  parseAccount: () => ({ accountLabel: "Vercel account" }),
+  notConfiguredDetail: "Vercel sign-in needs a published OAuth client metadata document and a matching callback on this deployment.",
+};
+
 export const OAUTH_PROVIDERS: Record<ConnectorId, OAuthProvider> = {
   notion: notionProvider,
   youtube: youtubeProvider,
@@ -307,6 +325,7 @@ export const OAUTH_PROVIDERS: Record<ConnectorId, OAuthProvider> = {
   google_drive: googleDriveProvider,
   slack: slackProvider,
   github: githubProvider,
+  vercel: vercelProvider,
 };
 
 /** Connectors served by the dynamic /api/mind/oauth/$connector/* routes (Notion keeps dedicated routes). */
@@ -317,6 +336,7 @@ export const DYNAMIC_OAUTH_CONNECTORS = [
   "google_drive",
   "slack",
   "github",
+  "vercel",
 ] as const satisfies readonly ConnectorId[];
 
 export type DynamicOauthConnector = (typeof DYNAMIC_OAUTH_CONNECTORS)[number];

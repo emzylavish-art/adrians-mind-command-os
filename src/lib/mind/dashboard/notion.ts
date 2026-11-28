@@ -1,5 +1,5 @@
 import type { NotionStopPoint } from "./types.ts";
-import type { NotionGraph } from "./notion-graph-core.ts";
+import type { NotionGraph, NotionSnapPage } from "./notion-graph-core.ts";
 
 export const MIRROR_PAGE_ID = "40bb95f33e42814aacf8c3281b4f528d";
 
@@ -93,60 +93,88 @@ function titleFromSearch(item: { properties?: Record<string, { title?: Array<{ p
   return "";
 }
 
-/** Live graph pages from the Notion search API. Returns null when no token or no pages. */
-export async function fetchNotionGraph(
-  token: string | undefined,
-  fetchImpl: typeof fetch = fetch,
-): Promise<NotionGraph | null> {
-  if (!token?.trim()) return null;
+type GraphItem = {
+  id?: string;
+  object?: string;
+  name?: string;
+  description?: string;
+  status?: string;
+  agent_type?: string;
+  instructions_page_id?: string;
+  last_edited_time?: string;
+  parent?: { page_id?: string };
+  properties?: Record<string, { title?: Array<{ plain_text?: string }> }>;
+};
+
+type GraphCollection = { results: GraphItem[]; more: boolean; issue?: string };
+
+async function graphCollection(
+  token: string, resource: "pages" | "agents", limit: number, fetchImpl: typeof fetch,
+): Promise<GraphCollection> {
+  const pages = resource === "pages";
+  const path = pages ? "search" : "agents/query";
   try {
-    const res = await fetchImpl("https://api.notion.com/v1/search", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token.trim()}`,
-        "Notion-Version": "2022-06-28",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ query: "Adrian", page_size: 20, filter: { property: "object", value: "page" } }),
+    const response = await fetchImpl(`https://api.notion.com/v1/${path}`, {
+      method: "POST", cache: "no-store", signal: AbortSignal.timeout(9000),
+      headers: { Authorization: `Bearer ${token}`, "Notion-Version": "2026-03-11", "Content-Type": "application/json" },
+      body: JSON.stringify(pages
+        ? { page_size: limit, filter: { property: "object", value: "page" }, sort: { timestamp: "last_edited_time", direction: "descending" } }
+        : { page_size: limit }),
     });
-    if (!res.ok) return null;
-    const json = (await res.json()) as {
-      results?: Array<{
-        id?: string;
-        url?: string;
-        last_edited_time?: string;
-        parent?: { page_id?: string };
-        properties?: Record<string, { title?: Array<{ plain_text?: string }> }>;
-      }>;
-    };
-    const pages = (json.results ?? []).flatMap((item) => {
-      const id = item.id ?? "";
-      const title = titleFromSearch(item);
-      if (!id || !title) return [];
-      return [{
-        id,
-        title,
-        url: item.url || `https://www.notion.so/${id.replace(/-/g, "")}`,
-        parentId: item.parent?.page_id ?? null,
-        lastEdited: item.last_edited_time ?? null,
-        excerpt: "",
-        kind: "page",
-      }];
-    }).slice(0, 48);
-    if (!pages.length) return null;
-    const ids = new Set(pages.map((page) => page.id));
-    const edges = pages.flatMap((page) => page.parentId && ids.has(page.parentId) ? [{ from: page.parentId, to: page.id, kind: "parent" }] : []);
-    return {
-      available: true,
-      mode: "live",
-      generatedAt: new Date().toISOString(),
-      pages,
-      edges,
-      botPageMap: {},
-      stats: { pages: pages.length, edges: edges.length, botsMapped: 0 },
-      reason: "Live Notion search.",
-    };
+    if (!response.ok) {
+      const issue = response.status === 403
+        ? `This connection lacks access to ${resource}.`
+        : response.status === 401 ? "Reconnect your Notion account."
+        : `Notion ${resource} unavailable (HTTP ${response.status}).`;
+      return { results: [], more: false, issue };
+    }
+    const data = await response.json();
+    if (!Array.isArray(data.results)) throw new Error("Invalid response");
+    return { results: data.results.slice(0, limit), more: Boolean(data.has_more) };
   } catch {
-    return null;
+    return { results: [], more: false, issue: `Notion ${resource} could not be loaded.` };
   }
+}
+
+export async function fetchNotionGraph(token: string, fetchImpl: typeof fetch = fetch): Promise<NotionGraph> {
+  // The force graph budgets 48 workspace nodes per frame. Keep space for AI agents
+  // even when an account has thousands of shared pages.
+  const [pageBatch, agentBatch] = await Promise.all([
+    graphCollection(token, "pages", 32, fetchImpl), graphCollection(token, "agents", 16, fetchImpl),
+  ]);
+  const pages: NotionSnapPage[] = [];
+  const edges: NotionGraph["edges"] = [];
+  const ids = new Set<string>();
+  for (const item of pageBatch.results) {
+    if (item?.object !== "page" || typeof item.id !== "string" || !item.id || ids.has(item.id)) continue;
+    ids.add(item.id);
+    pages.push({ id: item.id, title: titleFromSearch(item) || "Untitled page",
+      url: `https://www.notion.so/${encodeURIComponent(item.id.replace(/-/g, ""))}`, parentId: item.parent?.page_id ?? null,
+      lastEdited: item.last_edited_time ?? null, excerpt: "", kind: "page" });
+  }
+  for (const page of pages) {
+    if (page.parentId && ids.has(page.parentId)) edges.push({ from: page.parentId, to: page.id, kind: "parent" });
+  }
+  const pageCount = pages.length;
+  for (const item of agentBatch.results) {
+    if (item?.object !== "agent" || typeof item.id !== "string" || !item.id) continue;
+    const id = `agent:${item.id}`;
+    if (ids.has(id)) continue;
+    ids.add(id);
+    const kind = item.agent_type === "personal_agent" ? "Notion personal agent" : "Notion AI agent";
+    pages.push({ id, title: item.name || kind, kind, parentId: null, url: "",
+      lastEdited: item.last_edited_time ?? null, excerpt: [item.description, item.status].filter(Boolean).join(" · ") });
+    if (item.instructions_page_id && ids.has(item.instructions_page_id)) {
+      edges.push({ from: id, to: item.instructions_page_id, kind: "instructions" });
+    }
+  }
+  const agents = pages.length - pageCount;
+  const summaries = [
+    pageBatch.issue || `${pageCount} ${pageBatch.more ? "recent " : ""}Notion pages`,
+    agentBatch.issue || `${agents}${agentBatch.more ? "+" : ""} Notion AI agents`,
+  ];
+  const available = !pageBatch.issue || !agentBatch.issue;
+  return { available, mode: available ? "live" : "unavailable", generatedAt: new Date().toISOString(),
+    pages, edges, botPageMap: {}, stats: { pages: pageCount, agents, edges: edges.length, botsMapped: 0 },
+    reason: summaries.join(" · ") };
 }

@@ -22,7 +22,15 @@ export function archiveReview(current: Workspace, incoming: Workspace) {
 export function quarantineImportedMemory(incoming: Workspace, destination: Workspace, missingScopeIds: Set<string> = new Set()): Workspace {
   const projectIds = new Set([...destination.projects, ...incoming.projects].map(row => row.id));
   const chatIds = new Set([...destination.chats, ...incoming.chats].map(row => row.id));
-  return { ...incoming, memories: incoming.memories.map(note => {
+  // Imported transcripts can describe a completed workflow, but they cannot attest to a local run.
+  const chats = incoming.chats.map(chat => ({
+    ...chat, messages: chat.messages.map(message => {
+      if (!message.workflowKind) return message;
+      const { workflowKind: _imported, ...rest } = message;
+      return rest;
+    }),
+  }));
+  return { ...incoming, chats, memories: incoming.memories.map(note => {
     const reason = note.reviewReason || (missingScopeIds.has(note.id) ? "The archive did not declare this note's scope. Choose its scope before using it."
       : note.scope === "project" && !projectIds.has(note.projectId ?? "") ? "The referenced project is missing. Choose an existing project."
       : note.scope === "chat" && !chatIds.has(note.chatId ?? "") ? "The referenced conversation is missing. Choose an existing conversation." : null);

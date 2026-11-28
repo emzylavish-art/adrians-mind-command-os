@@ -6,9 +6,10 @@ import { clearDeviceVideos } from "@/lib/mind/media/video-device-store";
 import { accountKnowledgeStore } from "@/lib/mind/knowledge-index";
 import { clearAccountDrafts } from "@/lib/mind/use-composer-draft";
 import type { Workspace } from "@/lib/mind/types";
+import { packWorkspace } from "@/lib/mind/workspace";
 import { ResourceState } from "./resource-state";
 
-export function DataRetentionCenter({ ownerId, workspace, syncNote, onExport, verifyServerCopy, onLocalCleared }: { ownerId: string; workspace: Workspace; syncNote?: string; onExport?: () => void; verifyServerCopy?: () => Promise<{ ok: boolean; workspace?: Workspace | null; error?: string }>; onLocalCleared?: (targets: LocalRetentionTarget[]) => void }) {
+export function DataRetentionCenter({ ownerId, workspace, syncNote, onExport, offerServerExport, verifyServerCopy, onLocalCleared }: { ownerId: string; workspace: Workspace; syncNote?: string; onExport?: () => void; offerServerExport?: boolean; verifyServerCopy?: () => Promise<{ ok: boolean; workspace?: Workspace | null; revision?: string; error?: string }>; onLocalCleared?: (targets: LocalRetentionTarget[]) => void }) {
   const [selected, setSelected] = useState<LocalRetentionTarget[]>([]);
   const [review, setReview] = useState(false);
   const [confirmation, setConfirmation] = useState("");
@@ -16,8 +17,15 @@ export function DataRetentionCenter({ ownerId, workspace, syncNote, onExport, ve
   const [receipts, setReceipts] = useState<RetentionReceipt[]>([]);
   const [verification, setVerification] = useState<ReturnType<typeof verifyDeletionAcknowledgement> | null>(null);
   const [error, setError] = useState("");
+  const [exporting, setExporting] = useState(false);
+  const [exportReceipt, setExportReceipt] = useState("");
   const identity = useRef(ownerId); identity.current = ownerId;
-  useEffect(() => { setSelected([]); setReview(false); setConfirmation(""); setReceipts([]); setVerification(null); setPending(false); setError(""); }, [ownerId]);
+  const mounted = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+    setSelected([]); setReview(false); setConfirmation(""); setReceipts([]); setVerification(null); setPending(false); setError(""); setExporting(false); setExportReceipt("");
+    return () => { mounted.current = false; };
+  }, [ownerId]);
   const clear = async () => {
     if (confirmation !== "CLEAR LOCAL DATA" || !selected.length || pending) return;
     const owner = ownerId; const targets = [...selected]; setPending(true); setError("");
@@ -35,8 +43,40 @@ export function DataRetentionCenter({ ownerId, workspace, syncNote, onExport, ve
     catch (cause) { if (owner === identity.current) { setVerification(null); setError(cause instanceof Error ? cause.message : "Deletion status is unknown."); } }
     finally { if (owner === identity.current) setPending(false); }
   };
+  async function exportServerCopy() {
+    if (!verifyServerCopy || pending || exporting) return;
+    const owner = ownerId;
+    const current = () => mounted.current && identity.current === owner;
+    setExporting(true);
+    setExportReceipt("");
+    setError("");
+    try {
+      const result = await verifyServerCopy();
+      if (!current()) return;
+      if (!result.ok) throw new Error(result.error || "The managed server copy could not be read.");
+      if (!result.workspace) throw new Error("This account has no saved server workspace to export.");
+      if (!result.revision || !/^[a-f0-9]{64}$/.test(result.revision)) throw new Error("The server did not confirm a workspace revision.");
+      const pack = await packWorkspace(result.workspace, false);
+      if (!current()) return;
+      const archive = { ...pack, source: { type: "managed-server", revision: result.revision } };
+      const url = URL.createObjectURL(new Blob([JSON.stringify(archive, null, 2)], { type: "application/json" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "adrians-mind-server-archive.json";
+      link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setExportReceipt(`Download requested for server revision ${result.revision.slice(0, 12)}.`);
+    } catch (cause) {
+      if (current()) setError(cause instanceof Error ? cause.message : "The server archive could not be exported.");
+    } finally { if (current()) setExporting(false); }
+  }
   return <section className="space-y-4 rounded-xl border border-white/10 p-4" aria-labelledby="retention-heading"><div className="flex flex-wrap justify-between gap-2"><h3 id="retention-heading" className="font-medium">Data and retention</h3>{onExport && <button type="button" className="text-xs underline" onClick={onExport}>Export workspace archive</button>}</div>
     <p className="text-xs text-muted-foreground">Your current workspace contains {workspace.chats.length} conversations, {workspace.memories.length} memory notes, {workspace.files.length} Library entries and {workspace.runs.length} agent runs. Workspace archives contain structured records and references; download original documents, images and videos separately. {syncNote}</p>
+    {offerServerExport && <div className="space-y-2 text-xs">
+      <p>Download the saved workspace for this account at its verified server revision. The archive includes persistent workspace records and excludes temporary chats.</p>
+      <button type="button" className="min-h-11 underline" disabled={pending || exporting} onClick={() => void exportServerCopy()}>{exporting ? "Reading saved server workspace…" : "Export saved server workspace"}</button>
+      {exportReceipt && <p role="status">{exportReceipt}</p>}
+    </div>}
     {pending && <ResourceState phase="loading" title={review ? "Removing the selected local copies" : "Checking managed server deletion acknowledgement"}>Wait for an acknowledgement before treating the operation as complete.</ResourceState>}
     <div className="text-xs space-y-2"><p>Conversation and memory removal creates durable tombstones. A local removal waits for server acknowledgment. A quoted copy, exported file or independently saved document has its own lifecycle.</p><button type="button" className="underline" disabled={!verifyServerCopy || pending} onClick={() => void verify()}>Check managed server deletion acknowledgment</button>{verification && <p role="status">{verification.confirmedChatIds.length + verification.confirmedMemoryIds.length} of {verification.locallyRemoved} local deletion markers acknowledged by the managed server; {verification.pendingChatIds.length + verification.pendingMemoryIds.length} pending. {verification.scope}</p>}</div>
     <fieldset disabled={pending || review} className="space-y-3"><legend className="text-sm mb-2">Choose local copies to remove</legend>{LOCAL_RETENTION_TARGETS.map((target) => <label key={target} className="flex gap-3 items-start text-xs"><input type="checkbox" checked={selected.includes(target)} onChange={(event) => setSelected((current) => event.target.checked ? [...current, target] : current.filter((item) => item !== target))} /><span><strong>{RETENTION_DESCRIPTIONS[target].name}</strong><br />{RETENTION_DESCRIPTIONS[target].scope}<br /><span className="text-muted-foreground">{RETENTION_DESCRIPTIONS[target].retained}</span></span></label>)}</fieldset>

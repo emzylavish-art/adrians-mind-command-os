@@ -43,3 +43,11 @@ test("research versions and completed media retain direct authorized destination
   assert.deepEqual(rows.filter((row) => row.view === "research").map((row) => row.id), ["research:report:1", "research:report:2"]);
   assert.equal(workspaceNotices(ws, { ...DEFAULT_NOTIFICATION_PREFERENCES, media: false, research: false }, reports).length, 0);
 });
+
+test("one damaged notification setting does not load another account's state", async () => {
+  const { notificationIds, readNotificationPreferences, DEFAULT_NOTIFICATION_PREFERENCES } = await import("./notifications.ts");
+  const storage = { getItem: (key: string) => key === "read" ? '["first",false,"second"]' : "broken" };
+  assert.deepEqual(notificationIds(storage, "read"), ["first", "second"]);
+  assert.deepEqual(notificationIds(storage, "dismissed"), []);
+  assert.deepEqual(readNotificationPreferences(storage), DEFAULT_NOTIFICATION_PREFERENCES);
+});

@@ -234,12 +234,16 @@ export async function runNotionTurn(input: {
   cursor?: string | null;
   grantGeneration?: string;
   mayDispatch?: () => Promise<boolean>;
+  recoverOnly?: boolean;
 }): Promise<NotionTurn> {
   if (input.text.length > 8000) return empty("connected", "none", "Notion commands support up to 8,000 characters. Shorten this request before submitting it.");
   if (!input.token && input.workspaceId) return { ...empty("disconnected", "none", "The selected Notion workspace is unavailable. Reconnect the original workspace."), recovery: "workspace_removed" };
   const connection = notionConnection(input.token, input.disabled);
   if (connection.state !== "connected" || !input.token) return empty(connection.state, "none", connection.detail);
   const intent = parseNotionIntent(input.text);
+  if (input.recoverOnly && (intent.action !== "append" || !input.operationId || !input.operationStore || !input.workspaceId || !input.pageId)) {
+    return { ...empty("connected", "none", "The existing operation, workspace and exact page are required for this check."), errorCode: "selection_changed" };
+  }
   if (intent.action === "unclear") {
     return empty("connected", "unclear", "Say whether to search, read, or append, and name the page. Nothing was called.");
   }
@@ -256,6 +260,7 @@ export async function runNotionTurn(input: {
     if (["dispatched", "accepted", "verified", "uncertain"].includes(existing.state)) {
       return verifyAppend({ fetch: input.fetch, token: input.token, page: existing.page, note: intent.note, operation: existing, store: input.operationStore });
     }
+    if (input.recoverOnly) return { ...empty("connected", "append", "The saved operation has no dispatch record. Review its approval in the original conversation."), pages: [existing.page], operationId: existing.id, outcome: "not_dispatched" };
   }
   let pages: NotionPage[] = [];
   let nextCursor: string | null = null;

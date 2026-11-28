@@ -7,6 +7,8 @@ import {
   completeFleetModelStep,
   addConnection,
   addCustomAgent,
+  editBot,
+  readFleet,
   addMailbox,
   addSchedule,
   approveRunAction,
@@ -392,4 +394,21 @@ it("C5 a browser worker does not execute a queued occurrence assigned to another
   assert.equal(ignored.runs[0].step, 0);
   const advanced = tickFleet(ignored, { now: NOW, workerId: "local", environment: "local-worker" });
   assert.equal(advanced.runs[0].step, 1);
+});
+
+
+it("keeps a bot's Telegram username and knowledge links when edited and reloaded", () => {
+  const draft = { name: "Research desk", instructions: "", tools: ["list_projects"] as const };
+  const result = addCustomAgent(emptyWorkspace(), { ...draft, tools: [...draft.tools], telegramUsername: "@Desk_Bot", knowledgeDocumentIds: ["notes"] });
+  assert(result.ok);
+  assert.equal(readFleet(result.ws).agents[0]?.telegramUsername, "Desk_Bot");
+  const updated = editBot(result.ws, result.agent.id, { ...draft, tools: [...draft.tools], name: "Renamed" });
+  assert(updated.ok);
+  assert.deepEqual(updated.agent.knowledgeDocumentIds, ["notes"]);
+  assert.equal(updated.agent.telegramUsername, "Desk_Bot");
+  const invalid = addCustomAgent(emptyWorkspace(), { ...draft, tools: [...draft.tools], telegramUsername: "12345:token" });
+  assert.equal(invalid.ok, false);
+  const cleared = editBot(updated.ws, updated.agent.id, { ...draft, tools: [...draft.tools], telegramUsername: "" });
+  assert(cleared.ok);
+  assert.equal(cleared.agent.telegramUsername, "");
 });

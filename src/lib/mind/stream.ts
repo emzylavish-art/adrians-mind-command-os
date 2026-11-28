@@ -1,3 +1,4 @@
+import { readRequestedReasoningEffort, type RequestedReasoningEffort } from "./model-tiers.ts";
 import { readHelperReceipts } from "./execution-evidence.ts";
 import { readFailureEnvelope, type FailureEnvelope } from "./failure-envelope.ts";
 import { readModelExecutionPlan, type ModelExecutionPlan } from "./execution-plan.ts";
@@ -139,7 +140,8 @@ export type MindClientEvent =
   | { event: "delta"; text: string }
   | { event: "consultation"; consultation: ConsultEvidence[] }
   | { event: "executions"; executions: ConsultExecutionReceipt[] }
-  | ({ event: "done"; text: string; model: string; usage: ModelUsage | null; usedIds: string[]; requestId: string | null; modelTier?: string; resolvedTier?: string; tierReason?: string; memorySaved?: boolean; savedMemoryId?: string | null; provider?: string; requestedModel?: string; credentialFallback?: string | null; contextReceipt?: ContextReceipt; consultation?: ConsultEvidence[]; skillReceipts?: SkillApplicationReceipt[]; delivery?: "streamed" | "buffered"; actualCostMicros?: number; currency?: "USD" } & TurnCallEvidence)
+  | ({ event: "done"; text: string; model: string; usage: ModelUsage | null; usedIds: string[]; requestId: string | null; modelTier?: string; requestedReasoningEffort?: RequestedReasoningEffort;
+  resolvedTier?: string; tierReason?: string; memorySaved?: boolean; savedMemoryId?: string | null; provider?: string; requestedModel?: string; credentialFallback?: string | null; contextReceipt?: ContextReceipt; consultation?: ConsultEvidence[]; skillReceipts?: SkillApplicationReceipt[]; delivery?: "streamed" | "buffered"; actualCostMicros?: number; currency?: "USD" } & TurnCallEvidence)
   | ({ event: "error"; error: string; code?: TurnErrorCode } & TurnCallEvidence)
   | ({ event: "canceled"; error: string; code?: TurnErrorCode } & TurnCallEvidence);
 
@@ -188,6 +190,7 @@ export function pullMindEvents(buffer: string): { events: MindClientEvent[]; res
         usedIds: Array.isArray(record.usedIds) ? record.usedIds.filter((id) => typeof id === "string") : [],
         requestId: typeof record.requestId === "string" ? record.requestId : null,
         modelTier: typeof record.modelTier === "string" ? record.modelTier : undefined,
+        requestedReasoningEffort: readRequestedReasoningEffort(record.requestedReasoningEffort),
         resolvedTier: typeof record.resolvedTier === "string" ? record.resolvedTier : undefined,
         tierReason: typeof record.tierReason === "string" ? record.tierReason : undefined,
         memorySaved: record.memorySaved === true,

@@ -66,6 +66,17 @@ function collectHits(body: unknown): { title: string; url: string }[] {
 }
 
 
+// xAI uses Python character indices. Convert Unicode code points to JS string offsets.
+function textOffsets(text: string): number[] {
+  const offsets = [0];
+  let offset = 0;
+  for (const character of text) {
+    offset += character.length;
+    offsets.push(offset);
+  }
+  return offsets;
+}
+
 /** Preserve provider text and annotation offsets as attributed, unverified evidence. */
 export function extractResearchAnswer(body: unknown): ResearchAnswer {
   if (!body || typeof body !== "object") return { text: "", annotations: [] };
@@ -81,14 +92,15 @@ export function extractResearchAnswer(body: unknown): ResearchAnswer {
       if (typeof row.text !== "string" || !row.text) continue;
       const text = row.text.slice(0, Math.max(0, 16000 - offset));
       if (!text) break;
+      const offsets = textOffsets(text);
       for (const annotation of Array.isArray(row.annotations) ? row.annotations : []) {
         if (!annotation || typeof annotation !== "object") continue;
         const a = annotation as { url?: unknown; start_index?: unknown; end_index?: unknown };
         const normalized = normalizeCitations([{ title: "Source", url: a.url }])[0];
         if (!normalized) continue;
-        const start = typeof a.start_index === "number" && Number.isInteger(a.start_index) && a.start_index >= 0 && a.start_index <= text.length ? a.start_index : null;
-        const end = start !== null && typeof a.end_index === "number" && Number.isInteger(a.end_index) && a.end_index >= start && a.end_index <= text.length ? a.end_index : null;
-        annotations.push({ url: normalized.url, start: start === null || end === null ? null : start + offset, end: end === null ? null : end + offset });
+        const start = typeof a.start_index === "number" && Number.isInteger(a.start_index) && a.start_index >= 0 && a.start_index < offsets.length ? a.start_index : null;
+        const end = start !== null && typeof a.end_index === "number" && Number.isInteger(a.end_index) && a.end_index >= start && a.end_index < offsets.length ? a.end_index : null;
+        annotations.push({ url: normalized.url, start: start === null || end === null ? null : offsets[start]! + offset, end: end === null ? null : offsets[end]! + offset });
       }
       chunks.push(text);
       offset += text.length + 2;
@@ -110,13 +122,17 @@ export function researchEvidenceFromResponse(body: unknown, citations: ResearchC
   const known = new Set(citations.map((source) => source.url));
   const claims: NonNullable<ResearchResult["claims"]> = [];
   for (const block of blocks) {
+    const offsets = textOffsets(block.text);
     for (const raw of block.annotations ?? []) {
       if (!raw || typeof raw !== "object") continue;
       const annotation = raw as { url?: unknown; start_index?: unknown; end_index?: unknown };
       const start = annotation.start_index, end = annotation.end_index;
-      if (typeof annotation.url !== "string" || !known.has(annotation.url) || typeof start !== "number" || typeof end !== "number" || !Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end > block.text.length || end <= start) continue;
-      const text = block.text.slice(start, end).trim();
-      if (text) claims.push({ text, sourceUrls: [annotation.url], kind: "provider-cited" });
+      const url = normalizeCitations([{ title: "Source", url: annotation.url }])[0]?.url;
+      if (!url || !known.has(url) || typeof start !== "number" || typeof end !== "number" || !Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end >= offsets.length || end <= start) continue;
+      const text = block.text.slice(offsets[start], offsets[end]).trim();
+      // Provider annotations can cover only the inline reference, rather than the statement.
+      if (!text || /^\[.*?\](?:\([^)]*\))?$/.test(text)) continue;
+      claims.push({ text, sourceUrls: [url], kind: "provider-cited" });
     }
   }
   return { summary, claims };

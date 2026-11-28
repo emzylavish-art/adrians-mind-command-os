@@ -12,6 +12,15 @@
     "asar": true,
     "files": [
       "main.cjs",
+      "chat-bits.cjs",
+      "chat-bits-preload.cjs",
+      "chat-bits-widget-preload.cjs",
+      "chat-bits-widget.html",
+      "chat-bits-widget.cjs",
+      {
+        "from": "../public/chat-bits",
+        "to": "chat-bits"
+      },
       "cloud-update.cjs",
       "dictation-companion.cjs",
       "dictation-widget.html",

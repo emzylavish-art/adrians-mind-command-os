@@ -32,7 +32,7 @@ export type UseLiveVoiceSessionOptions = {
   onError?: (message: string) => void;
   onNotice?: (message: string) => void;
   mintSecret?: LiveSessionDeps["mintSecret"];
-  getVoiceProfile?: () => Pick<VoiceProfileInput, "personalityId" | "customPersonality" | "characterId"> | null;
+  getVoiceProfile?: () => Pick<VoiceProfileInput, "personalityId" | "customPersonality" | "characterId" | "modeInstruction"> | null;
 };
 
 export function useLiveVoiceSession(options: UseLiveVoiceSessionOptions = {}) {

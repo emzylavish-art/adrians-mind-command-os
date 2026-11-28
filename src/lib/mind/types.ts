@@ -1,3 +1,4 @@
+import type { RequestedReasoningEffort } from "./model-tiers.ts";
 import type { PdfEvidenceIndex } from "./pdf-evidence.ts";
 import type { ExecutionEvidence } from "./execution-evidence.ts";
 import type { SkillApplicationReceipt } from "./skill-activation";
@@ -60,6 +61,7 @@ export type Msg = {
   /** Received but unfinished output. Never included as a completed model-history turn. */
   partialReply?: string;
   inheritedFrom?: { chatId: string; messageId: string };
+  workflowKind?: import("./workflow-skills.ts").WorkflowKind;
   skillReceipts?: SkillApplicationReceipt[];
   voiceStages?: VoiceStagesReceipt;
   researchRefs?: { reportId: string; version: number; question: string; at: string }[];
@@ -69,6 +71,7 @@ export type Msg = {
   consultation?: ConsultEvidence[];
   deliveryMode?: "streamed" | "buffered";
   contextReceipt?: ContextReceipt | { availableMessages: number; includedMessages: number; omittedMessages: number; imageWarnings: string[] };
+  requestedReasoningEffort?: RequestedReasoningEffort;
   resolvedTier?: Exclude<ModelTier, "Auto">;
   kind?: "error";
   /** Inline image attachments shown in the bubble and sent on the originating turn. */

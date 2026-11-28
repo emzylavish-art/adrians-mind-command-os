@@ -1,7 +1,10 @@
 import type { Chat } from "@/lib/mind/types";
 import { CONVERSATIONAL_PERSONALITIES, type PersonalityId } from "@/lib/mind/personalities";
 import { type ModuleSuggestion } from "@/lib/intent/module-suggestions";
+import type { QueueTransferBinding } from "@/lib/mind/queue-transfer";
 import { type CuedMessage } from "@/lib/mind/message-cue";
+import { ComposerQueue } from "./composer-queue";
+export { ComposerQueue };
 import { type ConversationAction } from "@/lib/mind/conversation-actions";
 import { type DictationMachineState } from "@/lib/mind/voice/dictation-machine";
 import { type Autonomy } from "@/lib/mind/policy";
@@ -11,18 +14,18 @@ import { type ResponseRating, type RoutingMode } from "@/lib/mind/routing-modes"
 import { type LogicRouteId, type LogicRoutePublic } from "@/lib/mind/logic-routes";
 import { type ImageAttachment } from "@/lib/mind/media";
 import { type ModelTier, type ModelTierCatalogRow } from "@/lib/mind/model-tiers";
-import { agentActivityFromTimeline, connectedServicesRail, elapsedMs, formatElapsed, recentTasksFromAudit, systemStatusRail, timelineCounts, type ToolTimelineRow } from "@/lib/mind/tools-timeline";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { agentActivityFromTimeline, connectedServicesRail, elapsedMs, formatElapsed, recentTasksFromAudit, systemStatusRail, timelineCounts, toolTimelineLogo, type ToolTimelineRow } from "@/lib/mind/tools-timeline";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ComposerBar, type ComposerModelId, DictationPill as PreviewDictationPill, LiveSpeakControl, LiveVoiceBar as PresentationalLiveVoiceBar, VoiceModeStage } from "@/components/mind/voice-ui";
 import { routeForBotChat } from "@/lib/mind/bot-model";
 import { INITIAL_MESSAGE_WINDOW, messageWindow } from "@/lib/mind/render-window";
 import { nextReadingPosition } from "@/lib/mind/reading-position";
-import { Image, Mic, MicOff, Paperclip, Camera, Plus, Square, Volume2 } from "lucide-react";
+import { Copy, Check, Image, Mic, MicOff, Paperclip, Camera, Plus, Square, Volume2 } from "lucide-react";
 import { ConversationSections } from "@/components/mind/conversation-sections";
 import { MemoryChatToggle } from "@/components/mind/memory-chat-toggle";
 import { ChatMediaGallery } from "@/components/mind/media/chat-media-gallery";
 import { ChatEmptyHero } from "@/components/mind/chat-empty-hero";
-import { AnswerTabs, MessageBody } from "@/components/mind/message-body";
+import { AnswerTabs, MessageBody, RunActivity } from "@/components/mind/message-body";
 import { ContextReceiptDetails } from "@/components/mind/context-receipt";
 import { VoiceStageReceipt } from "@/components/mind/voice-stage-receipt";
 import { replyActions, replyHasSources } from "@/lib/mind/reply-actions";
@@ -46,6 +49,7 @@ import { ConversationComparison } from "./conversation-comparison";
 export type ChatReadingPositions = Map<string, { top: number; following: boolean; count: number }>;
 
 export function ChatPane({
+  shouldSubmit,
   chatSettingsOpen,
   onChatSettingsToggle,
   active,
@@ -69,8 +73,14 @@ export function ChatPane({
   onPick,
   onSend,
   cue,
+  deviceQueue,
+  canQueue,
+  onQueue,
   onDropCue,
-  onReleaseCue,
+  onMoveCue,
+  onEditCue,
+  onHoldCue,
+  onRestoreCue,
   canStop,
   onStop,
   onRename,
@@ -93,7 +103,7 @@ export function ChatPane({
  onSpeak,
   onStopSpeak,
  onOpenSpeak,
-  onOpenBuild,
+  renderWorkHandoff,
   onOpenHuman,
   onListen,
   onListenStop,
@@ -139,6 +149,9 @@ export function ChatPane({
   onAttach,
   onAttachImage,
   onOpenCamera,
+  onBrowsePlugins,
+  composerExtras,
+  browserActivity,
   onOpenCloud,
   driveConnected = false,
   onImagine,
@@ -165,6 +178,7 @@ export function ChatPane({
   systemStatus,
   onViewAudit,
 }: {
+  shouldSubmit: (event: KeyboardEvent) => boolean;
   chatSettingsOpen: boolean;
   onChatSettingsToggle: (open: boolean) => void;
   active: Chat | null;
@@ -188,8 +202,14 @@ export function ChatPane({
   onPick: (id: string) => void;
   onSend: () => void;
   cue: CuedMessage[];
+  deviceQueue?: QueueTransferBinding;
+  canQueue: boolean;
+  onQueue: () => void;
   onDropCue: (id: string) => void;
-  onReleaseCue: () => void;
+  onMoveCue: (id: string, offset: -1 | 1) => void;
+  onEditCue: (id: string, text: string) => void;
+  onHoldCue: () => void;
+  onRestoreCue: (id: string) => void;
   canStop: boolean;
   onStop: () => void;
   onRename: (title: string) => void;
@@ -212,7 +232,7 @@ export function ChatPane({
  onSpeak: (text: string, messageId?: string) => void;
   onStopSpeak?: () => void;
  onOpenSpeak?: () => void;
-  onOpenBuild: (text: string) => void;
+  renderWorkHandoff?: (messageId: string) => ReactNode;
   onOpenHuman: (text: string) => void;
   onListen: () => void;
   onListenStop?: () => void;
@@ -258,6 +278,9 @@ export function ChatPane({
   onAttach: () => void;
   onAttachImage: () => void;
   onOpenCamera: () => void;
+  onBrowsePlugins?: () => void;
+  browserActivity?: ReactNode;
+  composerExtras?: import("react").ReactNode;
   onOpenCloud: () => void;
   driveConnected?: boolean;
   onImagine: () => void;
@@ -406,7 +429,7 @@ export function ChatPane({
         </div>
       </aside>
       : null}
-      <section className="flex min-w-0 flex-1 flex-col">
+      <section className="flex min-w-0 flex-1 flex-col" data-browser-scope>
         {active?.branchFrom ? <p className="px-4 py-2 text-xs text-muted">Edited branch. <button type="button" className="min-h-9 px-2 underline" onClick={() => onPick(active.branchFrom!.chatId)}>Open source conversation</button></p> : null}
         <div className="chat-head px-4 pt-4" hidden={Boolean(active?.messages.length)}>
           <h2 className="font-display text-3xl font-bold">{active?.title || "AI Chat"}</h2>
@@ -495,7 +518,7 @@ export function ChatPane({
             savePosition(pane.scrollTop);
           }
         }}>Jump to latest</button></div>}
-          <div ref={turns} className="space-y-3">
+          <div ref={turns} className="chat-reading-column space-y-3">
           {copyError ? <p role="alert" className="text-sm text-danger">{copyError}</p> : null}
           <ChatMediaGallery messages={active?.messages} onUseInComposer={onSaveImage} onEditImagine={onEditImagine} onDownload={onDownloadImage} />
           {(!active || active.messages.length === 0) && !busy && (
@@ -528,23 +551,10 @@ export function ChatPane({
             <article key={msg.id} id={"message-" + msg.id} tabIndex={-1} className={`turn w-full max-w-none px-1 py-2 text-sm ${msg.role === "user" ? "turn-user" : "turn-assistant"}`}>
               <p className="mb-1 text-xs text-muted">{msg.role === "user" ? "You" : [msg.provider, msg.model].filter(Boolean).join(" · ") || "Assistant · model unreported"} · {stamp(msg.at)}</p>
               {msg.partialReply ? <details className="mb-3 rounded-panel border border-line p-3" open><summary>Incomplete response · not included as a completed answer</summary><MessageBody text={msg.partialReply} /><button type="button" className="min-h-11 px-3 text-xs" onClick={() => { void navigator.clipboard?.writeText(msg.partialReply!).then(() => setCopiedId(msg.id)).catch(() => setCopyError("Copy failed. Select the text and copy it manually.")); }}>{copiedId === msg.id ? "Copied incomplete response" : "Copy incomplete response"}</button></details> : null}
-              {msg.replyVersions && msg.replyVersions.length > 1 ? <details className="mb-2 text-sm"><summary>Answer versions ({msg.replyVersions.length})</summary><label>Use version <select className="min-h-11 border border-line rounded-panel bg-surface px-2" aria-label="Answer version" value={msg.selectedReplyVersionId} disabled={busy} onChange={(event) => onReplyVersion?.(msg.id, event.target.value)}>{msg.replyVersions.map((version, index) => <option key={version.id} value={version.id}>{index + 1} · {version.provider ?? version.model ?? "Provider unreported"} · {stamp(version.at)}</option>)}</select></label><div className="mt-2 grid gap-3 md:grid-cols-2">{msg.replyVersions.map((version, index) => <details key={version.id} className="rounded-panel border border-line p-2"><summary>Compare version {index + 1}</summary><MessageBody text={version.content} /></details>)}</div></details> : null}
-              {msg.contextReceipt && ("version" in msg.contextReceipt ? <ContextReceiptDetails receipt={msg.contextReceipt} /> :
-                <details><summary>Conversation context</summary><p>{msg.contextReceipt.includedMessages} of {msg.contextReceipt.availableMessages} messages included, {msg.contextReceipt.omittedMessages} omitted.</p>
-                  {msg.contextReceipt.imageWarnings.map((warning, index) => <p key={index}>{warning}</p>)}</details>)}
-              {msg.voiceStages && <VoiceStageReceipt receipt={msg.voiceStages} />}
-              {msg.deliveryMode && <p className="text-xs text-muted">Delivery: {msg.deliveryMode === "streamed" ? "provider stream" : "completed response buffered by this route"}</p>}
-              {msg.consultation?.length ? <details className="text-xs"><summary className="min-h-11 cursor-pointer">Consultation · {msg.consultation.length} selected helpers</summary>{msg.consultation.map((item) => <div key={item.id} className="my-2 rounded-panel border border-line p-2"><p>{item.id} · {item.ok ? "returned" : "failed"}{item.truncated ? ` · excerpt from ${item.originalCharacters} characters` : ""}</p><p>{item.error}</p><pre className="max-h-64 overflow-auto whitespace-pre-wrap">{item.text}</pre></div>)}</details> : null}
-              {msg.skillReceipts?.length ? <details className="mb-2 text-xs text-muted"><summary className="min-h-11 cursor-pointer">Skills considered ({msg.skillReceipts.length})</summary><ul>{msg.skillReceipts.map((item) => <li key={item.skillId}>{item.skillId} · version {item.version} · {skillReceiptSummary(item)}</li>)}</ul></details> : null}
-              {msg.researchRefs?.length ? <details className="mb-2 text-xs text-muted"><summary>Saved research references</summary><ul>{msg.researchRefs.map((item) => <li key={`${item.reportId}:${item.version}`}>{item.question} · version {item.version} · {item.reportId} · retrieved {stamp(item.at)}</li>)}</ul></details> : null}
-              {msg.memoryUsedIds?.length ? <details className="mb-2 text-xs text-muted"><summary>{msg.memoryUsedIds.length} saved notes used for this response</summary><ul>{msg.memoryUsedIds.map((id) => <li key={id}>{id}</li>)}</ul></details> : null}
-              {msg.requestedModel && msg.model !== msg.requestedModel && (
-                <p className="mb-1 break-words text-xs text-muted">Requested {msg.requestedModel}</p>
-              )}
               {msg.delivery && !(busy && msg.delivery === "submitted" && last?.id === msg.id) && (
                 <p className="mb-1 text-xs text-muted" role="status">
-                  {msg.deliveryRoute && <span>{msg.deliveryRoute.provider} · {msg.deliveryRoute.model ?? msg.deliveryRoute.tier}. </span>}
-                  {msg.delivery === "stopped" ? "Stopped. Received text is retained as incomplete. The provider outcome may still be unknown." : msg.delivery === "failed" ? "The provider did not complete this reply." : "No finished reply was saved. The provider may already have received this message."}
+                  {msg.deliveryRoute && <span>Requested {msg.deliveryRoute.provider} · {msg.deliveryRoute.model ?? msg.deliveryRoute.tier}. </span>}
+                  {msg.delivery === "stopped" ? "Stopped. Received text is retained as incomplete. The provider outcome may still be unknown." : msg.delivery === "failed" ? "No completed reply was saved for this message." : "No finished reply was saved. The provider may already have received this message."}
                 </p>
               )}
               {editingId === msg.id ? (
@@ -567,6 +577,26 @@ export function ChatPane({
                   {msg.videoUrl ? <video className="owner-video mt-2" src={msg.videoUrl} controls playsInline preload="metadata" /> : null}
                 </>
               )}
+              {(msg.replyVersions && msg.replyVersions.length > 1 || msg.contextReceipt || msg.voiceStages || msg.deliveryMode || msg.consultation?.length || msg.skillReceipts?.length || msg.researchRefs?.length || msg.memoryUsedIds?.length || msg.requestedModel && msg.model !== msg.requestedModel) ? (
+                <details className="mt-2 text-xs text-muted">
+                  <summary className="w-fit cursor-pointer py-2">Response details</summary>
+                  <div className="grid min-w-0 gap-2 pl-3">
+              {msg.replyVersions && msg.replyVersions.length > 1 ? <details className="mb-2 text-sm"><summary>Answer versions ({msg.replyVersions.length})</summary><label>Use version <select className="min-h-11 border border-line rounded-panel bg-surface px-2" aria-label="Answer version" value={msg.selectedReplyVersionId} disabled={busy} onChange={(event) => onReplyVersion?.(msg.id, event.target.value)}>{msg.replyVersions.map((version, index) => <option key={version.id} value={version.id}>{index + 1} · {version.provider ?? version.model ?? "Provider unreported"} · {stamp(version.at)}</option>)}</select></label><div className="mt-2 grid gap-3 md:grid-cols-2">{msg.replyVersions.map((version, index) => <details key={version.id} className="rounded-panel border border-line p-2"><summary>Compare version {index + 1}</summary><MessageBody text={version.content} /></details>)}</div></details> : null}
+              {msg.contextReceipt && ("version" in msg.contextReceipt ? <ContextReceiptDetails receipt={msg.contextReceipt} /> :
+                <details><summary>Conversation context</summary><p>{msg.contextReceipt.includedMessages} of {msg.contextReceipt.availableMessages} messages included, {msg.contextReceipt.omittedMessages} omitted.</p>
+                  {msg.contextReceipt.imageWarnings.map((warning, index) => <p key={index}>{warning}</p>)}</details>)}
+              {msg.voiceStages && <VoiceStageReceipt receipt={msg.voiceStages} />}
+              {msg.deliveryMode && <p className="text-xs text-muted">Delivery: {msg.deliveryMode === "streamed" ? "provider stream" : "completed response buffered by this route"}</p>}
+              {msg.consultation?.length ? <details className="text-xs"><summary className="min-h-11 cursor-pointer">Consultation · {msg.consultation.length} selected helpers</summary>{msg.consultation.map((item) => <div key={item.id} className="my-2 rounded-panel border border-line p-2"><p>{item.id} · {item.ok ? "returned" : "failed"}{item.truncated ? ` · excerpt from ${item.originalCharacters} characters` : ""}</p><p>{item.error}</p><pre className="max-h-64 overflow-auto whitespace-pre-wrap">{item.text}</pre></div>)}</details> : null}
+              {msg.skillReceipts?.length ? <details className="mb-2 text-xs text-muted"><summary className="min-h-11 cursor-pointer">Skills considered ({msg.skillReceipts.length})</summary><ul>{msg.skillReceipts.map((item) => <li key={item.skillId}>{item.skillId} · version {item.version} · {skillReceiptSummary(item)}</li>)}</ul></details> : null}
+              {msg.researchRefs?.length ? <details className="mb-2 text-xs text-muted"><summary>Saved research references</summary><ul>{msg.researchRefs.map((item) => <li key={`${item.reportId}:${item.version}`}>{item.question} · version {item.version} · {item.reportId} · retrieved {stamp(item.at)}</li>)}</ul></details> : null}
+              {msg.memoryUsedIds?.length ? <details className="mb-2 text-xs text-muted"><summary>{msg.memoryUsedIds.length} saved notes used for this response</summary><ul>{msg.memoryUsedIds.map((id) => <li key={id}>{id}</li>)}</ul></details> : null}
+              {msg.requestedModel && msg.model !== msg.requestedModel && (
+                <p className="mb-1 break-words text-xs text-muted">Requested {msg.requestedModel}</p>
+              )}
+                  </div>
+                </details>
+              ) : null}
               <div className="mt-2 flex flex-wrap items-center gap-2" role="toolbar" aria-label="Reply actions">
                 {msg.kind === "error" ? (
                   <>
@@ -587,10 +617,10 @@ export function ChatPane({
                     }).catch(() => { setCopiedId(null); setCopyError("Copy failed. Select the text and copy it manually."); });
                   }}
                 >
-                  {copiedId === msg.id ? "Copied" : "Copy"}
+                  <span className="inline-flex items-center gap-1.5 whitespace-nowrap">{copiedId === msg.id ? <Check size={16} aria-hidden="true" /> : <Copy size={16} aria-hidden="true" />}{copiedId === msg.id ? "Copied" : "Copy"}</span>
                 </button>
                 {msg.role === "assistant" && (
-                  <button type="button" className="chat-button chat-button--ghost" onClick={() => (speaking && speakingMessageId === msg.id ? onStopSpeak?.() : onSpeak(msg.content, msg.id))}>
+                  <button type="button" className="inline-flex min-h-11 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-xs" onClick={() => (speaking && speakingMessageId === msg.id ? onStopSpeak?.() : onSpeak(msg.content, msg.id))}>
                     <Volume2 size={20} strokeWidth={1.75} /> {replyActions({ role: "assistant", busy: false, speaking: speaking && speakingMessageId === msg.id, hasSources: replyHasSources(msg.content) }).includes("stop-playback") ? "Stop" : "Read aloud"}
                   </button>
                 )}
@@ -612,7 +642,7 @@ export function ChatPane({
                           {[1, 2, 3, 4, 5].map((score) => <option key={score} value={score}>{score} / 5</option>)}
                         </select>
                       </label>}
-                      <button type="button" className="min-h-11 px-3 text-left text-xs" onClick={() => onOpenBuild(msg.content)}>Open in Build</button>
+                      {renderWorkHandoff?.(msg.id)}
                       <button type="button" className="min-h-11 px-3 text-left text-xs" onClick={() => onOpenHuman(msg.content)}>Open in Intelligence</button>
                       {replyHasSources(msg.content) ? <p className="px-3 py-2 text-xs">Sources: {msg.content.match(/https?:\/\/\S+/g)?.join(" ")}</p> : null}
                       <p className="px-3 py-2 text-xs">Type list capabilities. Device actions are not verified until the PC or phone runs them.</p>
@@ -656,74 +686,29 @@ export function ChatPane({
                   </p>
                 );
               })()}
-              <ul className="space-y-2">
-                {toolTimeline.map((row) => {
-                  const ms = elapsedMs(row, timelineNowMs);
-                  const failed = row.status === "failed" || row.status === "timed_out" || row.status === "cancelled";
-                  const done = row.endedAtMs != null && !failed;
-                  return (
-                    <li key={row.id} className="flex flex-wrap items-center gap-2 rounded-panel border border-line bg-bg px-3 py-2 text-sm" data-testid="tool-timeline-row" data-status={row.status}>
-                      <span className={`size-2 shrink-0 rounded-full ${failed ? "bg-danger" : done ? "bg-ok" : "bg-accent"}`} />
-                      <span className="min-w-0 flex-1 font-medium">{row.name}</span>
-                      <span className={`text-xs ${failed ? "text-danger" : "text-muted"}`}>{row.status}</span>
-                      <span className="text-xs text-muted tabular-nums">{formatElapsed(ms)}</span>
-                      {row.auditId ? (
-                        <button type="button" className="min-h-11 text-xs text-accent" onClick={() => onViewAudit(row.auditId!)}>
-                          View
-                        </button>
-                      ) : (
-                        <span className="text-xs text-muted">—</span>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
+              <RunActivity label="Tool activity" rows={toolTimeline.map(row => ({
+                id: row.id, label: row.name, detail: row.text, state: row.status, meta: formatElapsed(elapsedMs(row, timelineNowMs)),
+                logo: toolTimelineLogo(row.toolId), receipt: row.auditId ? () => onViewAudit(row.auditId) : undefined,
+              }))} />
             </div>
           )}
+          {browserActivity}
           {error && <p className="rounded-panel border border-line bg-surface px-3 py-2 text-sm text-danger" role="status">{error}</p>}
           {videoStatus && <p data-testid="video-operation-status" role="status" className={`rounded-panel border border-line bg-surface px-3 py-2 text-sm ${videoStatus.failed ? "text-danger" : "text-muted"}`}>{videoStatus.text}</p>}
           {busy && liveText && (
             <article className="turn turn-assistant w-full max-w-none px-1 py-2 text-sm">
               <p className="mb-1 text-xs text-muted">{modelTier} · writing</p>
-              <p className="whitespace-pre-wrap">{liveText}</p>
+              <p className="chat-live-answer whitespace-pre-wrap">{liveText}</p>
             </article>
           )}
           {busy && !liveText && toolTimeline.length === 0 && (
-            <div className="turn turn-assistant w-full max-w-none space-y-2 px-1 py-2" aria-live="polite">
+            <div className="turn turn-assistant w-full max-w-none px-1 py-2" role="status">
               <p className="text-xs text-muted">{active?.messages.at(-1)?.content.startsWith("/video") ? "Rendering the video." : active?.messages.at(-1)?.content.startsWith("/imagine") ? "Creating the image." : "Waiting for the selected provider."}</p>
-              <div className="skeleton h-3" style={{ width: "75%" }} />
-              <div className="skeleton h-3" style={{ width: "50%" }} />
-              <div className="skeleton h-3" style={{ width: "66%" }} />
             </div>
           )}
           {voiceListening ? <div className="flex items-center gap-2"><VoiceLevelMeter level={voiceLevel} listening={voiceListening} /></div> : null}
         </div>
 
-        {cue.length > 0 ? (
-          <div className="rounded-panel border border-line p-2" data-testid="message-cue">
-            <p className="text-xs uppercase tracking-wide text-muted">Next</p>
-            <ol className="space-y-1">
-              {cue.map((item, index) => (
-                <li
-                  key={item.id}
-                  className="min-w-0"
-                  data-testid="cued-message"
-                  onPointerDown={(event) => {
-                    const timer = window.setTimeout(() => onDropCue(item.id), 550);
-                    event.currentTarget.dataset.hold = String(timer);
-                  }}
-                  onPointerUp={(event) => window.clearTimeout(Number(event.currentTarget.dataset.hold))}
-                  onPointerLeave={(event) => window.clearTimeout(Number(event.currentTarget.dataset.hold))}
-                  onPointerCancel={(event) => window.clearTimeout(Number(event.currentTarget.dataset.hold))}
-                >
-                  <div className="flex items-center gap-2"><span className="min-w-0 flex-1 break-words text-sm">{index + 1}. {item.text}</span><button type="button" className="min-h-11 min-w-11" aria-label={`Remove queued message ${index + 1}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => onDropCue(item.id)}>Remove</button></div>
-                </li>
-              ))}
-            </ol>
-            {notice ? <p className="mt-1 text-sm text-muted" role="status" data-testid="cue-notice">{notice}</p> : null}
-            {!busy ? <button type="button" className="mt-1 min-h-11 px-2 text-sm text-accent" onClick={onReleaseCue}>Send next</button> : null}
-          </div>
-        ) : null}
         {lastReply ? (
           <div className="next-guesses px-3 pb-1" data-testid="next-guesses">
             <button type="button" className="suggestion-chip shrink-0" onClick={() => setDraft("Go deeper on that")}>Go deeper</button>
@@ -734,6 +719,7 @@ export function ChatPane({
         </div>
         <form
           className="floating-composer command-card composer-dock thread-composer p-3" data-composer="floating" data-expanded={composerExpanded ? "true" : "false"}
+          data-mind-chat-composer
           onSubmit={(event) => {
             event.preventDefault();
             onSend();
@@ -753,13 +739,16 @@ export function ChatPane({
               <button type="button" className="chat-pill min-h-11 border border-line px-3 text-sm" data-testid="stop-reply" onClick={onStop}>Stop this reply</button>
             </div>
           )}
+          {notice && (cue.length > 0 || notice.startsWith("This draft is available in this tab only.")) && (
+            <p className="mb-2 px-2 text-sm text-muted" role="status" data-testid="cue-notice">{notice}</p>
+          )}
           <div className="thread-draft">
           {onPickModule && (!active || active.messages.length === 0) ? <ModuleSuggestions draft={draft} onPick={onPickModule} /> : null}
           <textarea
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
             onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey) {
+              if (shouldSubmit(event.nativeEvent)) {
                 event.preventDefault();
                 event.currentTarget.form?.requestSubmit();
               }
@@ -801,6 +790,8 @@ export function ChatPane({
           <div className="composer-toolbar mt-2 flex flex-wrap items-center gap-2">
             <ComposerMore testId="composer-more-menu">
                 <MenuCluster label="Files">
+                  {composerExtras}
+                  {onBrowsePlugins && <button type="button" style={menuChip} onClick={onBrowsePlugins}>Plugins</button>}
                   <button type="button" className="inline-flex items-center gap-2 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" style={menuChip} onClick={onAttach}>
                     <Paperclip className="size-4" /> Attach
                   </button>
@@ -859,6 +850,10 @@ export function ChatPane({
               {speaking ? "Stop" : "Read aloud"}
             </button></div>
 
+            <ComposerQueue title="Chat queue" items={cue} deviceTransfer={deviceQueue} canQueue={canQueue}
+              description="Waiting messages follow a successful reply in this conversation. Held messages return to the composer for review."
+              canRestore={!draft.trim() && pendingImages.length === 0 && !stagedName}
+              onQueue={onQueue} onRemove={onDropCue} onMove={onMoveCue} onEdit={onEditCue} onPause={onHoldCue} onRestore={onRestoreCue} />
             <button type={busy ? "button" : "submit"} onClick={busy ? onStop : undefined} disabled={halted || (!busy && !draft.trim() && pendingImages.length === 0 && !stagedName)} className="composer-send min-h-11 min-w-16 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">{busy ? "Stop" : "Send"}</button>
             <button type="button" className="composer-mic-dictate inline-flex min-h-11 items-center gap-2 rounded-full border border-line px-3 text-sm" data-testid="composer-mic-dictate" aria-label="Mic" title="Mic types into the field. It does not open Speak." onClick={onDictationMic}>
               <Mic className="size-4" /> Mic

@@ -51,7 +51,7 @@ export async function resolveOAuthAccessToken(input: {
     if (!input.forceRefresh && (!conn.expiresAt || Date.parse(conn.expiresAt) > now + 30_000)) return { ok: true, token, grant: conn, refreshed: false };
     const env = input.env ?? provider.readEnv();
     const refresh = conn.refreshTokenEnc ? decryptSecret(conn.refreshTokenEnc) : null;
-    if (!refresh || !env.clientId || !env.clientSecret || !env.tokenUrl) return { ok: false, error: `${provider.displayName} authorization expired. Reconnect the same account or workspace.`, reconnect: true };
+    if (!refresh || !env.clientId || (provider.tokenAuth !== "public" && !env.clientSecret) || !env.tokenUrl) return { ok: false, error: `${provider.displayName} authorization expired. Reconnect the same account or workspace.`, reconnect: true };
     const original = conn;
     release = await claimRefresh(input.ownerId, input.connector, conn.workspaceId ?? "");
     if (!release) return { ok: false, error: "Authorization renewal is already in progress. Retry this check shortly.", reconnect: false };
@@ -67,8 +67,10 @@ export async function resolveOAuthAccessToken(input: {
     if (!refreshToken) return { ok: false, error: "The selected authorization changed. Reconnect the same account or workspace.", reconnect: true };
     const body = new URLSearchParams({ grant_type: "refresh_token", refresh_token: refreshToken });
     const headers: Record<string, string> = { Accept: "application/json", "Content-Type": "application/x-www-form-urlencoded" };
-    if (provider.tokenAuth !== "body") headers.Authorization = `Basic ${Buffer.from(`${env.clientId}:${env.clientSecret}`).toString("base64")}`;
-    if (provider.tokenAuth !== "basic") { body.set("client_id", env.clientId); body.set("client_secret", env.clientSecret); }
+    if (provider.resource) body.set("resource", provider.resource);
+    if (provider.tokenAuth === "public") body.set("client_id", env.clientId);
+    if (provider.tokenAuth === "basic" || provider.tokenAuth === "basic_and_body") headers.Authorization = `Basic ${Buffer.from(`${env.clientId}:${env.clientSecret}`).toString("base64")}`;
+    if ((provider.tokenAuth === "body" || provider.tokenAuth === "basic_and_body") && env.clientSecret) { body.set("client_id", env.clientId); body.set("client_secret", env.clientSecret); }
     const requestBody = input.connector === "notion" ? JSON.stringify(Object.fromEntries(body)) : body;
     if (input.connector === "notion") { headers["Content-Type"] = "application/json"; headers["Notion-Version"] = "2022-06-28"; }
     const reject = async (): Promise<TokenResult> => {

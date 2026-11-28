@@ -101,3 +101,11 @@ describe("done.model null / number / object", () => {
     });
   }
 });
+
+it("retains only an explicit supported effort from a completed relay", () => {
+  for (const value of ["high", "unsupported", undefined]) {
+    const { events: [done] } = pullMindEvents("event: done\ndata: " + JSON.stringify({ text: "answer", requestedReasoningEffort: value }) + "\n\n");
+    assert.equal(done.event, "done");
+    if (done.event === "done") assert.equal(done.requestedReasoningEffort, value === "high" ? "high" : undefined);
+  }
+});

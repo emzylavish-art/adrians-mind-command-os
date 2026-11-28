@@ -1,3 +1,4 @@
+export { loadModeInstructions } from "./mode-instructions.ts";
 import { selectContextHistory, type ContextMessage } from "./context-budget.ts";
 import { MIND_MAX_BODY_BYTES } from "./request-body.ts";
 /**
@@ -355,6 +356,7 @@ export type ChatTurnBodyInput = {
   provider: string;
   personalityId?: string;
   customPersonality?: string;
+  modeInstruction?: string;
   modelTier: ModelTier;
   modelControls?: ModelControls;
   previousTier?: unknown;
@@ -396,6 +398,7 @@ export function chatTurnBody(input: ChatTurnBodyInput): Record<string, unknown> 
     ...(normalizeBotKnowledge(input.botKnowledge).knowledge ? { botKnowledge: normalizeBotKnowledge(input.botKnowledge).knowledge } : {}),
     personalityId: input.personalityId ?? "assistant",
     customPersonality: input.customPersonality ?? "",
+    ...(input.modeInstruction ? { modeInstruction: input.modeInstruction } : {}),
     provider: input.logicRoute ?? input.provider,
     modelTier: input.modelTier,
     ...(input.modelControls ? { modelControls: input.modelControls } : {}),

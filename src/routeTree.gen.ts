@@ -17,20 +17,26 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as MemoryRouteImport } from './routes/memory'
 import { Route as PersonasRouteImport } from './routes/personas'
 import { Route as ResearchRouteImport } from './routes/research'
+import { Route as SharedChatRouteImport } from './routes/shared-chat'
 import { Route as SocialRouteImport } from './routes/social'
 import { Route as UnauthorizedRouteImport } from './routes/unauthorized'
 import { Route as AuthCallbackRouteImport } from './routes/auth/callback'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as ApiMindAccountPhotoRouteImport } from './routes/api/mind/account-photo'
 import { Route as ApiMindAgentRouteImport } from './routes/api/mind/agent'
 import { Route as ApiMindDesktopUpdateRouteImport } from './routes/api/mind/desktop-update'
 import { Route as ApiMindDispatchPolicyRouteImport } from './routes/api/mind/dispatch-policy'
+import { Route as ApiMindManagedBrowserRouteImport } from './routes/api/mind/managed-browser'
 import { Route as ApiMindMemoryPolicyRouteImport } from './routes/api/mind/memory-policy'
+import { Route as ApiMindNotificationsRouteImport } from './routes/api/mind/notifications'
 import { Route as ApiMindProvidersRouteImport } from './routes/api/mind/providers'
+import { Route as ApiMindQueueTransferRouteImport } from './routes/api/mind/queue-transfer'
 import { Route as ApiMindReceiptsRouteImport } from './routes/api/mind/receipts'
 import { Route as ApiMindResearchReportsRouteImport } from './routes/api/mind/research-reports'
 import { Route as ApiMindResourcesRouteImport } from './routes/api/mind/resources'
 import { Route as ApiMindSessionRouteImport } from './routes/api/mind/session'
 import { Route as ApiMindSessionsRouteImport } from './routes/api/mind/sessions'
+import { Route as ApiMindSharedChatsRouteImport } from './routes/api/mind/shared-chats'
 import { Route as ApiMindSkillsRouteImport } from './routes/api/mind/skills'
 import { Route as ApiMindTurnRouteImport } from './routes/api/mind/turn'
 import { Route as ApiMindUsageRouteImport } from './routes/api/mind/usage'
@@ -65,6 +71,7 @@ import { Route as ApiMindMcpCallRouteImport } from './routes/api/mind/mcp/call'
 import { Route as ApiMindMcpServersRouteImport } from './routes/api/mind/mcp/servers'
 import { Route as ApiMindMcpToolsRouteImport } from './routes/api/mind/mcp/tools'
 import { Route as ApiMindMediaGenerateRouteImport } from './routes/api/mind/media/generate'
+import { Route as ApiMindNotificationsTickRouteImport } from './routes/api/mind/notifications/tick'
 import { Route as ApiMindNuanceKeyRouteImport } from './routes/api/mind/nuance/key'
 import { Route as ApiMindNuanceSessionRouteImport } from './routes/api/mind/nuance/session'
 import { Route as ApiMindPairingActionRouteImport } from './routes/api/mind/pairing/action'
@@ -141,6 +148,11 @@ const ResearchRoute = ResearchRouteImport.update({
   path: '/research',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SharedChatRoute = SharedChatRouteImport.update({
+  id: '/shared-chat',
+  path: '/shared-chat',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SocialRoute = SocialRouteImport.update({
   id: '/social',
   path: '/social',
@@ -161,6 +173,11 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   path: '/api/auth/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiMindAccountPhotoRoute = ApiMindAccountPhotoRouteImport.update({
+  id: '/api/mind/account-photo',
+  path: '/api/mind/account-photo',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiMindAgentRoute = ApiMindAgentRouteImport.update({
   id: '/api/mind/agent',
   path: '/api/mind/agent',
@@ -176,14 +193,29 @@ const ApiMindDispatchPolicyRoute = ApiMindDispatchPolicyRouteImport.update({
   path: '/api/mind/dispatch-policy',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiMindManagedBrowserRoute = ApiMindManagedBrowserRouteImport.update({
+  id: '/api/mind/managed-browser',
+  path: '/api/mind/managed-browser',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiMindMemoryPolicyRoute = ApiMindMemoryPolicyRouteImport.update({
   id: '/api/mind/memory-policy',
   path: '/api/mind/memory-policy',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiMindNotificationsRoute = ApiMindNotificationsRouteImport.update({
+  id: '/api/mind/notifications',
+  path: '/api/mind/notifications',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiMindProvidersRoute = ApiMindProvidersRouteImport.update({
   id: '/api/mind/providers',
   path: '/api/mind/providers',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMindQueueTransferRoute = ApiMindQueueTransferRouteImport.update({
+  id: '/api/mind/queue-transfer',
+  path: '/api/mind/queue-transfer',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiMindReceiptsRoute = ApiMindReceiptsRouteImport.update({
@@ -209,6 +241,11 @@ const ApiMindSessionRoute = ApiMindSessionRouteImport.update({
 const ApiMindSessionsRoute = ApiMindSessionsRouteImport.update({
   id: '/api/mind/sessions',
   path: '/api/mind/sessions',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMindSharedChatsRoute = ApiMindSharedChatsRouteImport.update({
+  id: '/api/mind/shared-chats',
+  path: '/api/mind/shared-chats',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiMindSkillsRoute = ApiMindSkillsRouteImport.update({
@@ -382,6 +419,12 @@ const ApiMindMediaGenerateRoute = ApiMindMediaGenerateRouteImport.update({
   path: '/api/mind/media/generate',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiMindNotificationsTickRoute =
+  ApiMindNotificationsTickRouteImport.update({
+    id: '/tick',
+    path: '/tick',
+    getParentRoute: () => ApiMindNotificationsRoute,
+  } as any)
 const ApiMindNuanceKeyRoute = ApiMindNuanceKeyRouteImport.update({
   id: '/api/mind/nuance/key',
   path: '/api/mind/nuance/key',
@@ -576,20 +619,26 @@ export interface FileRoutesByFullPath {
   '/memory': typeof MemoryRoute
   '/personas': typeof PersonasRoute
   '/research': typeof ResearchRoute
+  '/shared-chat': typeof SharedChatRoute
   '/social': typeof SocialRoute
   '/unauthorized': typeof UnauthorizedRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/mind/account-photo': typeof ApiMindAccountPhotoRoute
   '/api/mind/agent': typeof ApiMindAgentRoute
   '/api/mind/desktop-update': typeof ApiMindDesktopUpdateRoute
   '/api/mind/dispatch-policy': typeof ApiMindDispatchPolicyRoute
+  '/api/mind/managed-browser': typeof ApiMindManagedBrowserRoute
   '/api/mind/memory-policy': typeof ApiMindMemoryPolicyRoute
+  '/api/mind/notifications': typeof ApiMindNotificationsRouteWithChildren
   '/api/mind/providers': typeof ApiMindProvidersRoute
+  '/api/mind/queue-transfer': typeof ApiMindQueueTransferRoute
   '/api/mind/receipts': typeof ApiMindReceiptsRoute
   '/api/mind/research-reports': typeof ApiMindResearchReportsRoute
   '/api/mind/resources': typeof ApiMindResourcesRoute
   '/api/mind/session': typeof ApiMindSessionRoute
   '/api/mind/sessions': typeof ApiMindSessionsRoute
+  '/api/mind/shared-chats': typeof ApiMindSharedChatsRoute
   '/api/mind/skills': typeof ApiMindSkillsRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
   '/api/mind/usage': typeof ApiMindUsageRoute
@@ -624,6 +673,7 @@ export interface FileRoutesByFullPath {
   '/api/mind/mcp/servers': typeof ApiMindMcpServersRoute
   '/api/mind/mcp/tools': typeof ApiMindMcpToolsRoute
   '/api/mind/media/generate': typeof ApiMindMediaGenerateRoute
+  '/api/mind/notifications/tick': typeof ApiMindNotificationsTickRoute
   '/api/mind/nuance/key': typeof ApiMindNuanceKeyRoute
   '/api/mind/nuance/session': typeof ApiMindNuanceSessionRoute
   '/api/mind/pairing/action': typeof ApiMindPairingActionRoute
@@ -669,20 +719,26 @@ export interface FileRoutesByTo {
   '/memory': typeof MemoryRoute
   '/personas': typeof PersonasRoute
   '/research': typeof ResearchRoute
+  '/shared-chat': typeof SharedChatRoute
   '/social': typeof SocialRoute
   '/unauthorized': typeof UnauthorizedRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/mind/account-photo': typeof ApiMindAccountPhotoRoute
   '/api/mind/agent': typeof ApiMindAgentRoute
   '/api/mind/desktop-update': typeof ApiMindDesktopUpdateRoute
   '/api/mind/dispatch-policy': typeof ApiMindDispatchPolicyRoute
+  '/api/mind/managed-browser': typeof ApiMindManagedBrowserRoute
   '/api/mind/memory-policy': typeof ApiMindMemoryPolicyRoute
+  '/api/mind/notifications': typeof ApiMindNotificationsRouteWithChildren
   '/api/mind/providers': typeof ApiMindProvidersRoute
+  '/api/mind/queue-transfer': typeof ApiMindQueueTransferRoute
   '/api/mind/receipts': typeof ApiMindReceiptsRoute
   '/api/mind/research-reports': typeof ApiMindResearchReportsRoute
   '/api/mind/resources': typeof ApiMindResourcesRoute
   '/api/mind/session': typeof ApiMindSessionRoute
   '/api/mind/sessions': typeof ApiMindSessionsRoute
+  '/api/mind/shared-chats': typeof ApiMindSharedChatsRoute
   '/api/mind/skills': typeof ApiMindSkillsRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
   '/api/mind/usage': typeof ApiMindUsageRoute
@@ -717,6 +773,7 @@ export interface FileRoutesByTo {
   '/api/mind/mcp/servers': typeof ApiMindMcpServersRoute
   '/api/mind/mcp/tools': typeof ApiMindMcpToolsRoute
   '/api/mind/media/generate': typeof ApiMindMediaGenerateRoute
+  '/api/mind/notifications/tick': typeof ApiMindNotificationsTickRoute
   '/api/mind/nuance/key': typeof ApiMindNuanceKeyRoute
   '/api/mind/nuance/session': typeof ApiMindNuanceSessionRoute
   '/api/mind/pairing/action': typeof ApiMindPairingActionRoute
@@ -763,20 +820,26 @@ export interface FileRoutesById {
   '/memory': typeof MemoryRoute
   '/personas': typeof PersonasRoute
   '/research': typeof ResearchRoute
+  '/shared-chat': typeof SharedChatRoute
   '/social': typeof SocialRoute
   '/unauthorized': typeof UnauthorizedRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/mind/account-photo': typeof ApiMindAccountPhotoRoute
   '/api/mind/agent': typeof ApiMindAgentRoute
   '/api/mind/desktop-update': typeof ApiMindDesktopUpdateRoute
   '/api/mind/dispatch-policy': typeof ApiMindDispatchPolicyRoute
+  '/api/mind/managed-browser': typeof ApiMindManagedBrowserRoute
   '/api/mind/memory-policy': typeof ApiMindMemoryPolicyRoute
+  '/api/mind/notifications': typeof ApiMindNotificationsRouteWithChildren
   '/api/mind/providers': typeof ApiMindProvidersRoute
+  '/api/mind/queue-transfer': typeof ApiMindQueueTransferRoute
   '/api/mind/receipts': typeof ApiMindReceiptsRoute
   '/api/mind/research-reports': typeof ApiMindResearchReportsRoute
   '/api/mind/resources': typeof ApiMindResourcesRoute
   '/api/mind/session': typeof ApiMindSessionRoute
   '/api/mind/sessions': typeof ApiMindSessionsRoute
+  '/api/mind/shared-chats': typeof ApiMindSharedChatsRoute
   '/api/mind/skills': typeof ApiMindSkillsRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
   '/api/mind/usage': typeof ApiMindUsageRoute
@@ -811,6 +874,7 @@ export interface FileRoutesById {
   '/api/mind/mcp/servers': typeof ApiMindMcpServersRoute
   '/api/mind/mcp/tools': typeof ApiMindMcpToolsRoute
   '/api/mind/media/generate': typeof ApiMindMediaGenerateRoute
+  '/api/mind/notifications/tick': typeof ApiMindNotificationsTickRoute
   '/api/mind/nuance/key': typeof ApiMindNuanceKeyRoute
   '/api/mind/nuance/session': typeof ApiMindNuanceSessionRoute
   '/api/mind/pairing/action': typeof ApiMindPairingActionRoute
@@ -858,20 +922,26 @@ export interface FileRouteTypes {
     | '/memory'
     | '/personas'
     | '/research'
+    | '/shared-chat'
     | '/social'
     | '/unauthorized'
     | '/auth/callback'
     | '/api/auth/$'
+    | '/api/mind/account-photo'
     | '/api/mind/agent'
     | '/api/mind/desktop-update'
     | '/api/mind/dispatch-policy'
+    | '/api/mind/managed-browser'
     | '/api/mind/memory-policy'
+    | '/api/mind/notifications'
     | '/api/mind/providers'
+    | '/api/mind/queue-transfer'
     | '/api/mind/receipts'
     | '/api/mind/research-reports'
     | '/api/mind/resources'
     | '/api/mind/session'
     | '/api/mind/sessions'
+    | '/api/mind/shared-chats'
     | '/api/mind/skills'
     | '/api/mind/turn'
     | '/api/mind/usage'
@@ -906,6 +976,7 @@ export interface FileRouteTypes {
     | '/api/mind/mcp/servers'
     | '/api/mind/mcp/tools'
     | '/api/mind/media/generate'
+    | '/api/mind/notifications/tick'
     | '/api/mind/nuance/key'
     | '/api/mind/nuance/session'
     | '/api/mind/pairing/action'
@@ -951,20 +1022,26 @@ export interface FileRouteTypes {
     | '/memory'
     | '/personas'
     | '/research'
+    | '/shared-chat'
     | '/social'
     | '/unauthorized'
     | '/auth/callback'
     | '/api/auth/$'
+    | '/api/mind/account-photo'
     | '/api/mind/agent'
     | '/api/mind/desktop-update'
     | '/api/mind/dispatch-policy'
+    | '/api/mind/managed-browser'
     | '/api/mind/memory-policy'
+    | '/api/mind/notifications'
     | '/api/mind/providers'
+    | '/api/mind/queue-transfer'
     | '/api/mind/receipts'
     | '/api/mind/research-reports'
     | '/api/mind/resources'
     | '/api/mind/session'
     | '/api/mind/sessions'
+    | '/api/mind/shared-chats'
     | '/api/mind/skills'
     | '/api/mind/turn'
     | '/api/mind/usage'
@@ -999,6 +1076,7 @@ export interface FileRouteTypes {
     | '/api/mind/mcp/servers'
     | '/api/mind/mcp/tools'
     | '/api/mind/media/generate'
+    | '/api/mind/notifications/tick'
     | '/api/mind/nuance/key'
     | '/api/mind/nuance/session'
     | '/api/mind/pairing/action'
@@ -1044,20 +1122,26 @@ export interface FileRouteTypes {
     | '/memory'
     | '/personas'
     | '/research'
+    | '/shared-chat'
     | '/social'
     | '/unauthorized'
     | '/auth/callback'
     | '/api/auth/$'
+    | '/api/mind/account-photo'
     | '/api/mind/agent'
     | '/api/mind/desktop-update'
     | '/api/mind/dispatch-policy'
+    | '/api/mind/managed-browser'
     | '/api/mind/memory-policy'
+    | '/api/mind/notifications'
     | '/api/mind/providers'
+    | '/api/mind/queue-transfer'
     | '/api/mind/receipts'
     | '/api/mind/research-reports'
     | '/api/mind/resources'
     | '/api/mind/session'
     | '/api/mind/sessions'
+    | '/api/mind/shared-chats'
     | '/api/mind/skills'
     | '/api/mind/turn'
     | '/api/mind/usage'
@@ -1092,6 +1176,7 @@ export interface FileRouteTypes {
     | '/api/mind/mcp/servers'
     | '/api/mind/mcp/tools'
     | '/api/mind/media/generate'
+    | '/api/mind/notifications/tick'
     | '/api/mind/nuance/key'
     | '/api/mind/nuance/session'
     | '/api/mind/pairing/action'
@@ -1138,20 +1223,26 @@ export interface RootRouteChildren {
   MemoryRoute: typeof MemoryRoute
   PersonasRoute: typeof PersonasRoute
   ResearchRoute: typeof ResearchRoute
+  SharedChatRoute: typeof SharedChatRoute
   SocialRoute: typeof SocialRoute
   UnauthorizedRoute: typeof UnauthorizedRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
+  ApiMindAccountPhotoRoute: typeof ApiMindAccountPhotoRoute
   ApiMindAgentRoute: typeof ApiMindAgentRoute
   ApiMindDesktopUpdateRoute: typeof ApiMindDesktopUpdateRoute
   ApiMindDispatchPolicyRoute: typeof ApiMindDispatchPolicyRoute
+  ApiMindManagedBrowserRoute: typeof ApiMindManagedBrowserRoute
   ApiMindMemoryPolicyRoute: typeof ApiMindMemoryPolicyRoute
+  ApiMindNotificationsRoute: typeof ApiMindNotificationsRouteWithChildren
   ApiMindProvidersRoute: typeof ApiMindProvidersRoute
+  ApiMindQueueTransferRoute: typeof ApiMindQueueTransferRoute
   ApiMindReceiptsRoute: typeof ApiMindReceiptsRoute
   ApiMindResearchReportsRoute: typeof ApiMindResearchReportsRoute
   ApiMindResourcesRoute: typeof ApiMindResourcesRoute
   ApiMindSessionRoute: typeof ApiMindSessionRoute
   ApiMindSessionsRoute: typeof ApiMindSessionsRoute
+  ApiMindSharedChatsRoute: typeof ApiMindSharedChatsRoute
   ApiMindSkillsRoute: typeof ApiMindSkillsRoute
   ApiMindTurnRoute: typeof ApiMindTurnRoute
   ApiMindUsageRoute: typeof ApiMindUsageRoute
@@ -1281,6 +1372,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ResearchRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/shared-chat': {
+      id: '/shared-chat'
+      path: '/shared-chat'
+      fullPath: '/shared-chat'
+      preLoaderRoute: typeof SharedChatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/social': {
       id: '/social'
       path: '/social'
@@ -1309,6 +1407,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/mind/account-photo': {
+      id: '/api/mind/account-photo'
+      path: '/api/mind/account-photo'
+      fullPath: '/api/mind/account-photo'
+      preLoaderRoute: typeof ApiMindAccountPhotoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/mind/agent': {
       id: '/api/mind/agent'
       path: '/api/mind/agent'
@@ -1330,6 +1435,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiMindDispatchPolicyRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/mind/managed-browser': {
+      id: '/api/mind/managed-browser'
+      path: '/api/mind/managed-browser'
+      fullPath: '/api/mind/managed-browser'
+      preLoaderRoute: typeof ApiMindManagedBrowserRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/mind/memory-policy': {
       id: '/api/mind/memory-policy'
       path: '/api/mind/memory-policy'
@@ -1337,11 +1449,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiMindMemoryPolicyRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/mind/notifications': {
+      id: '/api/mind/notifications'
+      path: '/api/mind/notifications'
+      fullPath: '/api/mind/notifications'
+      preLoaderRoute: typeof ApiMindNotificationsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/mind/providers': {
       id: '/api/mind/providers'
       path: '/api/mind/providers'
       fullPath: '/api/mind/providers'
       preLoaderRoute: typeof ApiMindProvidersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/queue-transfer': {
+      id: '/api/mind/queue-transfer'
+      path: '/api/mind/queue-transfer'
+      fullPath: '/api/mind/queue-transfer'
+      preLoaderRoute: typeof ApiMindQueueTransferRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/mind/receipts': {
@@ -1377,6 +1503,13 @@ declare module '@tanstack/react-router' {
       path: '/api/mind/sessions'
       fullPath: '/api/mind/sessions'
       preLoaderRoute: typeof ApiMindSessionsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/shared-chats': {
+      id: '/api/mind/shared-chats'
+      path: '/api/mind/shared-chats'
+      fullPath: '/api/mind/shared-chats'
+      preLoaderRoute: typeof ApiMindSharedChatsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/mind/skills': {
@@ -1616,6 +1749,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/api/mind/media/generate'
       preLoaderRoute: typeof ApiMindMediaGenerateRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/notifications/tick': {
+      id: '/api/mind/notifications/tick'
+      path: '/tick'
+      fullPath: '/api/mind/notifications/tick'
+      preLoaderRoute: typeof ApiMindNotificationsTickRouteImport
+      parentRoute: typeof ApiMindNotificationsRoute
     }
     '/api/mind/nuance/key': {
       id: '/api/mind/nuance/key'
@@ -1865,6 +2005,17 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface ApiMindNotificationsRouteChildren {
+  ApiMindNotificationsTickRoute: typeof ApiMindNotificationsTickRoute
+}
+
+const ApiMindNotificationsRouteChildren: ApiMindNotificationsRouteChildren = {
+  ApiMindNotificationsTickRoute: ApiMindNotificationsTickRoute,
+}
+
+const ApiMindNotificationsRouteWithChildren =
+  ApiMindNotificationsRoute._addFileChildren(ApiMindNotificationsRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DashboardRoute: DashboardRoute,
@@ -1874,20 +2025,26 @@ const rootRouteChildren: RootRouteChildren = {
   MemoryRoute: MemoryRoute,
   PersonasRoute: PersonasRoute,
   ResearchRoute: ResearchRoute,
+  SharedChatRoute: SharedChatRoute,
   SocialRoute: SocialRoute,
   UnauthorizedRoute: UnauthorizedRoute,
   AuthCallbackRoute: AuthCallbackRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
+  ApiMindAccountPhotoRoute: ApiMindAccountPhotoRoute,
   ApiMindAgentRoute: ApiMindAgentRoute,
   ApiMindDesktopUpdateRoute: ApiMindDesktopUpdateRoute,
   ApiMindDispatchPolicyRoute: ApiMindDispatchPolicyRoute,
+  ApiMindManagedBrowserRoute: ApiMindManagedBrowserRoute,
   ApiMindMemoryPolicyRoute: ApiMindMemoryPolicyRoute,
+  ApiMindNotificationsRoute: ApiMindNotificationsRouteWithChildren,
   ApiMindProvidersRoute: ApiMindProvidersRoute,
+  ApiMindQueueTransferRoute: ApiMindQueueTransferRoute,
   ApiMindReceiptsRoute: ApiMindReceiptsRoute,
   ApiMindResearchReportsRoute: ApiMindResearchReportsRoute,
   ApiMindResourcesRoute: ApiMindResourcesRoute,
   ApiMindSessionRoute: ApiMindSessionRoute,
   ApiMindSessionsRoute: ApiMindSessionsRoute,
+  ApiMindSharedChatsRoute: ApiMindSharedChatsRoute,
   ApiMindSkillsRoute: ApiMindSkillsRoute,
   ApiMindTurnRoute: ApiMindTurnRoute,
   ApiMindUsageRoute: ApiMindUsageRoute,

@@ -1,8 +1,8 @@
 import type { ResearchCitation, ResearchResult } from "./research.ts";
 
 export type ResearchClaim = { id: string; text: string; sourceUrls: string[]; kind: "direct-evidence" | "interpretation" | "hypothesis" | "provider-cited"; addedAt: string };
-export type ResearchReportVersion = { version: number; summary: string; citations: ResearchCitation[]; steps?: ResearchResult["steps"]; at: string; claims?: ResearchClaim[] };
-export type ResearchReport = ResearchReportVersion & { id: string; question: string; versions?: ResearchReportVersion[] };
+export type ResearchReportVersion = { version: number; summary: string; citations: ResearchCitation[]; steps?: ResearchResult["steps"]; evidence?: ResearchResult["evidence"]; at: string; claims?: ResearchClaim[] };
+export type ResearchReport = ResearchReportVersion & { id: string; question: string; providerIdentity?: ResearchResult["providerIdentity"]; versions?: ResearchReportVersion[] };
 export type ResearchReference = { reportId: string; version: number; question: string; at: string };
 export const researchArchiveKey = (owner: string) => `amcos.research.v2.${owner}`;
 
@@ -32,14 +32,54 @@ export function makeResearchReport(question: string, result: ResearchResult, pre
   const summary = before && after && before !== after ? `${before}\n\nRecovered evidence:\n${after}` : before || after;
   const version = (previous?.version ?? (previous ? 1 : 0)) + 1;
   const citations = distinctSources(previous?.citations ?? [], result.citations.map((source) => ({ ...source, retrievedAt: source.retrievedAt || at, query: source.query || question, verification: source.verification || "search-result-only" })));
+  const evidence = [...new Map([...(previous?.evidence ?? []), ...(result.evidence ?? [])].map((source) => [source.url, source])).values()];
   const sourceUrls = new Set(citations.map((source) => source.url));
   const claims = [...(previous?.claims ?? [])];
   for (const claim of result.claims ?? []) {
     const urls = claim.sourceUrls.filter((url) => sourceUrls.has(url));
     if (urls.length && !claims.some((old) => old.text === claim.text && JSON.stringify(old.sourceUrls) === JSON.stringify(urls))) claims.push({ ...claim, sourceUrls: urls, id: crypto.randomUUID(), addedAt: at });
   }
-  return { id: previous?.id || crypto.randomUUID(), question, summary, citations, steps: allSteps, at, version,
-    claims, versions: previous ? [...(previous.versions ?? []), { version: previous.version || 1, summary: previous.summary, citations: previous.citations, steps: previous.steps, claims: previous.claims, at: previous.at }] : [] };
+  return { id: previous?.id || crypto.randomUUID(), question, summary, citations, evidence, steps: allSteps, at, version, providerIdentity: result.providerIdentity ?? previous?.providerIdentity,
+    claims, versions: previous ? [...(previous.versions ?? []), { version: previous.version || 1, summary: previous.summary, citations: previous.citations, evidence: previous.evidence, steps: previous.steps, claims: previous.claims, at: previous.at }] : [] };
+}
+
+/** Portable report with evidence numbering shared by findings and the bibliography. */
+export function researchReportMarkdown(report: ResearchReport): string {
+  const plain = (text: string) => text.replace(/[&<>]/g, (character) =>
+    character === "&" ? "&amp;" : character === "<" ? "&lt;" : "&gt;")
+    .replace(/[\\`*_{}\[\]()#!|~]/g, "\\$&");
+  const sources = distinctSources(report.citations, report.evidence ?? []);
+  const sourceNumbers = new Map(sources.map((source, index) => [source.url, index + 1]));
+  const lines = [
+    `# ${plain(report.question)}`, "",
+    `Version ${report.version || 1} · ${report.at}`, "",
+    researchCoverage(report), "", "## Summary", "", plain(report.summary) || "No summary recorded.", "",
+  ];
+  if (report.claims?.length) {
+    lines.push("## Findings", "");
+    for (const claim of report.claims) {
+      const references = claim.sourceUrls.flatMap((url) => sourceNumbers.has(url) ? [sourceNumbers.get(url)] : []);
+      lines.push(`- **${claim.kind}** · ${plain(claim.text)}${references.length ? ` (sources ${references.join(", ")})` : ""}`);
+    }
+    lines.push("");
+  }
+  lines.push("## Sources", "");
+  for (const [index, source] of sources.entries()) {
+    lines.push(`${index + 1}. ${plain(source.title)}`);
+    if (/^https?:\/\//i.test(source.url)) lines.push(`   <${source.url.replace(/[<>\s]/g, encodeURIComponent)}>`);
+    if (source.retrievedAt) lines.push(`   Retrieved ${plain(source.retrievedAt)}`);
+    if (source.publishedAt) lines.push(`   Published ${plain(source.publishedAt)}`);
+    if (source.excerpt) lines.push("", ...plain(source.excerpt).split("\n").map((line) => `   > ${line}`));
+    lines.push("");
+  }
+  if (report.steps?.length) {
+    lines.push("## Search history", "");
+    for (const step of report.steps) {
+      lines.push(`- ${plain(step.query)} · ${step.status ?? (step.ok ? "succeeded" : "failed")} · ${step.count} sources${step.error ? ` · ${plain(step.error)}` : ""}`);
+    }
+    lines.push("");
+  }
+  return lines.join("\n");
 }
 
 export function researchCoverage(report: Pick<ResearchReport, "steps">): string {

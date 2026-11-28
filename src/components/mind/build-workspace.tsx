@@ -2,22 +2,39 @@ import { knownCodeFilesFor, reviewedRelatedNavigation, type CodeBufferSource } f
 import type { BuilderInstructionReceipt } from "@/lib/mind/kimi/hosted/builder-instructions";
 import type { FileReconciliation } from "@/lib/mind/kimi/file-reconciliation";
 import { checkpointListOutcome, type BuildRuntime } from "@/lib/mind/kimi/runtime-capabilities";
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Activity, Code2, FileDiff, FolderOpen, RefreshCw, Send, ShieldCheck, Square, Terminal, WifiOff } from "lucide-react";
 import { KimiPhase4Panel } from "@/components/mind/kimi-phase4-panel";
 import { GitReview, type GitReport } from "@/components/mind/git-review";
 import { CodeIde } from "@/components/mind/code-ide";
 import { useAccountPreferences } from "@/components/mind/account-preferences-context";
-import { collectAccountSkillApplications, skillReceiptSummary, type SkillApplicationReceipt } from "@/lib/mind/skill-activation";
+import { collectAccountSkillApplications, skillReceiptSummary } from "@/lib/mind/skill-activation";
+import { InlineImage } from "./media/inline-image";
+import { AnswerTabs, RunActivity } from "./message-body";
 import { BrowserEnvironments } from "@/components/mind/browser-environments";
 import { OwnerFlow } from "@/components/mind/owner-flow";
-import { ActionOverlay } from "@/components/mind/conversation-menu";
-import { chatTurnBody } from "@/lib/mind/logic-routes";
-import { consumeMindTurn, prepareTurnId } from "@/lib/mind/live-turn";
+import { ActionsButton, ActionOverlay } from "@/components/mind/conversation-menu";
+import { getBearerToken } from "@/lib/auth/client";
+import { readVoicePreferences } from "@/lib/mind/voice-preferences";
+import type { ModelTier, ModelTierCatalogRow } from "@/lib/mind/model-tiers";
+import type { ImageAttachment } from "@/lib/mind/media";
+import { ComposerMore, MenuCluster, menuChip } from "@/components/mind/menu-material";
+import { ComposerQueue } from "@/components/mind/composer-queue";
+import { cueMessage, dropCued, EMPTY_CUE, hasCueAttachments, moveCued, readCue, receiveTransferredCue, type CuedMessage, type CueAttachments, type CuedFile } from "@/lib/mind/message-cue";
+import { approvedPlan, canQueuePlan, type QueuedPlanApproval } from "@/lib/mind/kimi/queued-plan";
+import { useComposerDraft } from "@/lib/mind/use-composer-draft";
+import { chatTurnBody, loadModeInstructions } from "@/lib/mind/logic-routes";
+import { checkTurnReceipt, consumeMindTurn, prepareTurnId } from "@/lib/mind/live-turn";
 import { boundAbortSignal } from "@/lib/mind/turn-timeouts";
-import { createBuildPlanningGate } from "@/lib/mind/kimi/build-lifecycle";
-import { buildBufferKey as bufferKey, buildDraftKey, buildResultHandoff, parseBuildDraft, serializeBuildDraft, type BuildEditorBuffer as EditorBuffer, type BuildFileTarget as FileTarget } from "@/lib/mind/kimi/build-review";
-import { buildResultKey, parseBuildResult, serializeBuildResult, type BuildStoredReceipt } from "@/lib/mind/kimi/build-result";
+import { applyBuildSave, buildBufferKey as bufferKey, buildDraftKey, buildResultHandoff, matchesBuildSave, parseBuildDraft, serializeBuildDraft, type BuildPlanReply, type BuildEditorBuffer as EditorBuffer, type BuildFileTarget as FileTarget } from "@/lib/mind/kimi/build-review";
+import { buildResultKey, canReturnBuildResult, parseBuildResult, readBuildReturnSource, serializeBuildResult, type BuildReturnSource, type BuildStoredReceipt, type BuildStoredResult } from "@/lib/mind/kimi/build-result";
+import type { BuildSourceReceipt } from "@/lib/mind/kimi/source-receipt";
+import { buildArtifactHref, buildArtifactName, type BuildArtifactStatus } from "@/lib/mind/kimi/build-artifact";
+import { buildRunPath } from "@/lib/mind/app-location";
+import { buildBranchName, workRunStorageKey, workStorageKey } from "@/lib/mind/kimi/build-scope";
+import { buildHandoffKey, normalizeWorkMedia, parseChatBuildHandoff, workImageKey, type ChatBuildHandoff, type WorkImageRef, type WorkMedia, type WorkOriginalRef } from "@/lib/mind/kimi/build-handoff";
+import { MAX_IMAGES_PER_TURN } from "@/lib/mind/media/types";
+import { MAX_BUILD_TASK_CHARACTERS } from "@/lib/mind/kimi/build-guidance";
 import { previewPathPrefix } from "@/lib/preview-path-prefix";
 
 type CompanionState = {
@@ -77,10 +94,35 @@ function eventLabel(event: BuildEvent): string {
 }
 
 type BuildWorkspaceProps = {
+  planningCatalog?: ModelTierCatalogRow[];
+  sharedTier?: ModelTier;
+  composer?: {
+    browserActivity?: ReactNode;
+    staged: CuedFile | null;
+    images: ImageAttachment[];
+    message: string | null;
+    onFile: () => void;
+    onPhoto: () => void;
+    onCamera: () => void;
+    onPlugins: () => void;
+    replaceAttachments: (attachments?: CueAttachments) => void;
+    removeFile: () => void;
+    removeImage: (index: number) => void;
+  };
+  plannerRef?: { current: ((words: string, images: unknown[]) => Promise<string | undefined>) | null };
   ownerId?: string;
+  deviceQueueEnabled?: boolean;
+  projectId?: string | null;
+  runId?: string | null;
+  workProjects?: { id: string; name: string }[];
+  onSelectProject?: (id: string | null) => void;
+  onReturnResult?: (result: BuildStoredResult) => string | undefined;
+  resolveWorkImages?: (source: string, refs: WorkImageRef[]) => Promise<ImageAttachment[]>;
+  downloadWorkOriginal?: (source: string, original: WorkOriginalRef) => Promise<void>;
   enabledSkills?: Record<string, boolean>;
   freeOnly?: boolean;
   onDiscuss?: (text: string) => void;
+  onOpenSourceChat?: (id: string) => void;
   onResult?: (text: string) => void;
   halted?: boolean;
   recording?: boolean;
@@ -91,11 +133,66 @@ type BuildWorkspaceProps = {
 };
 
 export function BuildWorkspace(props: BuildWorkspaceProps = {}) {
-  return <BuildWorkspaceSession key={props.ownerId || "signed-out"} {...props} />;
+  const projectId = props.projectId ?? null;
+  const key = JSON.stringify([props.ownerId, projectId, props.runId]);
+  if (props.runId) return <BuildRunReview key={key} owner={props.ownerId} projectId={projectId} runId={props.runId} onBack={() => props.onSelectProject?.(projectId)} />;
+  return <BuildWorkspaceSession key={key} {...props} projectId={projectId} />;
 }
 
-function BuildWorkspaceSession(props: BuildWorkspaceProps) {
+function BuildArtifactLink({ artifact, runId, projectId }: { artifact: BuildArtifactStatus; runId: string; projectId: string | null }) {
+  return artifact.status === "saved"
+    ? <a href={buildArtifactHref(runId, projectId)} className="inline-flex min-h-11 items-center underline">Download {artifact.name} · {artifact.bytes.toLocaleString()} bytes</a>
+    : <p role="status">The Build finished. The Companion could not save {artifact.name}.</p>;
+}
+
+function BuildRunReview({ owner, projectId, runId, onBack }: { owner?: string; projectId: string | null; runId: string; onBack: () => void }) {
+  const [result, setResult] = useState<BuildStoredResult | null>();
+  useEffect(() => {
+    const accountId = owner;
+    if (!accountId) { setResult(null); return; }
+    const controller = new AbortController();
+    const matchesRun = (saved: BuildStoredResult | null) => saved?.job.status === "done" &&
+      ((saved.source?.runId === runId && canReturnBuildResult(saved.job, saved.source)) || (saved.job.id === runId && Boolean(saved.receipt?.artifact)));
+    try {
+      const saved = parseBuildResult(localStorage.getItem(workRunStorageKey(accountId, projectId, runId)), accountId, projectId);
+      if (matchesRun(saved)) { setResult(saved); return; }
+    } catch { /* A paired run can be reopened without this browser's local copy. */ }
+    async function load(accountId: string) {
+      const query = new URLSearchParams({ jobId: runId, reviewProject: projectId ?? "" });
+      try {
+        const response = await fetch(`/api/mind/build/session?${query}`, { credentials: "include", cache: "no-store", signal: AbortSignal.any([controller.signal, AbortSignal.timeout(12_000)]) });
+        const body = response.ok ? await response.json() as { result?: BuildStoredResult } : null;
+        const saved = body?.result ? parseBuildResult(JSON.stringify(body.result), accountId, projectId) : null;
+        if (!controller.signal.aborted) setResult(matchesRun(saved) ? saved : null);
+      } catch { if (!controller.signal.aborted) setResult(null); }
+    }
+    void load(accountId);
+    return () => controller.abort();
+  }, [owner, projectId, runId]);
+  return <section className="dense-card min-w-0 space-y-3" aria-label="Saved Build run">
+    <button type="button" className="min-h-11 underline" onClick={onBack}>Back to Work draft</button>
+    <h2 className="font-semibold">Build run receipt</h2>
+    {result ? <>{result.receipt?.verifiedBranch && <p className="text-sm text-muted">Git branch verified before dispatch · {result.receipt.verifiedBranch}</p>}{result.receipt?.artifact && <BuildArtifactLink artifact={result.receipt.artifact} runId={runId} projectId={projectId} />}<div className="build-reading-result">{buildResultHandoff(result.receipt?.filesChanged || [], result.job.output, result.receipt?.operationId || runId, { outputComplete: result.receipt?.outputComplete })}</div></>
+      : <p role="status">{result === undefined ? "Loading saved receipt…" : "This receipt is unavailable for the current account, project, or browser. No task was started."}</p>}
+  </section>;
+}
+
+function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string | null }) {
+  const projectId = props.projectId;
+  const ownerKey = props.ownerId || "signed-out";
+  const draftKey = buildDraftKey(ownerKey, projectId);
+  const resultKey = buildResultKey(ownerKey, projectId);
+  const lastJobKey = workStorageKey(ownerKey, projectId, "last-job", `adrian-build-last-job.${ownerKey}`);
+  const liveKey = workStorageKey(ownerKey, projectId, "live-session", `adrian-build-live-session.${ownerKey}`);
+  const pendingSourceKey = workStorageKey(ownerKey, projectId, "pending-source", `adrian-build-pending-source.${ownerKey}`);
   const preferenceStorage = useAccountPreferences();
+  const [dictationEnabled, setDictationEnabled] = useState(() => readVoicePreferences(preferenceStorage).enabled);
+  useEffect(() => {
+    const refresh = () => setDictationEnabled(readVoicePreferences(preferenceStorage).enabled);
+    refresh();
+    window.addEventListener("adrian-dictation-preferences", refresh);
+    return () => window.removeEventListener("adrian-dictation-preferences", refresh);
+  }, [preferenceStorage]);
   const apiPrefix = typeof window === "undefined" ? "" : previewPathPrefix(window.location.hostname, window.location.pathname) || "";
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
@@ -103,15 +200,41 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
   const [companion, setCompanion] = useState<CompanionState>({});
   const [band, setBand] = useState<"actions" | "files" | "message" | "editor">("message");
   const [prompt, setPrompt] = useState("");
+  const [queuedTasks, setQueuedTasks] = useComposerDraft(
+    JSON.stringify([props.ownerId ?? null, ["work-tasks", projectId]]), "queue", EMPTY_CUE, Boolean(props.ownerId), true,
+  );
+  const queuedTaskRows = useMemo(() => readCue(queuedTasks), [queuedTasks]);
+  const [incomingTask, setIncomingTask] = useState<{ text: string; threadId: string | null; mode: string | null; chat?: ChatBuildHandoff } | null>(null);
+  const [sourceChatId, setSourceChatId] = useState<string>();
+  const [workMedia, setWorkMedia] = useState<WorkMedia>();
+  const taskField = useRef<HTMLTextAreaElement>(null);
+  const planningController = useRef<AbortController | null>(null);
+  useEffect(() => {
+    if (props.halted) planningController.current?.abort();
+    return () => planningController.current?.abort();
+  }, [props.halted]);
   const [cwd, setCwd] = useState("");
+  const [branch, setBranch] = useState("");
+  const [artifactName, setArtifactName] = useState("");
   const [job, setJob] = useState<BuildJob | null>(null);
+  const [resultSource, setResultSource] = useState<BuildReturnSource>();
+  const pendingSource = useRef<BuildReturnSource | undefined>(undefined);
   const [events, setEvents] = useState<BuildEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [rowMenu, setRowMenu] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [plan, setPlan] = useState("");
+  const [savedPlan, setSavedPlan] = useState<BuildPlanReply>();
   const [planModel, setPlanModel] = useState("");
+  const [planningTier, setPlanningTier] = useState<ModelTier | null>(null);
   const planFlight = useRef(false);
+  const activePlan = useRef<{ id: string; scope: string; context: typeof planningContext } | null>(null);
+  const queuedPlan = useRef<(QueuedPlanApproval & { context: typeof planningContext; instruction: string }) | null>(null);
+  const [armedPlan, setArmedPlan] = useState<string | null>(null);
+  const checkingPlan = useRef(false);
+  const [planReceiptNotice, setPlanReceiptNotice] = useState<{ id: string; message: string } | null>(null);
+  const [legacyReview, setLegacyReview] = useState("");
+  const [separatePlan, setSeparatePlan] = useState("");
   const planAttempts = useRef(new Map<string, string>());
   const planOwner = useRef(props.ownerId);
   planOwner.current = props.ownerId;
@@ -125,7 +248,7 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
   const [tabs, setTabs] = useState<string[]>([]);
   const [buffers, setBuffers] = useState<Record<string, EditorBuffer>>({});
   const [executionChoice, setExecutionChoice] = useState(false);
-  const [executionReceipt, setExecutionReceipt] = useState<{ workspace: string; cwd: string; files: { path: string; sha256: string }[]; policy: string } | null>(null);
+  const [executionReceipt, setExecutionReceipt] = useState<(BuildSourceReceipt & { checked?: boolean }) | null>(null);
   const haltedRef = useRef(props.halted);
   haltedRef.current = props.halted;
   const buffersRef = useRef(buffers);
@@ -153,6 +276,16 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
   const [mode, setMode] = useState<"default" | "plan" | "auto">("default");
   const [buildReceipt, setBuildReceipt] = useState<BuildStoredReceipt | null>(null);
   const [sessionId, setSessionId] = useState("");
+  const planScope = props.ownerId && !props.halted && !props.freeOnly && !sourceChatId
+    ? JSON.stringify([props.ownerId, projectId, cwd, branch, mode, planningTier ?? props.sharedTier ?? "Heavy", selectedFile]) : null;
+  const planningContext = useMemo(() => ({ scope: planScope, buffers }), [planScope, buffers]);
+  const currentPlanContext = useRef(planningContext);
+  currentPlanContext.current = planningContext;
+  useEffect(() => {
+    if (!queuedPlan.current || queuedPlan.current.context === planningContext) return;
+    queuedPlan.current = null;
+    setArmedPlan(null);
+  }, [planningContext]);
 
   const assistantText = useMemo(
     () => events.map(updateText).filter(Boolean).join(""),
@@ -184,22 +317,30 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
   }
 
   const pollSequence = useRef(0);
+  const inFlightPoll = useRef<{ jobId: string; sequence: number } | null>(null);
   async function refreshJob(jobId: string) {
+    if (inFlightPoll.current?.jobId === jobId && inFlightPoll.current.sequence === pollSequence.current) return;
     const sequence = ++pollSequence.current;
+    const flight = { jobId, sequence };
+    inFlightPoll.current = flight;
     try {
-      const response = await fetch(`/api/mind/build/session?jobId=${encodeURIComponent(jobId)}`, { credentials: "include", cache: "no-store" });
-      const data = (await response.json()) as { ok?: boolean; job?: BuildJob; receipt?: BuildStoredReceipt | null; events?: BuildEvent[]; error?: string };
+      const response = await fetch(`/api/mind/build/session?jobId=${encodeURIComponent(jobId)}`, { credentials: "include", cache: "no-store", signal: AbortSignal.timeout(12_000) });
+      const data = (await response.json()) as { ok?: boolean; job?: BuildJob; receipt?: BuildStoredReceipt | null; sourceReceipt?: BuildSourceReceipt | null; revisionVerified?: boolean; events?: BuildEvent[]; error?: string };
       if (!mounted.current || sequence !== pollSequence.current) return;
-      if (!response.ok || !data.ok || !data.job) {
+      if (!response.ok || !data.ok || data.job?.id !== jobId) {
         setNotice(data.error || "Build session status could not be read.");
         return;
       }
       setJob(data.job);
       setBuildReceipt(data.receipt ?? null);
+      setExecutionReceipt(data.sourceReceipt ? { ...data.sourceReceipt, checked: data.revisionVerified === true } : null);
+      setResultSource(pendingSource.current?.runtime === "paired" && pendingSource.current.runId === jobId ? pendingSource.current : undefined);
       setEvents(Array.isArray(data.events) ? data.events : []);
     } catch {
       if (!mounted.current || sequence !== pollSequence.current) return;
       setNotice("Build session status is temporarily unavailable. No completion was assumed.");
+    } finally {
+      if (inFlightPoll.current === flight) inFlightPoll.current = null;
     }
   }
 
@@ -244,13 +385,13 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
     }
   }
 
-  async function browseWorkspace() {
+  async function browseWorkspace(openEditor = true) {
     const result = await runFileOperation("list");
     if (!result?.files) return;
     if (result.truncated) setFileNotice("Showing a limited file listing. Use Search for other paths.");
     setListingTarget({ workspace: result.workspace, cwd: result.cwd });
     setWorkspaceFiles(result.files);
-    setPanel("editor");
+    if (openEditor) setPanel("editor");
   }
 
   async function closeCodingBrowser() {
@@ -347,13 +488,20 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
     const buffer = buffers[selectedFile];
     if (!buffer) return;
     if (buffer.workspace !== "hosted" && !buffer.cwd) { setFileNotice("Update the companion and reopen the file to identify its workspace root before saving."); return; }
-    const result = await runFileOperation("write", buffer.path, editorText, { workspace: buffer.workspace, cwd: buffer.cwd, expectedContent: buffer.saved });
-    if (result?.path) {
-      const verified = result.after ?? editorText;
-      setBuffers((prev) => prev[selectedFile] ? { ...prev, [selectedFile]: { ...prev[selectedFile], saved: verified } } : prev);
-      setLastDiff({ path: result.path, before: result.before || "", after: verified });
-      setFileNotice(`Saved ${result.path}. The before/after text is the reviewed result, not an assumed write.`);
-    }
+    const result = await runFileOperation("write", buffer.path, buffer.draft, { workspace: buffer.workspace, cwd: buffer.cwd, expectedContent: buffer.saved });
+    if (!mounted.current || !result) return;
+    if (!matchesBuildSave(buffer, result)) { setFileNotice("The save receipt could not confirm the target and text. Check the saved file before repeating the write. Your draft was kept."); return; }
+    rememberVerifiedSave(selectedFile, buffer);
+    setLastDiff({ path: buffer.path, before: buffer.saved, after: buffer.draft });
+    setFileNotice(`Saved ${buffer.path}. Any typing since Save remains in the draft.`);
+  }
+
+  function rememberVerifiedSave(key: string, buffer: EditorBuffer) {
+    setBuffers(previous => {
+      const current = previous[key];
+      const saved = applyBuildSave(current, buffer);
+      return saved && saved !== current ? { ...previous, [key]: saved } : previous;
+    });
   }
 
   async function checkFileState() {
@@ -453,48 +601,125 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
     const owner = props.ownerId;
     if (!owner) { setDraftHydrated(true); return; }
     try {
-      const restored = parseBuildDraft(sessionStorage.getItem(buildDraftKey(owner)), owner);
+      const restored = parseBuildDraft(sessionStorage.getItem(draftKey), owner, projectId);
       if (restored) {
-        setBuffers(restored.buffers); setTabs(restored.tabs); setSelectedFile(restored.selectedFile); setPrompt(restored.prompt);
-        if (Object.values(restored.buffers).some(buffer => buffer.saved !== buffer.draft)) setFileNotice("Recovered unsaved drafts for this account. Saving will check that each original file is unchanged.");
+        setBuffers(restored.buffers); setTabs(restored.tabs); setSelectedFile(restored.selectedFile); setPrompt(restored.prompt); setCwd(restored.cwd ?? ""); setPlanningTier(restored.planningTier ?? null); setSourceChatId(restored.sourceChatId);
+        if (restored.reply) {
+          setSavedPlan(restored.reply);
+          setPlan(restored.reply.text);
+          setPlanModel(restored.reply.model);
+        }
+        setBranch(restored.branch ?? "");
+        setMode(restored.mode ?? "default");
+        setWorkMedia(restored.media);
+        if (Object.values(restored.buffers).some(buffer => buffer.saved !== buffer.draft)) setFileNotice("Recovered unsaved drafts for this Work project. Saving will check that each original file is unchanged.");
+      }
+      const text = projectId === null ? sessionStorage.getItem(`adrian-build-draft.${owner}`) : null;
+      if (text) setIncomingTask({ text, threadId: sessionStorage.getItem(`adrian-build-task-source.${owner}`), mode: sessionStorage.getItem(`adrian-build-mode.${owner}`) });
+      else {
+        const chat = parseChatBuildHandoff(sessionStorage.getItem(buildHandoffKey(owner)), owner);
+        if (chat && chat.projectId === projectId) setIncomingTask({ text: chat.text, threadId: null, mode: null, chat });
       }
     } catch { setFileNotice("Editor draft recovery could not be read. Existing files have not been changed."); }
     setDraftHydrated(true);
-  }, [props.ownerId]);
+  }, [props.ownerId, projectId, draftKey]);
 
   useEffect(() => {
     if (!draftHydrated || !props.ownerId) return;
     try {
-      sessionStorage.setItem(buildDraftKey(props.ownerId), serializeBuildDraft({ owner: props.ownerId, buffers, tabs, selectedFile, prompt }));
+      sessionStorage.setItem(draftKey, serializeBuildDraft({ owner: props.ownerId, projectId, buffers, tabs, selectedFile, prompt, cwd, branch, mode, sourceChatId, media: workMedia, reply: savedPlan, planningTier: planningTier ?? undefined }));
     } catch (error) { setFileNotice(error instanceof Error ? error.message : "Draft recovery could not be saved. Save or copy your changes before leaving Build."); }
-  }, [buffers, tabs, selectedFile, prompt, props.ownerId, draftHydrated]);
+  }, [buffers, tabs, selectedFile, prompt, cwd, branch, mode, planningTier, props.ownerId, projectId, draftKey, draftHydrated, sourceChatId, workMedia, savedPlan]);
 
   useEffect(() => {
-    void browseWorkspace();
+    if (draftHydrated) void browseWorkspace(false);
+  }, [draftHydrated]);
+
+  useEffect(() => {
     if (props.ownerId) {
       try {
-        const saved = parseBuildResult(localStorage.getItem(buildResultKey(props.ownerId)), props.ownerId);
-        if (saved) { setJob(saved.job); setBuildReceipt(saved.receipt); }
+        const saved = parseBuildResult(localStorage.getItem(resultKey), props.ownerId, projectId);
+        if (saved) { setJob(saved.job); setBuildReceipt(saved.receipt); setResultSource(saved.source); }
       } catch (error) { setNotice(error instanceof Error ? error.message : "The previous Build receipt could not be recovered. Check your saved conversation before repeating the task."); }
     }
     void fetch(`${apiPrefix}/api/mind/build/browser`, { credentials: "include", cache: "no-store" }).then(response => { if (!response.ok) throw new Error("Browser status unavailable"); return response.json(); }).then(data => {
       if (!mounted.current) return;
       if (data.running === true) { setBrowserFrame(`${apiPrefix}/api/mind/build/browser?view=frame`); setBrowserNotice("Recovered this account's running local coding browser. Website handoff permissions are separate."); }
     }).catch(() => { if (mounted.current) setBrowserNotice("Coding browser status could not be verified. Starting a session is an explicit action."); });
-    const live = sessionStorage.getItem(`adrian-build-live-session.${props.ownerId || "signed-out"}`);
-    if (live) setSessionId(live);
-    const draft = sessionStorage.getItem(`adrian-build-draft.${props.ownerId || "signed-out"}`);
-    if (!draft) return;
-    setPrompt(draft);
-    sessionStorage.removeItem(`adrian-build-draft.${props.ownerId || "signed-out"}`);
-    const fromHuman = Boolean(sessionStorage.getItem(`adrian-human-return.${props.ownerId || "signed-out"}`));
-    const requested = sessionStorage.getItem(`adrian-build-mode.${props.ownerId || "signed-out"}`);
-    if (requested === "auto" || requested === "plan" || requested === "default") {
-      setMode(requested);
-      sessionStorage.removeItem(`adrian-build-mode.${props.ownerId || "signed-out"}`);
-    }
-    setNotice(fromHuman ? "Opened from Intelligence. Review the task, then press Run build. The result returns to that thread." : "Opened from Chat. Review the task, then press Run build.");
+    try {
+      const live = sessionStorage.getItem(liveKey);
+      if (live) setSessionId(live);
+    } catch { /* The live runtime ID is optional for browser recovery. */ }
   }, []);
+
+  function acceptIncomingTask(append: boolean) {
+    if (!incomingTask || !props.ownerId) return;
+    const owner = props.ownerId;
+    const nextPrompt = append && prompt.trim() ? `${prompt}\n\n${incomingTask.text}` : incomingTask.text;
+    if (nextPrompt.length > MAX_BUILD_TASK_CHARACTERS) {
+      setNotice("Shorten the current task before adding the handoff. Build accepts up to 8,000 characters.");
+      return;
+    }
+    const source = incomingTask.chat?.chatId;
+    const existing = append ? workMedia : undefined;
+    if (existing && source !== sourceChatId) { setNotice("Remove the current task’s carried images and originals before combining work from another conversation."); return; }
+    const added = incomingTask.chat?.media;
+    const images = [...new Map([...(existing?.images ?? []), ...(added?.images ?? [])].map(image => [workImageKey(image), image])).values()];
+    if (images.length > MAX_IMAGES_PER_TURN) { setNotice("Remove an image from the current task before adding more than four planning images."); return; }
+    const originals = [...new Map([...(existing?.originals ?? []), ...(added?.originals ?? [])].map(file => [file.fileId, file])).values()];
+    const media = normalizeWorkMedia({ images, originals });
+    const nextMode = incomingTask.mode === "auto" || incomingTask.mode === "plan" || incomingTask.mode === "default" ? incomingTask.mode : mode;
+    try {
+      const encoded = serializeBuildDraft({ owner, projectId, buffers: buffersRef.current, tabs, selectedFile, prompt: nextPrompt, cwd, branch, mode: nextMode, sourceChatId: source, media, reply: savedPlan, planningTier: planningTier ?? undefined });
+      sessionStorage.setItem(draftKey, encoded);
+      if (sessionStorage.getItem(draftKey) !== encoded) throw new Error("Build draft did not read back.");
+      if (incomingTask.threadId) sessionStorage.setItem(`adrian-human-return.${owner}`, incomingTask.threadId);
+      else sessionStorage.removeItem(`adrian-human-return.${owner}`);
+      removeIncomingTask(owner);
+    } catch { setNotice("The handoff could not be saved. Your Build draft was kept."); return; }
+    setPrompt(nextPrompt);
+    setSourceChatId(source);
+    setWorkMedia(media);
+    setMode(nextMode);
+    setIncomingTask(null);
+    setNotice(incomingTask.threadId ? "Task added from Intelligence. Review it before running. Its result returns to the source thread." : "Task added from Chat. Review it before running.");
+    taskField.current?.focus();
+  }
+
+  function removeIncomingTask(owner: string) {
+    if (incomingTask?.chat) sessionStorage.removeItem(buildHandoffKey(owner));
+    else {
+      sessionStorage.removeItem(`adrian-build-draft.${owner}`);
+      sessionStorage.removeItem(`adrian-build-task-source.${owner}`);
+      sessionStorage.removeItem(`adrian-build-mode.${owner}`);
+    }
+  }
+
+  function dismissIncomingTask() {
+    if (!props.ownerId) return;
+    try {
+      removeIncomingTask(props.ownerId);
+      setIncomingTask(null);
+    } catch { setNotice("Your browser could not dismiss the pending handoff."); }
+  }
+
+  function returnResultToChat() {
+    const owner = props.ownerId;
+    if (!owner || !job || !resultSource || !props.onReturnResult || !canReturnBuildResult(job, resultSource)) return;
+    const result = { owner, projectId, job, receipt: buildReceipt, source: resultSource };
+    try {
+      const key = workRunStorageKey(owner, projectId, resultSource.runId);
+      const raw = serializeBuildResult(result);
+      localStorage.setItem(key, raw);
+      if (localStorage.getItem(key) !== raw) throw new Error();
+    } catch {
+      setNotice("The run receipt could not be saved for its Chat link. Download the full receipt before leaving Work.");
+      setBand("message");
+      return;
+    }
+    const issue = props.onReturnResult(result);
+    if (issue) { setNotice(issue); setBand("message"); }
+  }
 
   useEffect(() => {
     if (!editorDirty) return;
@@ -508,7 +733,8 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
 
   useEffect(() => {
     try {
-      const savedJobId = localStorage.getItem(`adrian-build-last-job.${props.ownerId || "signed-out"}`);
+      pendingSource.current = readBuildReturnSource(JSON.parse(localStorage.getItem(pendingSourceKey) ?? "null"));
+      const savedJobId = localStorage.getItem(lastJobKey);
       if (savedJobId) void refreshJob(savedJobId);
     } catch { /* A new job can still run without browser storage. */ }
   }, []);
@@ -521,9 +747,9 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
 
   useEffect(() => {
     if (!props.ownerId || !job) return;
-    try { localStorage.setItem(buildResultKey(props.ownerId), serializeBuildResult({ owner: props.ownerId, job, receipt: buildReceipt })); }
+    try { localStorage.setItem(resultKey, serializeBuildResult({ owner: props.ownerId, projectId, job, receipt: buildReceipt, source: resultSource })); }
     catch (error) { setNotice(error instanceof Error ? error.message : "This browser could not preserve the Build receipt. Copy or download the result before leaving Build."); }
-  }, [job, buildReceipt, props.ownerId]);
+  }, [job, buildReceipt, resultSource, props.ownerId, projectId, resultKey]);
 
   useEffect(() => {
     if (!job?.id || !active) return;
@@ -538,11 +764,123 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
     await runBuild("saved");
   }
 
+  function queueTask() {
+    if (!props.ownerId || !draftHydrated || haltedRef.current) return;
+    if (sourceChatId || /^\//.test(prompt.trim())) {
+      setNotice("Review source handoffs and slash commands in the task composer before submitting.");
+      return;
+    }
+    const attachments = { file: props.composer?.staged ?? undefined, images: props.composer?.images ?? [] };
+    const hasAttachments = hasCueAttachments(attachments);
+    const result = cueMessage(readCue(queuedTasks), { id: crypto.randomUUID(), text: prompt, paused: true, ...(hasAttachments ? { attachments } : {}) });
+    if (result.error) { setNotice(result.error); return; }
+    if (!setQueuedTasks(result.queue)) {
+      setNotice("Browser storage is full or unavailable. Your task and attachments are still in the composer.");
+      return;
+    }
+    setPrompt("");
+    if (hasAttachments) props.composer?.replaceAttachments();
+    setNotice(null);
+  }
+
+  function revokePlanApproval(id?: string) {
+    if (!queuedPlan.current || (id && id !== queuedPlan.current.itemId)) return;
+    queuedPlan.current = null;
+    setArmedPlan(null);
+  }
+
+  function renderPlanApproval(item: CuedMessage) {
+    const receiptStatus = planReceiptNotice?.id === item.id
+      ? <p className="queue-description" role="status">{planReceiptNotice.message}</p> : null;
+    if (item.claimed && item.planningOperation) return <div>
+      <button className="queue-action" type="button" disabled={planning} onClick={() => void reviewPlanningReceipt(item)}>Check planning receipt</button>
+      {receiptStatus}
+    </div>;
+    const previous = activePlan.current;
+    if (!previous || previous.context !== currentPlanContext.current || !canQueuePlan(item)) return receiptStatus;
+    if (armedPlan === item.id) return <button className="queue-action" type="button" onClick={() => revokePlanApproval(item.id)}>Cancel approved follow-up</button>;
+    if (armedPlan) return null;
+    return <details>
+      <summary className="queue-action">Review automatic plan</summary>
+      <p className="queue-description">Send this exact text to Grok after the current plan succeeds in this open tab. This is one model request using the selected planning tier and may incur a charge.</p>
+      <button className="queue-action" type="button" onClick={() => {
+        if (activePlan.current !== previous || previous.context !== currentPlanContext.current || queuedPlan.current) return;
+        queuedPlan.current = { predecessor: previous.id, scope: previous.scope, itemId: item.id, text: item.text, context: previous.context, instruction: loadModeInstructions(preferenceStorage).build };
+        setArmedPlan(item.id);
+      }}>Approve one follow-up plan</button>
+    </details>;
+  }
+
+  async function reviewPlanningReceipt(item: CuedMessage) {
+    const owner = props.ownerId;
+    const operation = item.planningOperation;
+    if (!owner || !operation || planFlight.current || checkingPlan.current) return;
+    checkingPlan.current = true;
+    setPlanReceiptNotice({ id: item.id, message: "Checking the recorded request." });
+    try {
+      const bearer = getBearerToken();
+      const receipt = await checkTurnReceipt("/api/mind/turn", operation, bearer ? { authorization: `Bearer ${bearer}` } : {});
+      if (!mounted.current || planOwner.current !== owner) return;
+      if (receipt.ownerId !== owner) throw new Error("The account changed.");
+      let message = receipt.state === "responded" ? "The earlier request reached the app. No new request was sent." : "The earlier outcome is still unconfirmed. No new request was sent.";
+      if (receipt.state === "not_dispatched") {
+        const restored = setQueuedTasks(current => readCue(current).map(row => row.id === item.id && row.planningOperation === operation
+          ? { ...row, claimed: false, planningOperation: undefined } : row));
+        message = restored ? "The earlier request was not dispatched. The draft is held for review." : "The earlier request was not dispatched. The queue could not save the release.";
+      }
+      setPlanReceiptNotice({ id: item.id, message });
+    } catch {
+      if (mounted.current && planOwner.current === owner) setPlanReceiptNotice({ id: item.id, message: "The receipt could not be checked. No new request was sent." });
+    } finally {
+      checkingPlan.current = false;
+    }
+  }
+
+  const canRestoreTask = !prompt.trim() && !sourceChatId && !props.composer?.staged && !props.composer?.images.length;
+  function receiveDeviceTask(row: CuedMessage) {
+    let accepted = false;
+    const saved = setQueuedTasks(previous => {
+      const next = receiveTransferredCue(previous, row);
+      accepted = next !== null;
+      return next ?? previous;
+    });
+    return saved && accepted;
+  }
+  const taskQueue = <ComposerQueue title="Work and Build queue" items={armedPlan ? queuedTaskRows.map(row => row.id === armedPlan ? { ...row, paused: false } : row) : queuedTaskRows}
+    renderFollowUp={renderPlanApproval}
+    deviceTransfer={props.ownerId && props.deviceQueueEnabled && draftHydrated ? { owner: props.ownerId, scope: { kind: "work", id: projectId }, receive: receiveDeviceTask } : undefined}
+    description="Tasks wait in this project. Move one to the composer to review its branch, workspace and action before submitting."
+    canQueue={Boolean(props.ownerId && draftHydrated && !props.halted && (prompt.trim() || props.composer?.staged || props.composer?.images.length))}
+    canRestore={canRestoreTask && draftHydrated && Boolean(props.ownerId)}
+    onQueue={queueTask}
+    onRemove={id => { revokePlanApproval(id); setQueuedTasks(previous => dropCued(readCue(previous), id)); }}
+    onMove={(id, offset) => setQueuedTasks(previous => moveCued(readCue(previous), id, offset))}
+    onEditStart={revokePlanApproval}
+    onEdit={(id, text) => setQueuedTasks(previous => readCue(previous).map(row => row.id === id ? { ...row, text: text.trim() } : row))}
+    onRestore={id => {
+      const row = readCue(queuedTasks).find(item => item.id === id && !item.claimed);
+      if (!row || !canRestoreTask || (!row.text.trim() && !hasCueAttachments(row.attachments))) return;
+      if (hasCueAttachments(row.attachments) && !props.composer) return;
+      revokePlanApproval(id);
+      if (!setQueuedTasks(previous => dropCued(readCue(previous), id))) return;
+      setPrompt(row.text);
+      props.composer?.replaceAttachments(row.attachments);
+      if (row.attachmentsUnavailable) setNotice("Some saved attachments are unavailable. Review the recovered text and attach the files again before submitting.");
+      setBand("message");
+      requestAnimationFrame(() => taskField.current?.focus());
+    }} />;
+
+  function withTaskFile(words: string) {
+    const file = props.composer?.staged;
+    return file ? [words.trim(), `Attached file ${file.name}:\n${file.text}`].join("\n\n") : words.trim();
+  }
+
   async function runBuild(policy: "saved" | "save") {
     setExecutionChoice(false);
     if (haltedRef.current) { setNotice("Emergency stop is on. No Build task was started."); return; }
     if (props.freeOnly) { setNotice("Free-only is selected. Build has no verified free coding model for this action."); return; }
-    const text = prompt.trim();
+    if (props.composer?.images.length || workMedia?.images.length) { setNotice("Use Plan with Grok to review these images, then remove them before running the text-only coding task."); return; }
+    const text = withTaskFile(prompt);
     if (!text) {
       setNotice("Describe the coding task before submitting.");
       return;
@@ -558,12 +896,26 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
     const workspace = selectedBuffer?.workspace ?? companion.onlineAgentIds?.[0] ?? "hosted";
     const agentId = workspace === "hosted" ? undefined : workspace;
     const targetCwd = selectedBuffer?.cwd ?? cwd.trim();
-    if (agentId && !companion.onlineAgentIds?.includes(agentId)) {
+    const artifactInput = artifactName.trim();
+    if (artifactInput && (!agentId || !targetCwd || !buildArtifactName(artifactInput))) {
+      submittingBuild.current = false;
+      setNotice("Choose a paired checkout and enter a supported output filename such as report.pdf.");
+      return;
+    }
+    const expectedBranch = branch.trim();
+    if (expectedBranch && (!buildBranchName(expectedBranch) || policy === "save")) {
+      submittingBuild.current = false;
+      setNotice(!buildBranchName(expectedBranch) ? "Enter a valid target branch before running." : "Save reviewed files separately before running with a named branch.");
+      return;
+    }
+    if (agentId && !expectedBranch && !companion.onlineAgentIds?.includes(agentId)) {
       submittingBuild.current = false;
       setNotice("The original computer is offline. Reconnect it before running this task.");
       return;
     }
-    const jobKey = agentId ? crypto.randomUUID().replaceAll("-", "") : undefined;
+    const runId = crypto.randomUUID().replaceAll("-", "");
+    const jobKey = agentId ? runId : undefined;
+    const runSource: BuildReturnSource | undefined = sourceChatId ? { chatId: sourceChatId, runId, runtime: agentId ? "paired" : "hosted" } : undefined;
     ++pollSequence.current;
     setLoading(true);
     setNotice(null);
@@ -571,15 +923,18 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
     try {
       const target = { workspace, cwd: targetCwd };
       const relevant = Object.entries(buffersRef.current).filter(([, buffer]) => buffer.workspace === target.workspace && (buffer.cwd || "") === target.cwd);
+      const savedPaths: string[] = [];
+      const partialSaves = () => savedPaths.length ? ` Verified saves: ${savedPaths.join(", ")}.` : "";
       if (policy === "save") {
         const unrelated = Object.values(buffersRef.current).some((buffer) => buffer.draft !== buffer.saved && (buffer.workspace !== target.workspace || (buffer.cwd || "") !== target.cwd));
         if (unrelated) { setNotice("Unsaved files belong to another workspace. Save them there, or choose Run saved version. No task started."); return; }
         for (const [key, buffer] of relevant) {
           if (buffer.draft === buffer.saved) continue;
-          if (!mounted.current || haltedRef.current || planOwner.current !== props.ownerId || buffersRef.current[key]?.draft !== buffer.draft) { setNotice("The reviewed buffer or owner changed. No task started."); return; }
+          if (!mounted.current || haltedRef.current || planOwner.current !== props.ownerId || buffersRef.current[key]?.draft !== buffer.draft || buffersRef.current[key]?.saved !== buffer.saved) { setNotice(`The reviewed buffer or owner changed. No task started.${partialSaves()}`); return; }
           const result = await runFileOperation("write", buffer.path, buffer.draft, { workspace: buffer.workspace, cwd: buffer.cwd, expectedContent: buffer.saved });
-          if (!result || result.after !== buffer.draft) { setNotice("A file save was not verified. No Build task started. Your drafts were kept."); return; }
-          setBuffers((previous) => previous[key] ? { ...previous, [key]: { ...previous[key], saved: result.after! } } : previous);
+          if (!matchesBuildSave(buffer, result)) { setNotice(`A file save could not be verified. No Build task started. Your drafts were kept.${partialSaves()}`); return; }
+          savedPaths.push(buffer.path);
+          rememberVerifiedSave(key, buffer);
         }
       }
       const files: { path: string; sha256: string }[] = [];
@@ -588,19 +943,25 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
         const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(content));
         files.push({ path: buffer.path, sha256: Array.from(new Uint8Array(hash), (byte) => byte.toString(16).padStart(2, "0")).join("") });
       }
-      if (!mounted.current || haltedRef.current || planOwner.current !== props.ownerId || relevant.some(([key, buffer]) => !buffersRef.current[key] || (policy === "save" && buffersRef.current[key].draft !== buffer.draft))) { setNotice("Build stopped before submission."); return; }
+      if (agentId && expectedBranch && (!files.length || !targetCwd)) { setNotice("Open a saved file in the chosen checkout before queuing a branch-checked Build job."); return; }
+      if (!mounted.current || haltedRef.current || planOwner.current !== props.ownerId || relevant.some(([key, buffer]) => !buffersRef.current[key] || (policy === "save" && buffersRef.current[key].draft !== buffer.draft))) { setNotice(`Build stopped before submission.${partialSaves()}`); return; }
       const receipt = { ...target, files, policy };
       setExecutionReceipt(receipt);
       if (jobKey) {
-        try { localStorage.setItem(`adrian-build-last-job.${props.ownerId || "signed-out"}`, jobKey); } catch { /* Recovery remains available on this screen. */ }
+        pendingSource.current = runSource;
+        try {
+          if (runSource) localStorage.setItem(pendingSourceKey, JSON.stringify(runSource));
+          else localStorage.removeItem(pendingSourceKey);
+          localStorage.setItem(lastJobKey, jobKey);
+        } catch { /* Recovery remains available on this screen. */ }
       }
       const response = await fetch("/api/mind/build/session", {
         method: "POST",
         credentials: "include",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ prompt: text, skillApplications: collectAccountSkillApplications(preferenceStorage, text, props.enabledSkills, "build"), sourceReceipt: receipt, agentId: workspace, jobKey, cwd: targetCwd || undefined, mode, resumeSessionId: sessionId || undefined }),
+        body: JSON.stringify({ prompt: text, modeInstruction: loadModeInstructions(preferenceStorage).build || undefined, skillApplications: collectAccountSkillApplications(preferenceStorage, text, props.enabledSkills, "build"), sourceReceipt: receipt, agentId: workspace, jobKey, operationId: runId, projectId, sourceChatId: runSource?.runtime === "paired" ? runSource.chatId : undefined, expectedBranch: expectedBranch || undefined, artifactName: artifactInput || undefined, cwd: targetCwd || undefined, mode, resumeSessionId: expectedBranch ? undefined : sessionId || undefined }),
       });
-      const data = (await response.json()) as { ok?: boolean; jobId?: string; receipt?: BuildStoredReceipt | null; executed?: boolean; error?: string; version?: string; agent?: string; loginRequired?: boolean; output?: string; package?: string; sessionId?: string; mode?: string; resumed?: boolean; forkedSessionId?: string; filesChanged?: { path: string; before: string; after: string }[]; skillReceipts?: SkillApplicationReceipt[]; operationId?: string; outputComplete?: boolean; requestDispatched?: boolean; fileReviewScope?: string; fileReviewWarnings?: string[]; verification?: { implementation: string; builderInstructionDigest?: string; checks: { id: string; status: string }[] }; toolReceipts?: { method: string; path?: string; status: string; detail?: string; durable?: boolean }[] };
+      const data = (await response.json()) as BuildStoredReceipt & { ok?: boolean; jobId?: string; receipt?: BuildStoredReceipt | null; executed?: boolean; error?: string; output?: string; package?: string; sessionId?: string; mode?: string; resumed?: boolean; forkedSessionId?: string; processAlive?: boolean; reused?: boolean };
       if (!mounted.current) return;
       if (!response.ok || !data.ok || !data.jobId) {
         if (data.executed || data.toolReceipts?.length || data.filesChanged?.length) {
@@ -609,29 +970,35 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
           setBuildReceipt(data);
           if (data.sessionId) {
             setSessionId(data.sessionId);
-            try { sessionStorage.setItem(`adrian-build-live-session.${props.ownerId || "signed-out"}`, data.sessionId); }
+            try { sessionStorage.setItem(liveKey, data.sessionId); }
             catch { sessionWarning = "The session ID could not be saved for restart recovery. Download the receipt. "; }
           }
           const change = data.filesChanged?.[0];
           if (change) setLastDiff(change);
-          const alive = (data as { processAlive?: boolean }).processAlive === true;
-          const reused = (data as { reused?: boolean }).reused === true;
+          const alive = data.processAlive === true;
+          const reused = data.reused === true;
           setNotice(`${completed ? "Coding request completed; implementation verification is still pending." : `Coding request did not complete: ${data.error || "Completion was not confirmed"}. Recorded changes were preserved for review.`} ${sessionWarning}${data.outputComplete === false ? "Output exceeded the supported limit; review the incomplete receipt. " : ""}${data.mode || mode} mode ${reused ? "used the same running process" : data.resumed ? "resumed the last session" : "was requested"}. ${alive ? "The process is still running for this session." : ""} ${change ? `Recorded change: ${change.path}.` : "No file change was reported."}`);
           const result = buildResultHandoff(data.filesChanged || [], data.output || "", data.operationId, { completed, error: data.error, outputComplete: data.outputComplete });
-          if (sessionStorage.getItem(`adrian-human-return.${props.ownerId || "signed-out"}`)) props.onResult?.(result);
+          if (projectId === null && !runSource && sessionStorage.getItem(`adrian-human-return.${ownerKey}`)) props.onResult?.(result);
           setJob({ id: "local", status: completed ? "done" : "error", output: [data.package, data.mode ? `mode ${data.mode}` : "", data.resumed ? "resumed" : "", data.forkedSessionId ? `fork ${data.forkedSessionId}` : "", data.output].filter(Boolean).join("\n") || "No textual output returned.", error: completed ? "" : data.error || "Coding request did not complete.", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+          setResultSource(runSource);
           setPanel("agent");
+          setBand("editor");
+          try { localStorage.removeItem(lastJobKey); } catch { /* The hosted receipt is visible in Work. */ }
           return;
         }
         setNotice(data.error || "The build session could not be queued.");
         return;
       }
       ++pollSequence.current;
+      if (data.jobId !== jobKey) { setNotice("The accepted Build job did not match the submitted run. Check session history before retrying."); return; }
+      if (artifactInput) setArtifactName((current) => current.trim() === artifactInput ? "" : current);
       setJob({ id: data.jobId, status: "queued", output: "", error: "", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
       setBuildReceipt(data.receipt ?? null);
+      setResultSource(runSource);
       setPanel("agent");
-      try { localStorage.setItem(`adrian-build-last-job.${props.ownerId || "signed-out"}`, data.jobId); } catch { /* The accepted job remains visible in this session. */ }
-      setNotice("Task queued on the paired computer.");
+      setBand("editor");
+      setNotice(expectedBranch ? "Task queued. The updated paired runner will check the branch and reviewed files before the coding prompt." : "Task queued on the paired computer.");
     } catch {
       setNotice("Build could not verify the outcome. Check the session history before submitting again.");
       if (jobKey) await refreshJob(jobKey);
@@ -641,54 +1008,100 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
     }
   }
 
-  async function planWithGrok() {
+  async function planWithGrok(words = prompt, images: unknown[] = props.composer?.images ?? [], github = /^\/github(?:\s|$)/i.test(words), queued?: { context: typeof planningContext; instruction: string; onDispatch: (id: string) => boolean }) {
     if (planFlight.current || props.halted) return;
     const owner = props.ownerId;
-    if (props.freeOnly) { setNotice("Free-only is selected. Build has no verified free coding model for this action."); return; }
-    const text = prompt.trim();
+    if (props.freeOnly && !github) { setNotice("Free-only is selected. Build has no verified free coding model for this action."); return; }
+    const text = github || queued ? words.trim() : withTaskFile(words);
     if (!text) {
       setNotice("Describe the task before asking Grok for a plan.");
       return;
     }
     planFlight.current = true;
+    const context = currentPlanContext.current;
+    const previous = !queued && !github && context.scope ? { id: crypto.randomUUID(), scope: context.scope, context } : null;
+    activePlan.current = previous;
+    let succeeded = false;
+    let leftForeground = false;
+    const revokeWhenHidden = () => {
+      if (!document.hidden) return;
+      leftForeground = true;
+      revokePlanApproval();
+    };
+    if (previous || queued) document.addEventListener("visibilitychange", revokeWhenHidden);
     setPlanning(true);
-    setPlan("");
-    setPlanModel("");
-    setNotice("Asking Grok for a plan. This does not edit files.");
+    setNotice(github ? "Contacting GitHub…" : "Asking Grok for a plan.");
     const controller = new AbortController();
-    const timeout = AbortSignal.timeout(30_000);
-    const signal = typeof AbortSignal.any === "function" ? AbortSignal.any([controller.signal, timeout]) : timeout;
+    planningController.current = controller;
+    const { signal, cleanup } = boundAbortSignal(controller.signal, 30_000);
     try {
+      const carried = github || queued ? [] : workMedia?.images ?? [];
+      if (carried.length + (github ? 0 : images.length) > MAX_IMAGES_PER_TURN) { setNotice("Choose up to four total planning images before submitting."); return; }
+      let resolved: ImageAttachment[] = [];
+      if (carried.length) {
+        if (!sourceChatId || !props.resolveWorkImages) { setNotice("The carried images are unavailable. Review or remove them before planning."); return; }
+        try { resolved = await props.resolveWorkImages(sourceChatId, carried); }
+        catch (error) { if (mounted.current) setNotice(error instanceof Error ? error.message : "The selected images could not be read."); return; }
+      }
+      if (!mounted.current || signal.aborted || planOwner.current !== owner) return;
       const body = chatTurnBody({
-          text: `Plan this Adrian Build task. Do not claim any file was written.\n\n${text}`,
+          text: github ? words : `Plan this Adrian Build task. Do not claim any file was written.\n\n${text}`,
+          projectId: github ? undefined : projectId,
           memory: "off",
+          modeInstruction: github ? undefined : loadModeInstructions(preferenceStorage).build,
           halted: false,
           history: [],
           memoryContext: [],
           provider: "grok",
-          modelTier: "Heavy",
+          modelTier: planningTier ?? props.sharedTier ?? "Heavy",
           logicRoute: null,
-          images: [],
+          images: github ? [] : [...images, ...resolved],
       });
       const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(body)));
       const fingerprint = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
-      const key = `adrian.build.plan.${owner ?? "local"}.${fingerprint}`;
+      const legacyKey = `adrian.build.plan.${owner ?? "local"}.${fingerprint}`;
+      const key = workStorageKey(owner ?? "local", projectId, "plan." + fingerprint, legacyKey);
       let id = planAttempts.current.get(key);
       if (!id) {
         try { id = sessionStorage.getItem(key) || undefined; } catch { /* the open tab can still recover */ }
       }
-      id ??= await prepareTurnId("/api/mind/turn", {}, signal);
-      if (planOwner.current !== owner || signal.aborted) return;
+      const token = getBearerToken();
+      const headers: Record<string, string> = token ? { authorization: `Bearer ${token}` } : {};
+      if (projectId && !id && separatePlan !== key) {
+        let legacyId: string | null = null;
+        try { legacyId = sessionStorage.getItem(legacyKey); } catch { /* Memory-only recovery is still available. */ }
+        if (legacyId) {
+          const receipt = await checkTurnReceipt("/api/mind/turn", legacyId, headers, signal);
+          if (!mounted.current || signal.aborted || receipt.ownerId !== owner) return;
+          setLegacyReview(key);
+          setNotice(`Earlier matching request ${legacyId} has status ${receipt.state}. Its project was not recorded. No new request was sent.`);
+          return;
+        }
+      }
+      setLegacyReview("");
+      setSeparatePlan("");
+      id ??= await prepareTurnId("/api/mind/turn", headers, signal);
+      if (!mounted.current || planOwner.current !== owner || signal.aborted) return;
+      if (queued && (leftForeground || document.hidden || haltedRef.current || currentPlanContext.current !== queued.context || loadModeInstructions(preferenceStorage).build !== queued.instruction)) {
+        setNotice("The planning context changed. The follow-up is held for review.");
+        return;
+      }
+      if (queued && !queued.onDispatch(id)) {
+        setNotice("The queue could not record this planning request. The model was not called.");
+        return;
+      }
       planAttempts.current.set(key, id);
       try { sessionStorage.setItem(key, id); } catch { /* retained in this tab */ }
+      setPlan("");
+      setPlanModel("");
       const result = await consumeMindTurn({
         url: "/api/mind/turn",
         signal,
-        headers: { "content-type": "application/json", "x-mind-turn-id": id },
+        headers: { ...headers, "content-type": "application/json", "x-mind-turn-id": id },
         body,
-        onDelta: (chunk) => { if (planOwner.current === owner) setPlan((current) => current + chunk); },
+        onDelta: (chunk) => { if (mounted.current && !signal.aborted && planOwner.current === owner) setPlan((current) => current + chunk); },
       });
-      if (planOwner.current !== owner) return;
+      if (!mounted.current || signal.aborted || planOwner.current !== owner) return;
       if (result.ok || !result.deliveryUncertain) {
         planAttempts.current.delete(key);
         try { sessionStorage.removeItem(key); } catch { /* browser storage unavailable */ }
@@ -697,16 +1110,62 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
         setNotice(result.error);
         return;
       }
+      setSavedPlan({ text: result.text, model: result.model, request: words.trim() });
       setPlan(result.text);
       setPlanModel(result.model);
-      setNotice("Grok returned a plan. No file was written.");
+      setNotice(github ? "GitHub request completed." : "Grok returned a plan. No file was written.");
+      succeeded = Boolean(result.text.trim());
+      return result.text;
     } catch {
-      setNotice("The Grok plan could not be completed. No file was written.");
+      setNotice(github ? "GitHub did not confirm the request. Check the branch before retrying." : "The Grok plan could not be completed.");
     } finally {
+      cleanup();
+      planningController.current = null;
       planFlight.current = false;
       setPlanning(false);
+      if (previous || queued) document.removeEventListener("visibilitychange", revokeWhenHidden);
+      activePlan.current = null;
+      if (previous && queuedPlan.current?.predecessor === previous.id && mounted.current) {
+        void releaseApprovedPlan({ id: previous.id, succeeded: succeeded && !signal.aborted });
+      }
     }
   }
+
+  async function releaseApprovedPlan(previous: { id: string; succeeded: boolean }) {
+    const approval = queuedPlan.current;
+    revokePlanApproval();
+    if (!approval || document.hidden || approval.context !== currentPlanContext.current || approval.instruction !== loadModeInstructions(preferenceStorage).build) return;
+    let claimed = false;
+    const saved = setQueuedTasks(current => {
+      const rows = readCue(current);
+      const item = approvedPlan(approval, previous, currentPlanContext.current.scope, rows);
+      if (!item) return current;
+      claimed = true;
+      return rows.map(row => row.id === item.id ? { ...row, claimed: true, paused: true } : row);
+    });
+    if (!saved || !claimed) return;
+    let attempted = false;
+    const reply = await planWithGrok(approval.text, [], false, { context: approval.context, instruction: approval.instruction, onDispatch: id => {
+      let recorded = false;
+      const written = setQueuedTasks(current => readCue(current).map(item => {
+        if (item.id !== approval.itemId || !item.claimed) return item;
+        recorded = true;
+        return { ...item, planningOperation: id };
+      }));
+      attempted = written && recorded;
+      return attempted;
+    } });
+    if (!mounted.current || planOwner.current !== props.ownerId) return;
+    if (reply) setQueuedTasks(current => dropCued(readCue(current), approval.itemId));
+    else if (!attempted) setQueuedTasks(current => readCue(current).map(row => row.id === approval.itemId ? { ...row, claimed: false, paused: true } : row));
+  }
+
+  useEffect(() => {
+    const target = props.plannerRef;
+    if (!target) return;
+    target.current = (words, images) => planWithGrok(/^\/github(?:\s|$)/i.test(words) ? words : [prompt, words].filter(Boolean).join("\n\n"), images);
+    return () => { target.current = null; };
+  });
 
   async function cancelBuild() {
     if (!job?.id || !active || job.status === "cancel_requested") return;
@@ -724,7 +1183,7 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
       const response = await fetch("/api/mind/build/session", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "close", resumeSessionId: sessionId }) });
       const data = (await response.json()) as { ok?: boolean; closed?: boolean; error?: string };
       if (!response.ok || !data.ok) { setNotice(data.error || "The coding process was not closed."); return; }
-      sessionStorage.removeItem(`adrian-build-live-session.${props.ownerId || "signed-out"}`);
+      sessionStorage.removeItem(liveKey);
       setSessionId("");
       setNotice(data.closed ? "The coding process for this session was closed." : "No coding process was still running.");
     } catch {
@@ -776,6 +1235,7 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
 
   async function submitVoice() {
     if (props.freeOnly) { setNotice("Free-only is selected. A free Build voice task route is unavailable."); return; }
+    if (branch.trim()) { setNotice("Paste the transcript into the Coding task field to check the target Git branch before running."); return; }
     if (!transcript.trim()) return;
     const instructions = projects.find((project) => project.cwd === cwd)?.instructions || "";
     const response = await fetch("/api/mind/build/voice", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ transcript, cwd, instructions }) });
@@ -783,7 +1243,8 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
     if (data.jobId) {
       ++pollSequence.current;
       setJob({ id: data.jobId, status: "queued", output: "", error: "", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
-      try { localStorage.setItem(`adrian-build-last-job.${props.ownerId || "signed-out"}`, data.jobId); } catch { /* The accepted job remains visible in this session. */ }
+      setResultSource(undefined);
+      try { localStorage.setItem(lastJobKey, data.jobId); } catch { /* The accepted job remains visible in this session. */ }
     }
     setNotice(data.ok ? data.limitation || "Voice transcript queued." : data.error || "Voice transcript was not queued.");
   }
@@ -808,7 +1269,7 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
   }
 
   return (
-    <section className="page-shell intelligence-main" data-testid="build-workspace">
+    <section className="page-shell intelligence-main" data-testid="build-workspace" data-browser-scope>
       <div className="page-hero">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -833,6 +1294,13 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
 
       <nav className="intelligence-group" aria-label="Build sections">
         <h3>Sections</h3>
+        {props.onSelectProject && <label className="mb-2 flex min-h-11 flex-wrap items-center gap-2 text-sm">Work project
+          <select aria-label="Work project" className="min-h-11 max-w-full rounded-panel border border-line bg-transparent px-2" value={projectId ?? ""} disabled={!draftHydrated || loading || fileBusy || props.recording}
+            onChange={event => props.onSelectProject?.(event.target.value || null)}>
+            <option value="">General Work</option>
+            {props.workProjects?.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
+          </select>
+        </label>}
         <div className="flex flex-wrap gap-2">
           {([
             ["actions", "Actions"],
@@ -842,6 +1310,7 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
           ] as const).map(([id, label]) => (
             <button key={id} type="button" className={`min-h-11 rounded-panel border px-3 text-sm ${band === id ? "border-accent bg-accent text-accent-ink" : "border-line"}`} aria-pressed={band === id} onClick={() => setBand(id)}>{label}</button>
           ))}
+          {band !== "message" && taskQueue}
         </div>
       </nav>
 
@@ -859,19 +1328,23 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
       <section className="intelligence-group" aria-label="Workspace" hidden={band !== "files"}>
         <h3>Workspace</h3>
         {projects.length === 0 ? <p className="text-sm text-muted">No workspace is registered yet. Registering stores the label and path for this account. It does not prove the path is reachable.</p> : projects.map((project) => (
-          <button key={project.id} type="button" className="min-h-11 rounded-panel border border-line px-3 text-left text-sm" onPointerDown={(event) => { event.currentTarget.dataset.held = "0"; const timer = window.setTimeout(() => { event.currentTarget.dataset.held = "1"; setRowMenu(project.id); }, 550); event.currentTarget.dataset.hold = String(timer); }} onPointerUp={(event) => window.clearTimeout(Number(event.currentTarget.dataset.hold))} onPointerLeave={(event) => window.clearTimeout(Number(event.currentTarget.dataset.hold))} onClick={(event) => { if (event.currentTarget.dataset.held === "1") { event.currentTarget.dataset.held = "0"; return; } setCwd(project.cwd); setNotice(`Opened ${project.label}. File access still requires the runtime that owns this path.`); }}>
-            {project.label} · {project.cwd || "no path"}
-          </button>
+          <div key={project.id} className="flex items-center gap-1">
+            <button type="button" className="min-h-11 min-w-0 flex-1 rounded-panel border border-line px-3 text-left text-sm" onClick={() => { setCwd(project.cwd); setNotice(`Opened ${project.label}. File access still requires the runtime that owns this path.`); }}>
+              {project.label} · {project.cwd || "no path"}
+            </button>
+            <ActionsButton label={project.label} onOpen={() => setRowMenu(project.id)} />
+          </div>
         ))}
         {rowMenu && projects.some((project) => project.id === rowMenu) ? (
           <ActionOverlay label="Actions for workspace" title={projects.find((project) => project.id === rowMenu)?.label || "Workspace"} onClose={() => setRowMenu(null)}>
             <button type="button" className="flex min-h-11 w-full items-center rounded-2xl px-3 text-left text-sm" onClick={() => { const id = rowMenu; setRowMenu(null); void archiveRegisteredProject(id); }}>Archive</button>
           </ActionOverlay>
         ) : null}
-        {sessions.length === 0 ? <p className="text-sm text-muted">No saved session names yet.</p> : sessions.filter((session) => !session.archived).map((session) => (
-          <button key={session.jobId} type="button" className="min-h-11 rounded-panel border border-line px-3 text-left text-sm" onPointerDown={(event) => { const timer = window.setTimeout(() => setRowMenu(`session:${session.jobId}`), 550); event.currentTarget.dataset.hold = String(timer); }} onPointerUp={(event) => window.clearTimeout(Number(event.currentTarget.dataset.hold))} onPointerLeave={(event) => window.clearTimeout(Number(event.currentTarget.dataset.hold))}>
-            {session.name}
-          </button>
+        {sessions.every(session => session.archived) ? <p className="text-sm text-muted">No saved session names yet.</p> : sessions.filter((session) => !session.archived).map((session) => (
+          <div key={session.jobId} className="flex items-center gap-1">
+            <button type="button" className="min-h-11 min-w-0 flex-1 rounded-panel border border-line px-3 text-left text-sm" onClick={() => setRowMenu(`session:${session.jobId}`)}>{session.name}</button>
+            <ActionsButton label={session.name} onOpen={() => setRowMenu(`session:${session.jobId}`)} />
+          </div>
         ))}
         {rowMenu?.startsWith("session:") ? (
           <ActionOverlay label="Actions for session" title={sessions.find((session) => session.jobId === rowMenu.slice(8))?.name || "Session"} onClose={() => setRowMenu(null)}>
@@ -890,7 +1363,7 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
           ))}
         </div>
       ) : null}
-      <section className="intelligence-group" aria-label="Task" hidden={band !== "message"}>
+      <section className="intelligence-group build-task-section" aria-label="Task" hidden={band !== "message"}>
         <h3>Task</h3>
       {executionChoice && <ActionOverlay label="Unsaved Build files" title="Unsaved changes" onClose={() => setExecutionChoice(false)}>
         <p>The editor contains changes not saved to the execution workspace.</p>
@@ -898,13 +1371,96 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
         <button type="button" disabled={loading || fileBusy || props.halted} onClick={() => void runBuild("saved")}>Run saved version</button>
         <button type="button" onClick={() => setExecutionChoice(false)}>Cancel</button>
       </ActionOverlay>}
-      {executionReceipt && <details className="text-xs text-muted"><summary>Submitted source receipt</summary><p>Workspace {executionReceipt.workspace} · {executionReceipt.cwd || "runtime default"} · {executionReceipt.policy === "save" ? "Verified save before submission" : "Saved versions; drafts kept"}. These hashes identify the submitted baseline; runtime readback is required to confirm which revision executed.</p><ul>{executionReceipt.files.map((file) => <li key={file.path}>{file.path} · {file.sha256}</li>)}</ul></details>}
-      <form className="space-y-3" onSubmit={submit}>
+      {executionReceipt && <details className="text-xs text-muted"><summary>Submitted source receipt</summary><p>Workspace {executionReceipt.workspace} · {executionReceipt.cwd || "runtime default"} · {executionReceipt.policy === "save" ? "Verified save before submission" : "Saved versions; drafts kept"}.</p>
+        <p>{executionReceipt.checked ? "The paired runner checked these files before submitting the coding prompt." : "These hashes identify the submitted baseline. The coding runtime's source check is unconfirmed."}</p>
+        <ul>{executionReceipt.files.map((file) => <li key={file.path}>{file.path} · {file.sha256}</li>)}</ul></details>}
+      {props.composer?.browserActivity}
+      <div className="build-task-and-reply">
+      <form className="min-w-0 space-y-3" onSubmit={submit}>
         <div className="flex items-center gap-2">
           <FolderOpen className="size-4 text-accent" aria-hidden="true" />
           <p className="font-semibold">Adrian Build</p>
         </div>
-        <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Ask Adrian Build to create, edit, debug, or explain code…" className="min-h-20 w-full rounded-panel border border-line bg-transparent p-3 text-sm outline-none focus:border-accent" aria-label="Coding task" />
+        <textarea ref={taskField} value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Describe the change you want to build…" className="min-h-24 w-full rounded-panel border border-line bg-transparent p-3 text-sm outline-none focus:border-accent" aria-label="Coding task" />
+        {sourceChatId && props.onOpenSourceChat && <button type="button" className="min-h-11 underline" onClick={() => props.onOpenSourceChat?.(sourceChatId)}>Open source conversation</button>}
+        {incomingTask && <details className="rounded-panel border border-line p-3">
+          <summary className="min-h-11 cursor-pointer">Review task from {incomingTask.threadId ? "Intelligence" : "Chat"}</summary>
+          {incomingTask.chat && <p className="mb-2 text-sm text-muted">{incomingTask.chat.messageCount} selected {incomingTask.chat.messageCount === 1 ? "message" : "messages"} · {incomingTask.chat.fileCount} selected {incomingTask.chat.fileCount === 1 ? "file" : "files"}</p>}
+          {incomingTask.chat?.media && <p className="mb-2 text-sm text-muted">{incomingTask.chat.media.images.length} planning images · {incomingTask.chat.media.originals.length} downloadable originals</p>}
+          <p className="max-h-48 overflow-auto whitespace-pre-wrap break-words text-sm">{incomingTask.text}</p>
+          <div className="flex flex-wrap gap-3">
+            <button type="button" disabled={active || loading} className="min-h-11 underline" onClick={() => acceptIncomingTask(Boolean(prompt.trim()))}>{prompt.trim() ? "Add to current task" : "Use this task"}</button>
+            <button type="button" className="min-h-11 text-muted" onClick={dismissIncomingTask}>Dismiss handoff</button>
+          </div>
+        </details>}
+        {sourceChatId && workMedia && <fieldset className="rounded-panel border border-line px-3">
+          <legend className="px-1 text-sm font-semibold">Carried from Chat</legend>
+          {workMedia.images.length > 0 && <p className="text-sm text-muted">Selected images can be sent with a plan. Build execution uses text.</p>}
+          {workMedia.originals.length > 0 && <p className="text-sm text-muted">Download exact originals from this device. Build uses the retained text shown in the task.</p>}
+          {workMedia.images.map(image => <div key={workImageKey(image)} className="flex flex-wrap items-center gap-x-3 text-sm">
+            <span className="min-w-0 break-all">{image.name}</span>
+            <button type="button" disabled={planning} className="min-h-11 underline" onClick={() => setWorkMedia(normalizeWorkMedia({ ...workMedia, images: workMedia.images.filter(item => item !== image) }))}>Remove image<span className="sr-only"> {image.name}</span></button>
+          </div>)}
+          {workMedia.originals.map(original => <div key={original.fileId} className="flex flex-wrap items-center gap-x-3 text-sm">
+            <button type="button" className="min-h-11 min-w-0 break-all text-left underline" onClick={() => void props.downloadWorkOriginal?.(sourceChatId, original).catch(error => { if (mounted.current) setNotice(error instanceof Error ? error.message : "The original file could not be opened."); })}>Download {original.name}</button>
+            <button type="button" className="min-h-11 underline" onClick={() => setWorkMedia(normalizeWorkMedia({ ...workMedia, originals: workMedia.originals.filter(item => item !== original) }))}>Remove original<span className="sr-only"> {original.name}</span></button>
+          </div>)}
+        </fieldset>}
+        {props.composer && <div className="flex flex-wrap items-center gap-2" aria-label="Work attachments and project">
+          <ComposerMore testId="work-composer-more-menu">
+            <MenuCluster label="Add to Work">
+              <button type="button" style={menuChip} onClick={props.composer.onCamera}>Camera</button>
+              <button type="button" style={menuChip} onClick={props.composer.onPhoto}>Photos</button>
+              <button type="button" style={menuChip} onClick={props.composer.onFile}>Files</button>
+              <button type="button" style={menuChip} onClick={props.composer.onPlugins}>Plugins</button>
+            </MenuCluster>
+          </ComposerMore>
+          <label className="flex min-h-11 flex-wrap items-center gap-2 text-sm">Execution workspace
+            <select className="min-h-11 max-w-full rounded-panel border border-line bg-transparent px-2" aria-label="Execution workspace" value={cwd} onChange={event => setCwd(event.target.value)}>
+              <option value="">Runtime default</option>
+              {cwd && !projects.some(project => project.cwd === cwd) && <option value={cwd}>{cwd}</option>}
+              {projects.filter(project => project.cwd).map(project => <option key={project.id} value={project.cwd}>{project.label}</option>)}
+            </select>
+          </label>
+          <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={props.composer.onFile}>Files</button>
+          <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={props.composer.onPlugins}>Plugins</button>
+          {props.composer.staged && <button type="button" className="min-h-11 px-2 text-xs" onClick={props.composer.removeFile}>Remove {props.composer.staged.name}</button>}
+          {props.composer.images.length > 0 && <div className="grid w-full grid-cols-2 gap-2 sm:grid-cols-4" aria-label="Work image previews">{props.composer.images.map((image, index) => <figure className="min-w-0" key={index}>
+            <InlineImage src={image.dataUrl} alt={image.name || "Work image"} />
+            <button type="button" className="min-h-11 break-words px-2 text-left text-xs" onClick={() => props.composer?.removeImage(index)}>Remove {image.name}</button>
+          </figure>)}</div>}
+          {props.composer.message && <p className="w-full text-xs text-muted" role="status">{props.composer.message}</p>}
+        </div>}
+        <label className="flex min-h-11 flex-wrap items-center gap-2 text-sm">Target Git branch
+          <input value={branch} maxLength={160} aria-label="Target Git branch" aria-describedby="work-branch-help" placeholder="Optional branch name" onChange={event => setBranch(event.target.value)} className="min-h-11 max-w-full rounded-panel border border-line bg-transparent px-2" />
+        </label>
+        <p id="work-branch-help" className="text-xs text-muted">Saved with this Work project. A named branch requires a runtime that can verify its active checkout.</p>
+        {props.deviceQueueEnabled && <div>
+          <label className="flex min-h-11 flex-wrap items-center gap-2 text-sm">Save Build output to account
+            <input value={artifactName} maxLength={80} aria-describedby="work-output-help" placeholder="Optional · report.pdf" onChange={event => setArtifactName(event.target.value)} className="min-h-11 max-w-full rounded-panel border border-line bg-transparent px-2" />
+          </label>
+          <p id="work-output-help" className="text-xs text-muted">Run Build can save one new file from the paired checkout’s artifacts folder, up to 1 MiB. Requires an updated Companion. Supported files include PDF, ZIP, images, BIN and WASM.</p>
+        </div>}
+        {job && <button type="button" className="min-h-11 underline" onClick={() => { setPanel("agent"); setBand("editor"); }}>Open latest Build run</button>}
+        <div className="flex flex-wrap items-center gap-2" aria-label="Build planning tools">
+          {Boolean(props.planningCatalog?.length) && <label className="flex flex-wrap items-center gap-2 text-sm">Planning model
+            <select aria-label="Work planning model" className="min-h-11 max-w-full rounded-panel border border-line bg-transparent px-2" value={planningTier ?? ""} onChange={event => setPlanningTier(event.target.value ? event.target.value as ModelTier : null)}>
+              <option value="">Use shared tier · {props.sharedTier ?? "Heavy"}</option>
+              {props.planningCatalog?.map(row => <option key={row.id} value={row.id} disabled={row.availability === "unavailable"}>{row.id}{row.model ? " · " + row.model : ""}</option>)}
+            </select>
+          </label>}
+          <button type="button" className="min-h-11 rounded-panel border border-line px-3" title={dictationEnabled ? "Dictate into the task" : "Enable dictation in Voice settings"} disabled={props.halted || !dictationEnabled} onClick={() => { taskField.current?.focus(); window.dispatchEvent(new Event("adrian:handy-mic")); }}>Dictate task</button>
+          <button type="button" className="min-h-11 rounded-panel border border-line px-3" disabled={props.halted} onClick={props.onOpenSpeak}>Speak and attach images</button>
+          <button type="button" className="min-h-11 rounded-panel border border-line px-3" disabled={props.halted || planning || !prompt.trim()} onClick={() => void planWithGrok()}>{planning ? "Working…" : /^\/github(?:\s|$)/i.test(prompt) ? "Run GitHub request" : "Plan with Grok"}</button>
+          <button type="button" className="min-h-11 rounded-panel border border-line px-3" disabled={props.halted || planning} onClick={() => void planWithGrok("/github repos", [], true)}>Check GitHub repos</button>
+        </div>
+        {!prompt && <div className="flex flex-wrap gap-2" aria-label="Work starters">
+          {[
+            ["Compare local models", "Compare local AI models for this computer. Ask for any missing hardware limits."],
+            ["Prepare a draft run", "Prepare a dry run for this project. List the inputs, steps and expected results before making changes."],
+            ["Review my writing style", "Use the writing samples I attach to identify my style and draft a reusable style guide."],
+          ].map(([label, text]) => <button key={label} type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => { setPrompt(text); taskField.current?.focus(); }}>{label}</button>)}
+        </div>}
         <details className="rounded-panel border border-line p-3">
           <summary className="cursor-pointer text-sm font-semibold">Workspace and advanced controls</summary>
           <div className="mt-3 flex gap-2"><input value={cwd} onChange={(event) => setCwd(event.target.value)} placeholder="Optional local path, or leave blank for the hosted workspace" className="min-h-11 min-w-0 flex-1 rounded-panel border border-line bg-transparent px-3 text-sm outline-none focus:border-accent" aria-label="Approved workspace path" /><button type="button" disabled={fileBusy} onClick={() => void browseWorkspace()} className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm disabled:opacity-50"><FolderOpen className="size-4" />{fileBusy ? "Loading…" : "Browse"}</button></div>
@@ -917,7 +1473,6 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
           <input value={transcript} onChange={(event) => setTranscript(event.target.value)} placeholder="Dictate or paste an Adrian Speak transcript" className="min-h-11 min-w-40 flex-1 rounded-panel border border-line bg-transparent px-3 text-sm outline-none focus:border-accent" aria-label="Voice transcript" />
           <button type="button" disabled={!transcript.trim()} onClick={() => void submitVoice()} className="min-h-11 rounded-panel border border-line px-3 text-sm disabled:opacity-50">Send transcript</button>
           <button type="button" onClick={speakResult} className="min-h-11 rounded-panel border border-line px-3 text-sm">Read result</button>
-          <button type="button" disabled={planning || !prompt.trim()} onClick={() => void planWithGrok()} className="min-h-11 rounded-panel border border-line px-3 text-sm disabled:opacity-50">{planning ? "Planning…" : "Plan with Grok"}</button>
           <button type="button" disabled={!prompt.trim()} onClick={() => props.onDiscuss?.(prompt)} className="min-h-11 rounded-panel border border-line px-3 text-sm disabled:opacity-50">Discuss in Intelligence</button>
           <button type="button" onClick={() => props.onResult?.(buildResultHandoff(buildReceipt?.filesChanged?.length ? buildReceipt.filesChanged : lastDiff ? [lastDiff] : [], job?.output || notice || prompt || "Build has no result yet.", buildReceipt?.operationId, { completed: job?.status === "done", error: job?.error, outputComplete: buildReceipt?.outputComplete }))} className="min-h-11 rounded-panel border border-line px-3 text-sm">Save result in Intelligence</button>
           </div>
@@ -938,12 +1493,15 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
           <button type="submit" disabled={loading || Boolean(active) || !prompt.trim()} className="inline-flex min-h-11 items-center gap-2 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:cursor-not-allowed disabled:opacity-50">
             <Send className="size-4" aria-hidden="true" /> {loading ? "Queueing…" : active ? "Task running…" : mode === "plan" ? "Ask Build" : mode === "default" ? "Review build" : "Run build"}
           </button>
+          {band === "message" && taskQueue}
           <span className="text-xs text-muted">{mode === "plan" ? "Ask explains only. No file is changed." : mode === "default" ? "Review reads the workspace. Writes require Run mode." : "Run can change files and use tools in this workspace."}</span>
         </div>
       </form>
 
+      {plan ? <section className="dense-card min-w-0 space-y-2" aria-label="Build reply"><h3 className="font-semibold">Build reply{planModel ? ` · ${planModel}` : ""}</h3>{savedPlan?.text === plan && <details className="text-xs text-muted"><summary className="cursor-pointer py-2">Submitted task</summary><p className="whitespace-pre-wrap break-words">{savedPlan.request}</p></details>}<div className="build-reading-result text-base"><AnswerTabs text={plan} /></div></section> : null}
+      </div>
       {notice ? <p className="dense-card text-sm" role="status">{notice}</p> : null}
-      {plan ? <section className="dense-card space-y-2"><h3 className="font-semibold">Grok plan{planModel ? ` · ${planModel}` : ""}</h3><p className="text-xs text-muted">This is a reply. It did not edit a file, run a terminal, or commit.</p><pre className="whitespace-pre-wrap text-sm">{plan}</pre></section> : null}
+      {legacyReview && <button type="button" className="min-h-11 underline" onClick={() => { setSeparatePlan(legacyReview); setLegacyReview(""); setNotice("Separate request selected. Review the task and submit when ready."); }}>Prepare a separate request for this project</button>}
       {fileNotice ? <p className="dense-card text-sm" role="status">{fileNotice}</p> : null}
 
       {!hasWorkspaceSurface ? <div className="promo-banner text-sm"><ShieldCheck className="size-5 text-accent" aria-hidden="true" /><div><p className="font-semibold">Honest runtime boundary</p><p className="text-muted">This workspace never fabricates agent output. It shows queued, running, permission, error, and completed states from the ACP event stream.</p></div></div> : null}
@@ -966,17 +1524,25 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
             </div>
             {panel === "browser" ? <div className="space-y-2"><BrowserEnvironments /><p className="text-sm text-muted" role="status">{browserNotice || "The coding browser uses the in-repo package and the saved Grok key. It does not ask for a separate login."}</p>{browserFrame ? <><button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => void closeCodingBrowser()}>Close coding browser</button><iframe title="Coding browser" src={browserFrame} className="h-[32rem] w-full rounded-panel border border-line bg-black" /></> : null}</div> : null}
             {panel === "agent" ? <>
+              {buildReceipt?.verifiedBranch && <p className="text-xs text-muted">Git branch verified before dispatch · {buildReceipt.verifiedBranch}</p>}
               {buildReceipt ? <details className="rounded-panel border border-line p-3 text-sm"><summary className="cursor-pointer font-semibold">Execution receipt · implementation unverified</summary><p className="mt-2 break-all text-xs text-muted">Operation: {buildReceipt.operationId || "not supplied"}</p><p className="text-xs text-muted">Builder instruction version: {buildReceipt.verification?.builderInstructionDigest || "not reported"}</p><ul className="mt-2 space-y-1">{buildReceipt.verification?.checks.map(check => <li key={check.id}>{check.id.replaceAll("_", " ")}: {check.status.replaceAll("_", " ")}</li>)}{buildReceipt.skillReceipts?.map(receipt => <li key={receipt.skillId}>{receipt.skillId} · version {receipt.version}: {skillReceiptSummary(receipt)}</li>)}{buildReceipt.toolReceipts?.map((receipt, index) => <li key={index}>{receipt.method}{receipt.path ? ` · ${receipt.path}` : ""}: {receipt.status.replaceAll("_", " ")}{receipt.detail ? ` — ${receipt.detail}` : ""}</li>)}</ul><p className="mt-2 text-xs text-muted">{buildReceipt.fileReviewScope}</p>{buildReceipt.fileReviewWarnings?.map((warning, index) => <p key={index} className="text-xs text-warning">{warning}</p>)}<p className="mt-2 text-xs text-muted">Provider statements are not independent test evidence. Review the changed files and run the required checks before accepting the implementation.</p></details> : null}
-              <div className="min-h-32 whitespace-pre-wrap rounded-panel border border-line bg-black/10 p-3 text-sm">{assistantText || job?.output || job?.error || "No active build task. Submit a task to stream agent output here."}</div>
+              <div className="build-reading-result min-h-32 rounded-panel border border-line bg-black/10 p-3 text-base">{active ? assistantText || job?.output || job?.error : <AnswerTabs text={assistantText || job?.output || job?.error || "No active build task."} />}</div>
               {active ? <button type="button" disabled={job?.status === "cancel_requested"} onClick={() => void cancelBuild()} className="min-h-10 rounded-panel border border-danger/40 px-3 text-sm text-danger">{job?.status === "cancel_requested" ? "Stopping…" : "Stop task"}</button> : null}
               {job?.output ? <button type="button" className="min-h-10 rounded-panel border border-line px-3 text-sm" onClick={() => {
                 const url = URL.createObjectURL(new Blob([JSON.stringify({ job, receipt: buildReceipt }, null, 2)], { type: "application/json" }));
                 const link = document.createElement("a"); link.href = url; link.download = `build-${buildReceipt?.operationId || job.id}.json`; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
               }}>Download full receipt</button> : null}
+              {props.onReturnResult && canReturnBuildResult(job, resultSource) && <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={returnResultToChat}>Return result to source chat</button>}
+              {job?.status === "done" && buildReceipt?.artifact && <div className="space-y-2">
+                <BuildArtifactLink artifact={buildReceipt.artifact} runId={job.id} projectId={projectId} />
+                <a href={buildRunPath(projectId, job.id)} className="block min-h-11 underline">Open saved Build result</a>
+              </div>}
               {sessionId ? <button type="button" onClick={() => void endCodingSession()} className="min-h-10 rounded-panel border border-line px-3 text-sm">End coding session</button> : null}
               {job?.error ? <p className="text-sm text-danger" role="alert">{job.error}</p> : null}
             </> : null}
-            {panel === "timeline" ? <ol className="max-h-96 space-y-2 overflow-auto text-sm">{events.map((item) => <li key={item.id} className="rounded-panel border border-line p-2"><div className="flex items-center justify-between gap-2"><span className="font-medium">{eventLabel(item)}</span><time className="text-xs text-muted">{new Date(item.createdAt).toLocaleTimeString()}</time></div>{updateText(item) ? <p className="mt-1 text-xs text-muted">{updateText(item).slice(0, 240)}</p> : null}</li>)}{!events.length ? <li className="text-sm text-muted">No events yet.</li> : null}</ol> : null}
+            {panel === "timeline" && (events.length ? <div className="max-h-96 overflow-auto"><RunActivity label="Build execution activity" rows={events.map(item => ({
+              id: item.id, label: eventLabel(item), detail: updateText(item).slice(0, 240), meta: new Date(item.createdAt).toLocaleTimeString(),
+            }))} /></div> : <p className="text-sm text-muted">No events yet.</p>)}
             {panel === "changes" ? <GitReview report={gitReport} busy={fileBusy} onRead={() => void readGit(false)} onInit={() => void readGit(true)} onCommit={(message) => void commitGit(message)} onBranch={(name) => void branchGit(name)} onOpen={(path) => { setPanel("editor"); void openFile(path, { workspace: "hosted" }); }} /> : null}
             {panel === "changes" ? <div className="space-y-2">{changedFiles.map((path) => <div key={path} className="rounded-panel border border-line p-3 text-sm"><FileDiff className="mr-2 inline size-4 text-accent" />{path}<span className="ml-2 text-xs text-muted">written by ACP</span></div>)}{(buildReceipt?.filesChanged || []).filter(change => change.path !== lastDiff?.path).map(change => <details key={change.path} className="rounded-panel border border-line p-3 text-xs"><summary>{change.path} · verified local change</summary><p className="mt-2 whitespace-pre-wrap text-danger">{change.before}</p><hr className="my-2 border-line" /><p className="whitespace-pre-wrap text-success">{change.after}</p></details>)}{lastDiff ? <div className="rounded-panel border border-line p-3 text-xs"><p className="font-semibold">Reviewed save: {lastDiff.path}</p><p className="mt-2 whitespace-pre-wrap text-danger">{lastDiff.before}</p><hr className="my-2 border-line" /><p className="whitespace-pre-wrap text-success">{lastDiff.after}</p></div> : null}{!changedFiles.length && !lastDiff ? <p className="text-sm text-muted">No file-write events have been reported for this session.</p> : null}<p className="text-xs text-muted">Reviewed file saves return before/after content for bounded change review.</p></div> : null}
             {panel === "changes" ? <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => void restoreLatestCheckpoint()}>Restore last checkpoint</button> : null}

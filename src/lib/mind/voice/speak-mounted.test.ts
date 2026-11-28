@@ -176,7 +176,7 @@ describe("mounted speak() failure banner", () => {
   it("speak() reports failures through reportFailure and the shared failure mount", () => {
     assert.match(commandApp, /async function speak\(/);
     assert.match(commandApp, /runMountedSpeak\(/);
-    assert.match(commandApp, /reportFailure\(message, action, target, retry\)/);
+    assert.match(commandApp, /reportFailure\(message, action, target, stageRecovery\.retry\)/);
     assert.match(commandApp, /failure-mount/);
   });
 

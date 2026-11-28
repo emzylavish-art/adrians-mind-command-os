@@ -39,3 +39,12 @@ export const ownerConnections = createServerFn({ method: "POST" })
     }
     return { connections, unavailable };
   });
+
+/** Private overlay. The public fleet endpoint must never load an owner's grants. */
+export const ownerNotionGraph = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    if (context.userId === "dev-user") throw new Error("Sign in to see your workspace graph.");
+    const { readOwnerNotionGraph } = await import("./owner-notion-graph.server");
+    return { ownerId: context.userId, ...await readOwnerNotionGraph(context.userId) };
+  });

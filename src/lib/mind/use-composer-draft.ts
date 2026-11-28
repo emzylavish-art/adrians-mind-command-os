@@ -13,7 +13,7 @@ export function clearAccountDrafts(owner: string) {
 }
 
 /** Each open tab owns its drafts. Temporary conversations keep drafts in memory only. */
-export function useComposerDraft<T>(scope: string, field: string, initial: T, persist: boolean) {
+export function useComposerDraft<T>(scope: string, field: string, initial: T, persist: boolean, requirePersistence = false) {
   const fields = useMemo(() => new Map<string, T>(), []);
   const listeners = useMemo(() => new Set<() => void>(), []);
   const key = `amcos.draft.v1.${scope}.${field}`;
@@ -46,20 +46,28 @@ export function useComposerDraft<T>(scope: string, field: string, initial: T, pe
   }, [fields, listeners]);
   const value = useSyncExternalStore(subscribe, getSnapshot, () => initial);
   const write = useCallback((key: string, persist: boolean, update: SetStateAction<T>) => {
-    const next = typeof update === "function" ? (update as (previous: T) => T)(read(key, persist)) : update;
-    fields.set(key, next);
+    const previous = read(key, persist);
+    const next = typeof update === "function" ? (update as (previous: T) => T)(previous) : update;
+    if (Object.is(next, previous)) return true;
     if (persist) {
       try {
         if (next === null || next === "" || (Array.isArray(next) && next.length === 0)) window.sessionStorage.removeItem(key);
         else window.sessionStorage.setItem(key, JSON.stringify(next));
       } catch {
+        // Leave both the previous queue and the source draft intact if the move cannot be saved.
+        if (requirePersistence) {
+          window.dispatchEvent(new Event("adrian-queue-storage-full"));
+          return false;
+        }
         // An out-of-quota write must not restore an older attachment or text on reload.
         try { window.sessionStorage.removeItem(key); } catch { /* storage unavailable */ }
         window.dispatchEvent(new Event("adrian-draft-storage-full"));
       }
     }
+    fields.set(key, next);
     for (const notify of listeners) notify();
-  }, [fields, read, listeners]);
+    return true;
+  }, [fields, read, listeners, requirePersistence]);
   const setValue = useCallback((update: SetStateAction<T>) => write(key, persist, update), [key, persist, write]);
   const setInScope = useCallback((scope: string, persist: boolean, update: SetStateAction<T>) =>
     write(`amcos.draft.v1.${scope}.${field}`, persist, update), [field, write]);

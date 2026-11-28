@@ -1,3 +1,5 @@
+import { buildRunId } from "./kimi/build-scope.ts";
+
 /** Stable share links for one chat, project, file, or bot.
  * Section history stays in `section`. This does not replace it.
  */
@@ -8,13 +10,15 @@ export type ShareItemKey = (typeof SHARE_ITEM_KEYS)[number];
 export type ShareWrite = {
   section: string;
   pane?: string | null;
+  workProject?: string | null;
+  workRun?: string | null;
   chat: string | null;
   project: string | null;
   file: string | null;
   bot: string | null;
 };
 
-export const SETTINGS_PANES = ["general", "connections", "voice", "pages", "data", "safety", "keys", "browser", "personalization"] as const;
+export const SETTINGS_PANES = ["general", "connections", "voice", "pages", "data", "safety", "keys", "browser", "keyboard", "bits", "archived", "storage", "profile", "personalization", "sessions", "usage", "notifications"] as const;
 export type SettingsPane = (typeof SETTINGS_PANES)[number];
 export function settingsPaneFromSearch(search: string): SettingsPane | null {
   const params = paramsFrom(search);
@@ -46,6 +50,47 @@ export function isShareId(value: string | null | undefined): value is string {
   return typeof value === "string" && ID_PATTERN.test(value);
 }
 
+/** Keep only the workspace selectors; embedded tools get no incidental URL parameters. */
+export function embeddedWorkspaceSearch(search: string): string {
+  const source = paramsFrom(search);
+  const result = new URLSearchParams();
+  for (const key of ["section", "pane", ...SHARE_ITEM_KEYS]) {
+    const value = source.get(key);
+    if (isShareId(value)) result.set(key, value);
+  }
+  if (source.get("section") === "build") {
+    const work = workLocation(search);
+    if (work.projectId) result.set("workProject", work.projectId);
+    if (work.runId) result.set("workRun", work.runId);
+  }
+  return result.size ? `?${result}` : "";
+}
+
+export function workLocation(search: string) {
+  const params = paramsFrom(search);
+  if (params.get("section") !== "build") return { projectId: null, runId: null };
+  const project = params.get("workProject");
+  const run = params.get("workRun");
+  return { projectId: isShareId(project) ? project : null, runId: buildRunId(run) ? run : null };
+}
+
+export function buildRunPath(projectId: string | null, runId: string) {
+  const params = new URLSearchParams({ section: "build", workRun: runId });
+  if (projectId) params.set("workProject", projectId);
+  return `/?${params}`;
+}
+
+export function isWorkRunLink(href: string) {
+  if (!href.startsWith("/") || href.startsWith("//") || href.includes("\\")) return false;
+  const [path, search = ""] = href.split("?", 2);
+  return path.endsWith("/") && Boolean(workLocation(search).runId);
+}
+
+export function socialLegacyReturn(search: string): string | undefined {
+  const returnSearch = embeddedWorkspaceSearch(paramsFrom(search).get("socialReturn") ?? "");
+  return returnSearch ? `/${returnSearch}#mind-workspace` : undefined;
+}
+
 function paramsFrom(search: string) {
   const raw = search.startsWith("?") ? search.slice(1) : search;
   return new URLSearchParams(raw);
@@ -66,11 +111,15 @@ export function shareWriteForView(
 
 export function writeShareSearch(current: string, next: ShareWrite, knownSections: readonly string[]): string {
   const params = paramsFrom(current);
-  for (const key of ["section", "pane", ...SHARE_ITEM_KEYS]) params.delete(key);
+  for (const key of ["section", "pane", "workProject", "workRun", ...SHARE_ITEM_KEYS]) params.delete(key);
   if (next.section && next.section !== "command" && knownSections.includes(next.section)) {
     params.set("section", next.section);
   }
   if (next.section === "settings" && SETTINGS_PANES.includes(next.pane as SettingsPane)) params.set("pane", next.pane!);
+  if (next.section === "build") {
+    if (isShareId(next.workProject)) params.set("workProject", next.workProject);
+    if (buildRunId(next.workRun)) params.set("workRun", next.workRun);
+  }
   for (const key of SHARE_ITEM_KEYS) {
     const value = next[key];
     if (isShareId(value)) params.set(key, value);

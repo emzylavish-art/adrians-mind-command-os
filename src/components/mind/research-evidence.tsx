@@ -1,18 +1,40 @@
 import { useState } from "react";
-import { addResearchClaim, researchCoverage, type ResearchClaim, type ResearchReport } from "@/lib/mind/research-reports";
+import { addResearchClaim, researchCoverage, researchReportMarkdown, type ResearchClaim, type ResearchReport } from "@/lib/mind/research-reports";
 
 export function ResearchEvidence({ report, onChange }: { report: ResearchReport; onChange: (report: ResearchReport) => void }) {
   const [claim, setClaim] = useState("");
   const [sources, setSources] = useState<string[]>([]);
   const [kind, setKind] = useState<ResearchClaim["kind"]>("interpretation");
   const [error, setError] = useState<string | null>(null);
-  const exportReport = () => {
-    const url = URL.createObjectURL(new Blob([JSON.stringify({ kind: "adrians-mind-research", format: 1, report }, null, 2)], { type: "application/json" }));
-    const link = document.createElement("a"); link.href = url; link.download = `research-${report.id}-v${report.version || 1}.json`; link.click(); URL.revokeObjectURL(url);
-  };
+  function exportReport(format: "json" | "md") {
+    const markdown = format === "md";
+    const content = markdown ? researchReportMarkdown(report) : JSON.stringify({ kind: "adrians-mind-research", format: 1, report }, null, 2);
+    const url = URL.createObjectURL(new Blob([content], { type: markdown ? "text/markdown;charset=utf-8" : "application/json" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `research-${report.id}-v${report.version || 1}.${format}`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  const shownSources = new Set(report.citations.map((source) => source.url));
+  const additionalSources = (report.evidence ?? []).filter((source) => !shownSources.has(source.url));
   return <section className="mt-4 space-y-3 rounded-panel border border-line p-3" aria-label="Research evidence">
-    <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm">Version {report.version || 1} · {researchCoverage(report)}</p><button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={exportReport}>Export report and evidence</button></div>
+    <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm">Version {report.version || 1} · {researchCoverage(report)}</p><button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => exportReport("md")}>Download Markdown</button><button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => exportReport("json")}>Export report and evidence</button></div>
     <p className="text-xs text-muted">Saved on this device. Search-result metadata does not establish that a full page was read or that a claim is independently verified.</p>
+    {report.steps?.length ? <details>
+      <summary className="min-h-11 cursor-pointer text-sm">Search history · {report.providerIdentity?.label ?? "Search provider"}</summary>
+      <ol className="space-y-2 pl-4 text-sm">{report.steps.map((step) => <li key={step.query}>
+        <strong>{step.query}</strong> · {step.status ?? (step.ok ? "succeeded" : "failed")} · {step.count} sources
+        {step.error && <p className="text-xs text-muted">{step.error}</p>}
+      </li>)}</ol>
+    </details> : null}
+    {additionalSources.length > 0 && <details>
+      <summary className="min-h-11 cursor-pointer text-sm">Additional sources ({additionalSources.length})</summary>
+      <ul className="space-y-2 pl-4 text-sm">{additionalSources.map((source) => <li key={source.url}>
+        <a href={source.url} target="_blank" rel="noreferrer" className="text-accent underline">{source.title}</a>
+        <p className="text-xs text-muted">{source.query}</p>
+      </li>)}</ul>
+    </details>}
     <ul className="space-y-2">{report.citations.map((source) => <li key={source.url} className="rounded-panel border border-line p-2 text-sm"><a href={source.url} target="_blank" rel="noreferrer" className="text-accent underline">{source.title}</a><p className="text-xs text-muted">{source.retrievedAt ? `Search returned ${source.retrievedAt}` : "Retrieval time unknown"} · {source.publishedAt ? `Published ${source.publishedAt}` : "Publication date unknown"}</p>{source.excerpt ? <blockquote className="mt-2 border-l-2 border-line pl-2">Provider excerpt: {source.excerpt}</blockquote> : <p className="text-xs text-muted">No supporting passage was returned.</p>}</li>)}</ul>
     {report.claims?.length ? <ul className="space-y-2" aria-label="Claims and sources">{report.claims.map((entry) => <li key={entry.id} className="rounded-panel border border-line p-2"><p className="text-xs text-muted">{entry.kind} · {entry.kind === "provider-cited" ? "provider attribution; not independently verified" : "owner-reviewed relationship"}</p><p className="text-sm">{entry.text}</p><ul>{entry.sourceUrls.map((url) => <li key={url}><a className="text-xs text-accent underline" href={url} target="_blank" rel="noreferrer">{report.citations.find((source) => source.url === url)?.title || url}</a></li>)}</ul></li>)}</ul> : null}
     <details><summary className="min-h-11 cursor-pointer text-sm">Record a finding with supporting sources</summary>

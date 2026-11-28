@@ -38,7 +38,6 @@ function ConnectionList() {
 export function OwnerDashboard() {
   const { user, isPending } = useCurrentUserState();
   return <section className="mx-auto max-w-5xl space-y-3 p-4 md:p-6">
-    <h1 className="font-display text-3xl font-bold">Dashboard</h1>
     <h2 className="text-lg font-semibold">Your connections and workspaces</h2>
     {isPending ? <p role="status">Checking your account…</p> : <ConnectionList key={user?.id || "session"} />}
   </section>;

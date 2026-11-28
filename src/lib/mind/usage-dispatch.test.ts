@@ -1,3 +1,4 @@
+import * as githubTurn from "./github-turn.ts";
 import { withExecutionReceipts } from "./execution-response.ts";
 import { providerResponse, consultationResponse } from "./provider-response.ts";
 import { validatePrimaryConfiguration } from "./turn-primary-selection.ts";
@@ -8,6 +9,7 @@ import { test } from "node:test";
 import { runInNewContext } from "node:vm";
 import ts from "typescript";
 import { readJsonObjectBody } from "./request-body.ts";
+import { parseModeInstruction } from "./mode-instructions.ts";
 import { decideFetchSite } from "./request-guard.ts";
 import { recoverableTurnResponse, readTurnRecovery } from "./turn-recovery.ts";
 import { turnErrorCode } from "./turn-error.ts";
@@ -200,7 +202,7 @@ test("C5 actual orchestration records two helpers and one primary without losing
     const record = async (row: UsageReceipt) => { rows.set(row.id, structuredClone(row)); };
     runInNewContext(code, {
       exports: exported, Response, Error, Date, crypto, DEV_USER_ID: "dev-user",
-      require: (specifier: string) => { assert.equal(specifier, "./halt.server.ts"); return { readHaltState: async () => "off", haltIsOn: async () => false }; },
+      require: (specifier: string) => { if (specifier === "./github-turn.ts") return githubTurn; assert.equal(specifier, "./halt.server.ts"); return { readHaltState: async () => "off", haltIsOn: async () => false }; },
       consumeSharedMindRateLimit: async () => true, randomUUID: () => operationId,
       process: { env: {} }, ADRIAN_MIND_IDENTITY: "fixture coordinator",
       withExecutionReceipts, providerResponse, consultationResponse, validatePrimaryConfiguration, toNativeProviderTurns,
@@ -218,7 +220,7 @@ test("C5 actual orchestration records two helpers and one primary without losing
       createChatTurnPreflight: () => async () => null,
       modulesConnectedNow: async () => ["custom:fixture:primary", "openai", "gemini"].map(id => ({ id, label: id, connected: true })),
       planModelConsult, collectConsultHelp, orchestratorInstruction,
-      sanitizeAttachments: () => [], parseModelTierField: () => ({ ok: true }), resolveRequestedRoute: () => ({ ok: true, route: null }),
+      sanitizeAttachments: () => [], parseModeInstruction, parseModelTierField: () => ({ ok: true }), resolveRequestedRoute: () => ({ ok: true, route: null }),
       parseCustomProviderChoice: () => ({ ok: true, model: "primary" }), isHistory: () => true, isNote: () => true,
       checkTurnSize: () => ({ ok: true }), envCheck: () => ({ ok: true }),
       assembleTurn: (body: { consultHelp: string }) => ({ ok: true, messages: [{ role: "system", content: body.consultHelp }], usedIds: [] }),

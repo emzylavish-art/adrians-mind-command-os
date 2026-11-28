@@ -6,7 +6,6 @@
  * dashboard status (bots + constellation edges + Notion pages).
  */
 import { useEffect, useRef } from "react";
-// The published package exports a factory; default import shape varies by bundler.
 import type { BotNode, DashboardStatus, Health } from "@/lib/mind/dashboard/types";
 import { DEFAULT_GRAPH_FILTER, filterBotIds, type GraphFilterState } from "@/lib/mind/dashboard/graph-filters";
 import { sanitizeLabelText } from "@/lib/mind/dashboard/health";
@@ -22,7 +21,7 @@ type GraphNode = {
   id: string;
   name: string;
   health: Health;
-  kind: "bot" | "notion";
+  kind: "bot" | "notion" | "notion-agent";
   val: number;
   bot?: BotNode;
   x?: number;
@@ -101,8 +100,8 @@ function buildGraph(data: DashboardStatus, allow: Set<string> | null) {
   const pageIds = new Set(pages.map((page) => page.id));
   for (const page of pages) {
     nodes.push({
-      id: `notion:${page.id}`, name: page.title || page.id,
-      health: "idle", kind: "notion", val: 1,
+      id: `notion:${page.id}`, name: page.kind.includes("agent") ? `Notion AI · ${page.title}` : page.title || page.id,
+      health: "idle", kind: page.kind.includes("agent") ? "notion-agent" : "notion", val: 1,
     });
   }
 
@@ -143,10 +142,7 @@ function buildGraph(data: DashboardStatus, allow: Set<string> | null) {
   return { nodes, links };
 }
 
-function createGraph(el: HTMLElement, importedFactory: unknown): GraphApi {
-  const factory = importedFactory as (opts?: { controlType?: string }) => (dom: HTMLElement) => GraphApi;
-  return factory({ controlType: "orbit" })(el);
-}
+
 
 export function FleetForceGraph({
   data,
@@ -187,7 +183,7 @@ export function FleetForceGraph({
 
       let graph: GraphApi;
       try {
-        graph = createGraph(mount, module.default)
+        graph = (new module.default(mount, { controlType: "orbit" }) as unknown as GraphApi)
           .backgroundColor("#05070d")
           .showNavInfo(false)
           .nodeId("id")
@@ -196,7 +192,8 @@ export function FleetForceGraph({
           .nodeOpacity(0.92)
           .nodeColor((n) => {
             const hot = hoverId.current === n.id || highlighted.current.has(n.id);
-            if (n.kind === "notion") return hot ? "#78a6d8" : "#3a4a63";
+            if (n.kind === "notion-agent") return hot ? "#e9d5ff" : "#b18dff";
+            if (n.kind === "notion") return hot ? "#a6d6ef" : "#5688a8";
             const base = HEALTH_COLOR[n.health] ?? "#687487";
             if (highlighted.current.size && !hot) return "#243044";
             return base;
@@ -277,7 +274,7 @@ export function FleetForceGraph({
               );
             }
             if (node.kind === "bot" && node.bot) callbacks.current.onSelectBot(node.bot);
-            if (node.kind === "notion") callbacks.current.onSelectNotion(node.id.replace(/^notion:/, ""));
+            if (node.kind !== "bot") callbacks.current.onSelectNotion(node.id.replace(/^notion:/, ""));
           })
           .cooldownTicks(motionRef.current ? 0 : 90)
           .d3AlphaDecay(motionRef.current ? 1 : 0.022)

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { chromium } from "playwright";
 import { installVisualFixture, VISUAL_FIXTURES } from "./fixture-states.mjs";
 
@@ -128,6 +129,51 @@ try {
     await page.waitForFunction(() => { const p = document.querySelector("#chat-thread > section > .overflow-auto"); return p.scrollHeight - p.scrollTop - p.clientHeight < 4; }, undefined, { timeout: 5000 });
     return { stream: "in-page synthetic ReadableStream", liveProviderCalls: 0, completionProvider: "fixture" };
   });
+  await check(page, "chat-composer-queue-follows-success", async () => {
+    const composer = page.locator("form.thread-composer");
+    const draft = composer.getByRole("textbox", { name: "Message", exact: true });
+    await draft.fill("Synthetic first request for the new queue");
+    await composer.getByRole("button", { name: "Send", exact: true }).click();
+    await page.waitForFunction(() => window.__syntheticTurn.started === 2);
+    await draft.fill("Synthetic queued follow-up");
+    await composer.getByRole("button", { name: "Queue", exact: true }).click();
+    assert.equal(await draft.inputValue(), "");
+    const list = composer.getByRole("button", { name: "Open chat queue, 1 waiting", exact: true });
+    await list.click();
+    await page.getByRole("dialog", { name: "Chat queue" }).getByText("Waiting", { exact: true }).waitFor();
+    await page.keyboard.press("Escape");
+    await page.waitForFunction(() => document.activeElement?.getAttribute("aria-label") === "Open chat queue, 1 waiting");
+    assert.equal(await page.evaluate(() => window.__syntheticTurn.started), 2);
+    await page.evaluate(() => window.__syntheticTurn.done());
+    await page.waitForFunction(() => window.__syntheticTurn.started === 3);
+    await page.getByText("Synthetic queued follow-up", { exact: true }).waitFor();
+    await page.evaluate(() => window.__syntheticTurn.done());
+    await composer.getByRole("button", { name: "Open chat queue, 0 waiting", exact: true }).waitFor();
+    assert.equal(await page.evaluate(() => window.__syntheticTurn.started), 3);
+    return { followUpRequests: 1, focusReturned: true, liveProviderCalls: 0 };
+  });
+  await check(page, "chat-queue-holds-attached-follow-up", async () => {
+    const composer = page.locator("form.thread-composer");
+    const draft = composer.getByRole("textbox", { name: "Message", exact: true });
+    await draft.fill("Synthetic request before the attached follow-up");
+    await composer.getByRole("button", { name: "Send", exact: true }).click();
+    await page.waitForFunction(() => window.__syntheticTurn.started === 4);
+    const name = "chat-follow-up.png";
+    await page.getByTestId("composer-image-input").setInputFiles({ name, mimeType: "image/png", buffer: await page.screenshot() });
+    await composer.getByRole("img", { name, exact: true }).waitFor();
+    await draft.fill("Review this attachment before sending");
+    await composer.getByRole("button", { name: "Queue", exact: true }).click();
+    await composer.getByRole("button", { name: "Open chat queue, 1 waiting", exact: true }).click();
+    const sheet = page.getByRole("dialog", { name: "Chat queue" });
+    await sheet.getByText("Held for review", { exact: true }).waitFor();
+    await sheet.getByText(`Attachments: ${name}`, { exact: true }).waitFor();
+    await page.evaluate(() => window.__syntheticTurn.done());
+    await sheet.getByRole("button", { name: "To draft", exact: true }).click();
+    await composer.getByRole("img", { name, exact: true }).waitFor();
+    assert.equal(await draft.inputValue(), "Review this attachment before sending");
+    assert.equal(await page.evaluate(() => window.__syntheticTurn.started), 4);
+    return { attachedFollowUpHeld: true, composerRestored: true, additionalRequests: 0 };
+  });
   await check(page, "build-buffer-symbol-and-dependency", async () => {
     await navigate(page, "/?section=build", "build");
     const sections = page.getByRole("navigation", { name: "Build sections" });
@@ -151,6 +197,265 @@ try {
     return { language: "TypeScript", selectedSymbol: "renamedFixture", unsavedDraftRetained: true, relatedFile: "dependency.ts", relatedWorkspace: "hosted", apiResponses: "synthetic read/list only; no provider or file writes" };
   });
   report.desktopTransport = transport.summary(); await context.close();
+
+  const queueContext = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, serviceWorkers: "block", reducedMotion: "reduce" });
+  const queueBase = VISUAL_FIXTURES["chat-interrupted"].workspace();
+  const queueWorkspace = { ...queueBase, projects: [{ id: "queue-project", name: "Queue fixture", createdAt: at }, { id: "queue-other", name: "Other fixture", createdAt: at }] };
+  const queueTransport = await installVisualFixture(queueContext, origin, "chat-interrupted", { workspace: queueWorkspace, preserveOnReload: true });
+  const queuePage = await queueContext.newPage();
+  let buildSubmissions = 0;
+  queuePage.on("request", request => {
+    if (request.method() === "POST" && new URL(request.url()).pathname === "/api/mind/build/session") buildSubmissions++;
+  });
+  await queuePage.goto(origin, { waitUntil: "domcontentloaded" });
+  await check(queuePage, "home-and-work-queues-review-and-reload", async () => {
+    await queuePage.locator('#mind-workspace[data-workspace-ready="true"]').waitFor();
+    const home = queuePage.getByTestId("home-command");
+    await home.fill("Synthetic held Home draft");
+    await queuePage.getByRole("button", { name: "Queue", exact: true }).click();
+    await queuePage.reload({ waitUntil: "domcontentloaded" });
+    await queuePage.getByRole("button", { name: "Open new chat queue, 1 waiting", exact: true }).click();
+    const homeSheet = queuePage.getByRole("dialog", { name: "New chat queue" });
+    assert.equal(await homeSheet.locator(".queue-sheet").evaluate(element => getComputedStyle(element).animationName), "none");
+    await homeSheet.getByRole("button", { name: "To draft", exact: true }).click();
+    assert.equal(await home.inputValue(), "Synthetic held Home draft");
+    await navigate(queuePage, "/?section=build&workProject=queue-project", "build");
+    await queuePage.waitForFunction(() => document.querySelector('select[aria-label="Work project"]')?.disabled === false);
+    const field = queuePage.getByRole("textbox", { name: "Coding task", exact: true });
+    await field.fill("First synthetic task");
+    await queuePage.getByRole("button", { name: "Queue", exact: true }).click();
+    await field.fill("Second synthetic task");
+    await queuePage.getByRole("button", { name: "Queue", exact: true }).click();
+    await queuePage.getByRole("button", { name: "Open work and build queue, 2 waiting", exact: true }).click();
+    const sheet = queuePage.getByRole("dialog", { name: "Work and Build queue" });
+    await sheet.getByRole("button", { name: "Move queued message 2 up", exact: true }).click();
+    await sheet.getByTestId("cued-message").first().getByRole("button", { name: "Edit", exact: true }).click();
+    await sheet.getByRole("textbox", { name: "Edit queued message 1" }).fill("Edited next synthetic task");
+    await sheet.getByRole("button", { name: "Save edit", exact: true }).click();
+    await sheet.getByRole("button", { name: "Close queue", exact: true }).click();
+    await queuePage.getByRole("combobox", { name: "Work project", exact: true }).selectOption("queue-other");
+    await queuePage.getByRole("button", { name: "Open work and build queue, 0 waiting", exact: true }).waitFor();
+    await queuePage.getByRole("combobox", { name: "Work project", exact: true }).selectOption("queue-project");
+    await queuePage.getByRole("button", { name: "Open work and build queue, 2 waiting", exact: true }).waitFor();
+    await queuePage.reload({ waitUntil: "domcontentloaded" });
+    await queuePage.getByRole("button", { name: "Open work and build queue, 2 waiting", exact: true }).click();
+    await sheet.getByTestId("cued-message").first().getByText("Edited next synthetic task", { exact: true }).waitFor();
+    await queuePage.screenshot({ path: resolve(output, "transition-work-queue-sheet.png") });
+    await sheet.getByTestId("cued-message").first().getByRole("button", { name: "To draft", exact: true }).click();
+    assert.equal(await field.inputValue(), "Edited next synthetic task");
+    await queuePage.getByRole("button", { name: "Open work and build queue, 1 waiting", exact: true }).click();
+    assert.equal(await sheet.getByRole("button", { name: "To draft", exact: true }).isDisabled(), true);
+    await sheet.getByRole("button", { name: "Remove queued message 1", exact: true }).click();
+    await sheet.getByText("The queue is empty.", { exact: true }).waitFor();
+    await sheet.getByRole("button", { name: "Close queue", exact: true }).click();
+    assert.equal(await field.inputValue(), "Edited next synthetic task");
+    assert.equal(buildSubmissions, 0);
+    return { reducedMotion: true, mobileWidth: 390, projectIsolation: true, reload: true, buildSubmissions };
+  });
+  await check(queuePage, "work-queue-attachments-restored-after-reload", async () => {
+    const task = queuePage.getByRole("textbox", { name: "Coding task", exact: true });
+    await task.fill("");
+    const image = { name: "queue-reference.png", mimeType: "image/png", buffer: await queuePage.screenshot() };
+    await queuePage.getByTestId("composer-image-input").setInputFiles(image);
+    const file = { name: "queue-scope.txt", mimeType: "text/plain", buffer: Buffer.from("Retain this exact excerpt.") };
+    await queuePage.locator('input[type="file"][accept$="image/*"]').setInputFiles(file);
+    await queuePage.getByRole("button", { name: "Remove queue-reference.png", exact: true }).waitFor();
+    await queuePage.getByRole("button", { name: "Remove queue-scope.txt", exact: true }).waitFor();
+
+    await queuePage.evaluate(() => {
+      const setItem = Storage.prototype.setItem;
+      Storage.prototype.setItem = function(key, value) {
+        if (this === sessionStorage && key.endsWith(".queue")) throw new DOMException("Fixture limit", "QuotaExceededError");
+        return setItem.call(this, key, value);
+      };
+      window.restoreQueueStorage = () => { Storage.prototype.setItem = setItem; };
+    });
+    const queue = queuePage.getByRole("button", { name: "Queue", exact: true });
+    await queue.click();
+    await queuePage.getByText("Browser storage is full or unavailable. Your task and attachments are still in the composer.", { exact: true }).waitFor();
+    assert.equal(await queuePage.getByRole("button", { name: "Remove queue-reference.png", exact: true }).isVisible(), true);
+    await queuePage.evaluate(() => window.restoreQueueStorage());
+    await queue.click();
+    await queuePage.getByRole("button", { name: "Remove queue-reference.png", exact: true }).waitFor({ state: "detached" });
+    await queuePage.reload({ waitUntil: "domcontentloaded" });
+    await queuePage.getByRole("button", { name: "Open work and build queue, 1 waiting", exact: true }).click();
+    const sheet = queuePage.getByRole("dialog", { name: "Work and Build queue" });
+    await sheet.getByText("Attachments: queue-scope.txt, queue-reference.png", { exact: true }).waitFor();
+    await sheet.getByText("Held for review", { exact: true }).waitFor();
+    await sheet.getByRole("button", { name: "To draft", exact: true }).click();
+    await queuePage.getByRole("img", { name: "queue-reference.png", exact: true }).waitFor();
+    await queuePage.getByRole("button", { name: "Remove queue-scope.txt", exact: true }).waitFor();
+    assert.equal(await task.inputValue(), "");
+    assert.equal(buildSubmissions, 0);
+    return { sameTabReload: true, quotaFailureKeptInput: true, restoredTextFileAndImage: true, buildSubmissions };
+  });
+  await check(queuePage, "work-browser-handoff-and-scoped-screenshot", async () => {
+    const activity = queuePage.getByTestId("browser-activity");
+    await queuePage.evaluate(() => {
+      window.browserOpenRequests = [];
+      window.open = (...args) => { window.browserOpenRequests.push(args); return null; };
+    });
+    await activity.getByRole("button", { name: "Browser", exact: true }).click();
+    const website = queuePage.getByRole("dialog", { name: "Open a website" });
+    const address = website.getByRole("textbox", { name: "Website address" });
+    await address.fill("https://example.com/review");
+    await website.getByRole("button", { name: "Open in browser", exact: true }).click();
+    await queuePage.getByRole("dialog", { name: "Continue in your browser" }).getByRole("button", { name: "I’m back", exact: true }).click();
+    await activity.getByText("Returned by you", { exact: true }).waitFor();
+    assert.deepEqual(await queuePage.evaluate(() => window.browserOpenRequests), [["https://example.com/review", "_blank", "noopener,noreferrer"]]);
+    await activity.getByText("Returned by you", { exact: true }).click();
+    const file = { name: "work-browser-fixture.png", mimeType: "image/png", buffer: await queuePage.screenshot() };
+    const chooser = queuePage.waitForEvent("filechooser");
+    await activity.getByRole("button", { name: "Add screenshot to this step", exact: true }).click();
+    await (await chooser).setFiles(file);
+    const review = queuePage.getByRole("dialog", { name: "Review screenshot" });
+    await review.getByRole("img", { name: file.name, exact: true }).waitFor();
+    await review.getByRole("button", { name: "Save screenshot", exact: true }).click();
+    const image = activity.getByRole("img", { name: "Screenshot of https://example.com", exact: true });
+    await image.waitFor();
+    const projects = queuePage.getByRole("combobox", { name: "Work project", exact: true });
+    await projects.selectOption("queue-other");
+    await queuePage.waitForFunction(() => new URL(location.href).searchParams.get("workProject") === "queue-other");
+    assert.equal(await image.count(), 0);
+    await projects.selectOption("queue-project");
+    await image.waitFor();
+    assert.equal(buildSubmissions, 0);
+    return { personalBrowserHandoff: true, returnedReceipt: true, screenshotReviewed: true, projectIsolation: true, actualExternalRequests: 0 };
+  });
+  await check(queuePage, "work-approved-plan-follow-up", async () => {
+    const domain = queuePage.getByTestId("build-workspace");
+    for (const name of ["Remove queue-scope.txt", "Remove queue-reference.png"]) {
+      const entry = domain.getByRole("button", { name, exact: true });
+      if (await entry.count()) await entry.click();
+    }
+    await queuePage.evaluate(() => {
+      const fetchBefore = window.fetch.bind(window);
+      window.workPlanAttempts = [];
+      window.workPlanningReceiptReads = [];
+      window.workPlanningReceiptState = "processing_or_unknown";
+      window.fetch = async (input, init) => {
+        const url = new URL(typeof input === "string" ? input : input.url, location.href);
+        if (url.origin !== location.origin || url.pathname !== "/api/mind/turn") return fetchBefore(input, init);
+        if (init?.method === "GET" && url.searchParams.has("operationId")) {
+          window.workPlanningReceiptReads.push(url.searchParams.get("operationId"));
+          return Response.json({ ownerId: "dev-user", state: window.workPlanningReceiptState });
+        }
+        if (init?.method !== "POST") {
+          if (window.holdNextWorkPlanId) {
+            window.holdNextWorkPlanId = false;
+            await new Promise(resolve => { window.releaseWorkPlanId = resolve; });
+          }
+          return Response.json({ operationId: `1760000000000-${crypto.randomUUID()}` });
+        }
+        window.workPlanAttempts.push(JSON.parse(init.body));
+        window.latestWorkPlanId = new Headers(init.headers).get("x-mind-turn-id");
+        return new Response(new ReadableStream({ start(controller) {
+          window.failWorkPlan = () => controller.close();
+          window.finishWorkPlan = () => {
+            controller.enqueue(new TextEncoder().encode(`event: done\ndata: ${JSON.stringify({ text: "Follow-up plan fixture completed", model: "fixture", provider: "grok", usage: null, usedIds: [] })}\n\n`));
+            controller.close();
+          };
+        } }), { headers: { "content-type": "text/event-stream" } });
+      };
+    });
+    const field = domain.getByRole("textbox", { name: "Coding task", exact: true });
+    await field.fill("Start the current plan fixture");
+    await domain.getByRole("button", { name: "Plan with Grok", exact: true }).click();
+    await queuePage.waitForFunction(() => window.workPlanAttempts.length === 1);
+    await field.fill("Review only the next plan");
+    await domain.getByRole("button", { name: "Queue", exact: true }).click();
+    await domain.getByRole("button", { name: "Open work and build queue, 1 waiting", exact: true }).click();
+    const sheet = queuePage.getByRole("dialog", { name: "Work and Build queue" });
+    await sheet.getByText("Review automatic plan", { exact: true }).click();
+    await sheet.getByRole("button", { name: "Approve one follow-up plan", exact: true }).click();
+    assert.equal(await queuePage.evaluate(() => window.workPlanAttempts.length), 1);
+    await queuePage.evaluate(() => window.finishWorkPlan());
+    await queuePage.waitForFunction(() => window.workPlanAttempts.length === 2);
+    const attempt = await queuePage.evaluate(() => window.workPlanAttempts[1]);
+    assert.equal(attempt.projectId, "queue-project");
+    assert.ok(attempt.text.endsWith("Review only the next plan"));
+    assert.equal(buildSubmissions, 0);
+    await queuePage.evaluate(() => window.finishWorkPlan());
+    await sheet.getByText("The queue is empty.", { exact: true }).waitFor();
+    await sheet.getByRole("button", { name: "Close queue", exact: true }).click();
+    await field.fill("Start the cancellation fixture");
+    await domain.getByRole("button", { name: "Plan with Grok", exact: true }).click();
+    await queuePage.waitForFunction(() => window.workPlanAttempts.length === 3);
+    await field.fill("Keep this follow-up held");
+    await domain.getByRole("button", { name: "Queue", exact: true }).click();
+    await domain.getByRole("button", { name: "Open work and build queue, 1 waiting", exact: true }).click();
+    await sheet.getByText("Review automatic plan", { exact: true }).click();
+    await sheet.getByRole("button", { name: "Approve one follow-up plan", exact: true }).click();
+    await sheet.getByRole("button", { name: "Cancel approved follow-up", exact: true }).click();
+    await queuePage.evaluate(() => window.finishWorkPlan());
+    await sheet.getByText("Review automatic plan", { exact: true }).waitFor({ state: "detached" });
+    await sheet.getByText("Held for review", { exact: true }).waitFor();
+    assert.equal(await queuePage.evaluate(() => window.workPlanAttempts.length), 3);
+    await sheet.getByRole("button", { name: "Close queue", exact: true }).click();
+    await field.fill("Start the stale branch fixture");
+    await domain.getByRole("button", { name: "Plan with Grok", exact: true }).click();
+    await queuePage.waitForFunction(() => window.workPlanAttempts.length === 4);
+    await domain.getByRole("button", { name: "Open work and build queue, 1 waiting", exact: true }).click();
+    await sheet.getByText("Review automatic plan", { exact: true }).click();
+    await sheet.getByRole("button", { name: "Approve one follow-up plan", exact: true }).click();
+    await sheet.getByRole("button", { name: "Close queue", exact: true }).click();
+    const branch = domain.getByRole("textbox", { name: "Target Git branch", exact: true });
+    const originalBranch = await branch.inputValue();
+    await branch.fill("fixture-changed-branch");
+    await branch.fill(originalBranch);
+    await domain.getByRole("button", { name: "Open work and build queue, 1 waiting", exact: true }).click();
+    await sheet.getByText("Held for review", { exact: true }).waitFor();
+    assert.equal(await sheet.getByText("Review automatic plan", { exact: true }).count(), 0);
+    await queuePage.evaluate(() => window.finishWorkPlan());
+    await domain.getByText("Grok returned a plan. No file was written.", { exact: true }).waitFor();
+    assert.equal(await queuePage.evaluate(() => window.workPlanAttempts.length), 4);
+    await sheet.getByRole("button", { name: "Close queue", exact: true }).click();
+    await field.fill("Start the lost receipt fixture");
+    await domain.getByRole("button", { name: "Plan with Grok", exact: true }).click();
+    await queuePage.waitForFunction(() => window.workPlanAttempts.length === 5);
+    await domain.getByRole("button", { name: "Open work and build queue, 1 waiting", exact: true }).click();
+    await sheet.getByText("Review automatic plan", { exact: true }).click();
+    await sheet.getByRole("button", { name: "Approve one follow-up plan", exact: true }).click();
+    await queuePage.evaluate(() => window.finishWorkPlan());
+    await queuePage.waitForFunction(() => window.workPlanAttempts.length === 6);
+    await queuePage.evaluate(() => window.failWorkPlan());
+    const checkReceipt = sheet.getByRole("button", { name: "Check planning receipt", exact: true });
+    await checkReceipt.click();
+    await sheet.getByText("The earlier outcome is still unconfirmed. No new request was sent.", { exact: true }).waitFor();
+    await queuePage.evaluate(() => { window.workPlanningReceiptState = "not_dispatched"; });
+    await checkReceipt.click();
+    await sheet.getByText("The earlier request was not dispatched. The draft is held for review.", { exact: true }).waitFor();
+    assert.deepEqual(await queuePage.evaluate(() => window.workPlanningReceiptReads),
+      await queuePage.evaluate(() => [window.latestWorkPlanId, window.latestWorkPlanId]));
+    assert.equal(await queuePage.evaluate(() => window.workPlanAttempts.length), 6);
+    await sheet.getByRole("button", { name: "Remove queued message 1", exact: true }).click();
+    await sheet.getByRole("button", { name: "Close queue", exact: true }).click();
+    await field.fill("Start the late visibility fixture");
+    await domain.getByRole("button", { name: "Plan with Grok", exact: true }).click();
+    await queuePage.waitForFunction(() => window.workPlanAttempts.length === 7);
+    await field.fill("Hold this draft if the tab goes into the background");
+    await domain.getByRole("button", { name: "Queue", exact: true }).click();
+    await domain.getByRole("button", { name: "Open work and build queue, 1 waiting", exact: true }).click();
+    await sheet.getByText("Review automatic plan", { exact: true }).click();
+    await sheet.getByRole("button", { name: "Approve one follow-up plan", exact: true }).click();
+    await queuePage.evaluate(() => { window.holdNextWorkPlanId = true; window.finishWorkPlan(); });
+    await queuePage.waitForFunction(() => typeof window.releaseWorkPlanId === "function");
+    await queuePage.evaluate(() => {
+      Object.defineProperty(document, "hidden", { configurable: true, value: true });
+      document.dispatchEvent(new Event("visibilitychange"));
+      Reflect.deleteProperty(document, "hidden");
+      document.dispatchEvent(new Event("visibilitychange"));
+      window.releaseWorkPlanId();
+    });
+    await sheet.getByText("Held for review", { exact: true }).waitFor();
+    assert.equal(await queuePage.evaluate(() => window.workPlanAttempts.length), 7);
+    assert.equal(buildSubmissions, 0);
+    return {
+      explicitApproval: true, followUpRequests: 1, cancelledDraftHeld: true, revertedBranchStillInvalidatesApproval: true,
+      uncertainReceiptCheckedWithoutReplay: true, lateBackgroundDraftHeld: true, confirmedProject: attempt.projectId, buildSubmissions,
+    };
+  });
+  report.queueTransport = queueTransport.summary(); await queueContext.close();
 
   const providerContext = await browser.newContext({ viewport: { width: 1440, height: 900 }, serviceWorkers: "block" });
   const providerModels = { gemini: "gemini-fixture-model", openrouter: "fixture/free-model:free" };
@@ -212,8 +517,507 @@ try {
   report.providerRequests = requests;
   await providerContext.close();
 
+  const embedded = await browser.newContext({ viewport: { width: 1280, height: 840 }, serviceWorkers: "block", reducedMotion: "reduce" });
+  await installVisualFixture(embedded, origin, "chat-interrupted", { preserveOnReload: true });
+  let socialApprovals = 0;
+  let socialReads = 0;
+  let socialStatus = "running";
+  let refused = false;
+  const socialWrites = [];
+  let socialConfig = { limits: { per_contact_daily: { US: 1, NG: 1 }, per_account_daily: 1 }, timing: { gap_min_seconds: 1, gap_max_seconds: 2 } };
+  const socialData = new Map([
+    ["/api/status", () => {
+      socialReads++;
+      return { state: socialStatus, sessions: [{ account_id: "demo-account", status: "running" }], ready: [], drafts: socialApprovals ? [] : [{ account_id: "demo-account", draft_text: "Synthetic review draft", jeff_output: { draft_id: "fixture-draft" } }], health: { cpu_percent: 24, ram_percent: 36, uptime_seconds: 500 } };
+    }],
+    ["/api/config", request => {
+      if (request.method() === "PUT") { socialConfig = request.postDataJSON().config; return { ok: true }; }
+      return socialConfig;
+    }],
+    ...["/api/optouts", "/api/audit", "/api/captures"].map(path => [path, () => ({ items: [] })]),
+    ["/api/drafts/approve", request => {
+      assert.equal(request.postDataJSON().draft_id, "fixture-draft");
+      socialApprovals++;
+      return { status: "queued" };
+    }],
+    ["/api/control", request => {
+      const { scope, action } = request.postDataJSON();
+      assert.equal(scope, "global");
+      socialStatus = { start: "running", pause: "paused", stop: "stopped" }[action];
+      return { ok: true };
+    }],
+    ["/api/config/export", () => ({ config: JSON.stringify(socialConfig) })],
+    ["/api/captures/screen", () => ({ status: "not_wired" })],
+  ]);
+  await embedded.route(url => url.origin === origin && socialData.has(url.pathname), route => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+    if (request.headers()["x-adrian-secret"] !== "fixture-social-secret" || refused) return route.fulfill({ status: 401, json: {} });
+    if (request.method() !== "GET") socialWrites.push([request.method(), path]);
+    return route.fulfill({ json: socialData.get(path)(request) });
+  });
+  let bridgeSwitches = 0;
+  await embedded.route(url => url.origin === "http://127.0.0.1:8000", route => {
+    const path = new URL(route.request().url()).pathname;
+    const headers = { "access-control-allow-origin": "*", "access-control-allow-headers": "authorization, content-type, x-gpt-bridge-secret" };
+    if (path === "/v1/browser-models/select" && route.request().method() === "POST") {
+      bridgeSwitches++;
+      return route.fulfill({ headers, status: 409, json: { reason: "Fixture bridge denied this model." } });
+    }
+    const json = path === "/dashboard-data" ? { session: { logged_in: true }, health: { healthy: true } }
+      : path === "/v1/browser-models" ? { current: "Model A", models: [{ name: "Model A", selected: true }, { name: "Model B" }] } : {};
+    return route.fulfill({ headers, json });
+  });
+  const embeddedPage = await embedded.newPage();
+  const embeddedChat = `${origin}/?section=chat&chat=fixture-chat`;
+  const social = embeddedPage.getByTestId("adrian-social-workspace");
+  await embeddedPage.goto(embeddedChat, { waitUntil: "domcontentloaded" });
+  await embeddedPage.locator("#message-fixture-message").waitFor();
+  await check(embeddedPage, "trading-snapshot-loads-only-on-request", async () => {
+    let reads = 0;
+    const snapshot = "https://fleet-paper-desk.operation-beat-magnus.workers.dev/";
+    await embeddedPage.route(snapshot, route => {
+      reads++;
+      return route.fulfill({ contentType: "text/html", body: "<h1>Synthetic published snapshot</h1>" });
+    });
+    await embeddedPage.locator("#workspace-sidebar").getByRole("button", { name: "Trading", exact: true }).click();
+    const desk = embeddedPage.getByRole("region", { name: "Paper trading desk" });
+    await desk.waitFor();
+    assert.equal(reads, 0);
+    assert.equal(await desk.locator("iframe").count(), 0);
+    assert.equal(await desk.getByRole("link", { name: "Open private desk in new tab" }).getAttribute("href"), "https://fleet-control-desk.operation-beat-magnus.workers.dev/login");
+    await desk.getByRole("button", { name: "View published snapshot" }).click();
+    await desk.frameLocator("iframe").getByRole("heading", { name: "Synthetic published snapshot" }).waitFor();
+    assert.equal(reads, 1);
+    assert.equal(await desk.locator("iframe").getAttribute("sandbox"), "");
+    await desk.getByRole("button", { name: "Close snapshot" }).click();
+    assert.equal(await desk.locator("iframe").count(), 0);
+    return { externalReadsBeforeOpen: 0, syntheticReads: reads, commands: 0 };
+  });
+  await navigate(embeddedPage, embeddedChat, "chat");
+  await check(embeddedPage, "social-shared-workspace-entry-exit-and-resize", async () => {
+    const message = embeddedPage.locator("form.thread-composer").getByRole("textbox", { name: "Message", exact: true });
+    await message.fill("Synthetic Social return draft");
+    await embeddedPage.getByTestId("nav-route-social").click();
+    await social.getByRole("heading", { name: "Adrian Social", exact: true }).waitFor();
+    assert.equal(await social.locator("iframe").count(), 0);
+    assert.equal(await embeddedPage.getByTestId("nav-route-social").getAttribute("aria-current"), "page");
+    const divider = embeddedPage.getByRole("separator", { name: "Workspace sidebar width" });
+    const before = Number(await divider.getAttribute("aria-valuenow"));
+    const geometry = await divider.boundingBox();
+    assert.ok(geometry && geometry.width >= 12);
+    await embeddedPage.mouse.move(geometry.x + geometry.width / 2, geometry.y + geometry.height / 2);
+    await embeddedPage.mouse.down();
+    await embeddedPage.mouse.move(geometry.x + geometry.width / 2 + 32, geometry.y + geometry.height / 2);
+    await embeddedPage.mouse.up();
+    assert.equal(Number(await divider.getAttribute("aria-valuenow")), before + 32);
+    await divider.press("ArrowLeft");
+    assert.equal(Number(await divider.getAttribute("aria-valuenow")), before + 24);
+    await embeddedPage.getByRole("button", { name: "Collapse sidebar" }).click();
+    await divider.waitFor({ state: "hidden" });
+    await embeddedPage.getByRole("button", { name: "Open sidebar" }).click();
+    assert.equal(Number(await divider.getAttribute("aria-valuenow")), before + 24);
+    const exit = social.getByRole("button", { name: "Back to workspace" });
+    for (const viewport of [{ width: 390, height: 844 }, { width: 844, height: 390 }]) {
+      await embeddedPage.setViewportSize(viewport);
+      const box = await exit.boundingBox();
+      assert.ok(box && box.height >= 44 && box.y + box.height <= viewport.height);
+      const overflow = await social.evaluate(node => node.scrollWidth > node.clientWidth + 1);
+      assert.equal(overflow, false);
+      await embeddedPage.screenshot({ path: resolve(output, `transition-social-native-${viewport.width}.png`) });
+    }
+    await exit.press("Enter");
+    await embeddedPage.locator("#message-fixture-message").waitFor();
+    assert.equal(await message.inputValue(), "Synthetic Social return draft");
+    await embeddedPage.setViewportSize({ width: 1280, height: 840 });
+    await embeddedPage.reload({ waitUntil: "domcontentloaded" });
+    await embeddedPage.locator("#message-fixture-message").waitFor();
+    assert.equal(Number(await divider.getAttribute("aria-valuenow")), before + 24);
+    return { integrated: true, sidebarDrag: 32, keyboardResize: true, widthKeptAfterCollapseAndReload: true, restoredDraft: true, portraitAndLandscape: true };
+  });
+
+  await embeddedPage.goto(`${origin}/social?workspace=${encodeURIComponent("?section=chat&chat=fixture-chat")}`, { waitUntil: "domcontentloaded" });
+  await check(embeddedPage, "social-internal-queue-receipt", async () => {
+    await social.getByRole("heading", { name: "Adrian Social", exact: true }).waitFor();
+    assert.match(await social.getByRole("link", { name: "Back to workspace" }).getAttribute("href"), /[?&]chat=fixture-chat/);
+    assert.equal(socialReads, 0);
+    await social.getByRole("button", { name: "Connect your PC" }).click();
+    await social.getByLabel("Service URL").fill(origin);
+    await social.getByLabel("Local secret").fill("fixture-social-secret");
+    await social.getByRole("button", { name: "Connect to PC" }).click();
+    await social.locator("#runtime-state").filter({ hasText: "Running" }).waitFor();
+    const pages = social.getByRole("navigation", { name: "Social pages" });
+    const groups = social.getByRole("navigation", { name: "Social categories" });
+    await groups.getByRole("button", { name: "Inbox" }).click();
+    await pages.getByRole("button", { name: "Drafts" }).click();
+    await social.getByRole("heading", { name: "PC checks, in order" }).waitFor();
+    await social.getByRole("button", { name: "Approve", exact: true }).click();
+    await social.getByText("Queued. Delivery has not been confirmed.", { exact: true }).waitFor();
+    await social.getByText("No pending drafts", { exact: true }).waitFor();
+    assert.equal(await social.locator('[id="drafts"]').count(), 1);
+    assert.equal(socialApprovals, 1);
+    await groups.getByRole("button", { name: "Overview & service" }).click();
+    await pages.getByRole("button", { name: "Run", exact: true }).click();
+    await social.getByRole("button", { name: "Pause", exact: true }).click();
+    await social.locator("#runtime-state").filter({ hasText: "Paused" }).waitFor();
+    await social.getByRole("button", { name: "Stop", exact: true }).click();
+    await social.locator("#runtime-state").filter({ hasText: "Stopped" }).waitFor();
+    await social.getByRole("button", { name: "Start", exact: true }).click();
+    await social.locator("#runtime-state").filter({ hasText: "Running" }).waitFor();
+    await groups.getByRole("button", { name: "Safety & limits" }).click();
+    await pages.getByRole("button", { name: "Limits" }).click();
+    await social.getByLabel("US daily").fill("4");
+    socialConfig.limits.per_contact_daily.US = 2;
+    const readsBeforeRefresh = socialReads;
+    const refresh = social.getByRole("button", { name: "Refresh status" });
+    await refresh.click();
+    await embeddedPage.waitForFunction(() => !document.querySelector("#refresh-status").disabled);
+    assert.ok(socialReads > readsBeforeRefresh);
+    assert.equal(await social.getByLabel("US daily").inputValue(), "4");
+    embeddedPage.once("dialog", dialog => { void dialog.dismiss(); });
+    await social.getByRole("button", { name: "Apply ceilings" }).click();
+    await social.getByText("Your draft is still here. The PC settings were kept.", { exact: true }).waitFor();
+    assert.equal(socialConfig.limits.per_contact_daily.US, 2);
+    embeddedPage.once("dialog", dialog => { void dialog.accept(); });
+    await social.getByRole("button", { name: "Apply ceilings" }).click();
+    await social.getByText("Settings saved on the PC.", { exact: true }).waitFor();
+    assert.equal(socialConfig.limits.per_contact_daily.US, 4);
+    await pages.getByRole("button", { name: "Machine" }).click();
+    await social.getByText("24%", { exact: true }).waitFor();
+    await groups.getByRole("button", { name: "Records & tools" }).click();
+    await social.getByRole("button", { name: "Export settings" }).click();
+    await social.getByText("Settings copied into the text field.", { exact: true }).waitFor();
+    await social.getByRole("button", { name: "Screen capture" }).click();
+    await social.getByText("Screen capture is unavailable. Nothing was recorded.", { exact: true }).waitFor();
+    refused = true;
+    await social.getByRole("button", { name: "Refresh status" }).click();
+    await social.locator("#runtime-state").filter({ hasText: "Access refused" }).waitFor();
+    assert.equal(await social.getByRole("button", { name: "Screen capture" }).isEnabled(), false);
+    assert.equal(await social.locator("#link-state").textContent().then(text => text.includes("fixture-social-secret")), false);
+    assert.equal(await embeddedPage.evaluate(() => Object.values(localStorage).some(value => value.includes("fixture-social-secret"))), false);
+    return { queue: "fixture response", deliveryConfirmed: false, guardRetained: true, reads: socialReads, writes: socialWrites, editedLimitsSurviveRefresh: true, conflictingChangeRequiresApproval: true, persistedSecret: false, controlsDisabledOnRefusal: true };
+  });
+
+  await embeddedPage.goto(embeddedChat, { waitUntil: "domcontentloaded" });
+  await embeddedPage.locator("#message-fixture-message").waitFor();
+  await check(embeddedPage, "gpt-wrapper-host-entry-and-exit", async () => {
+    const message = embeddedPage.locator("form.thread-composer").getByRole("textbox", { name: "Message", exact: true });
+    await message.fill("Synthetic wrapper return draft");
+    await embeddedPage.getByTestId("nav-route-gpt-wrapper").click();
+    await embeddedPage.getByTitle("GPT wrapper", { exact: true }).waitFor();
+    const exit = embeddedPage.getByRole("link", { name: "Back to workspace" });
+    assert.match(await exit.getAttribute("href"), /[?&]chat=fixture-chat/);
+    await exit.press("Enter");
+    await embeddedPage.locator("#message-fixture-message").waitFor();
+    assert.equal(await message.inputValue(), "Synthetic wrapper return draft");
+    return { keyboardExit: true, restoredDraft: true };
+  });
+  await embeddedPage.goto(`${origin}/gpt-wrapper`, { waitUntil: "domcontentloaded" });
+  await check(embeddedPage, "wrapper-internal-signed-in-status", async () => {
+    const frame = embeddedPage.frameLocator('iframe[title="GPT wrapper"]');
+    await frame.getByText("Browser signed in", { exact: true }).waitFor();
+    return { signedIn: "fixture response", apiExecution: "unverified" };
+  });
+  await check(embeddedPage, "wrapper-refused-model-preserves-verified-selection", async () => {
+    const frame = embeddedPage.frameLocator('iframe[title="GPT wrapper"]');
+    await frame.locator('[data-panel="models-section"]').click();
+    await frame.getByRole("button", { name: "See models" }).click();
+    await frame.getByRole("button", { name: "Model B", exact: true }).click();
+    await frame.getByText("Fixture bridge denied this model.", { exact: true }).waitFor();
+    assert.equal(await frame.locator("#model-current").innerText(), "Current: Model A");
+    assert.equal(bridgeSwitches, 1);
+    return { refused: "Model B", verified: "Model A", selectionRequests: bridgeSwitches };
+  });
+  await embedded.close();
+
+  const handoffContext = await browser.newContext({ viewport: { width: 1280, height: 840 }, serviceWorkers: "block" });
+  const base = VISUAL_FIXTURES["chat-interrupted"].workspace();
+  const originalBytes = "Synthetic binary original\u0000fixture";
+  const originalHash = createHash("sha256").update(originalBytes).digest("hex");
+  const handoffPixel = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+  const handoffThread = {
+    ...base.chats[0], id: "handoff-chat", projectId: "handoff-project", notionWorkspaceId: "fixture-notion-space",
+    messages: [
+      { id: "reviewed-prompt", role: "user", content: "Fixture selected prompt", at },
+      { id: "excluded-prompt", role: "user", content: "Fixture excluded prompt", at },
+      { id: "reviewed-answer", role: "assistant", content: "Fixture selected answer", at, images: [{ name: "fixture-handoff.png", dataUrl: handoffPixel }] },
+    ],
+  };
+  await installVisualFixture(handoffContext, origin, "chat-interrupted", { preserveOnReload: true,
+    workspace: { ...base, chats: [handoffThread], projects: [{ id: "handoff-project", name: "Fixture project", description: "", createdAt: at }, { id: "other-project", name: "Other fixture project", description: "", createdAt: at }],
+      recovery: [{ id: "fixture-notion-work", operationId: "fixture-notion-work", workspaceId: "fixture-notion-space", pageId: "fixture-notion-page", chatId: "handoff-chat", text: "Append synthetic note to Notion", message: "Synthetic uncertain acknowledgement", target: "notion", state: "open", action: "notion_operation", outcome: "uncertain", at }],
+      files: [{ id: "reviewed-file", name: "handoff-notes.txt", text: "Fixture selected file bytes", bytes: 27, projectId: "handoff-project", createdAt: at },
+        { id: "original-fixture", name: "fixture-original.bin", text: "", bytes: originalBytes.length, projectId: "handoff-project", createdAt: at, original: { blobId: `document_${originalHash}`, sha256: originalHash, bytes: originalBytes.length, mime: "application/octet-stream", name: "fixture-original.bin" } }] } });
+  let automaticBuildRuns = 0;
+  let runRequested = false;
+  let observedBuildRequest;
+  let dropPairedAcknowledgement = false;
+  let pairedRequest;
+  let pairedSubmissions = 0;
+  let pairedReads = 0;
+  let notionRecoveryCalls = 0;
+  await handoffContext.route(url => url.origin === origin && url.pathname === "/api/mind/dispatch-policy" && url.searchParams.get("section") === "financial", route => {
+    const owner = new URL(route.request().url()).searchParams.get("ownerId");
+    assert.ok(owner === "dev-user" || owner === "fixture-owner");
+    assert.equal(route.request().method(), "GET");
+    return route.fulfill({ json: { ok: true, financial: { ledger: [
+      { id: "fixture-cost", provider: "fixture-provider", model: "fixture-model", projectId: "handoff-project", actualMicros: 12000, costBasis: "provider_reported", state: "settled", updatedAt: at },
+      { id: "other-fixture-cost", provider: "other-project-provider", model: "other-model", projectId: "other-project", actualMicros: 1020000, costBasis: "provider_reported", state: "settled", updatedAt: "2026-01-02T00:00:00.000Z" },
+    ] } } });
+  });
+  await handoffContext.route(url => {
+    if (url.origin !== origin || !url.pathname.startsWith("/_serverFn/")) return false;
+    try { return /^notionCommand(?:_|$)/.test(JSON.parse(Buffer.from(url.pathname.split("/").at(-1), "base64url").toString("utf8")).export); }
+    catch { return false; }
+  }, route => {
+    const payload = route.request().postData() || "";
+    for (const value of ["recoverOnly", "fixture-notion-space", "fixture-notion-page", "fixture-notion-work"]) assert.ok(payload.includes(value));
+    notionRecoveryCalls++;
+    return route.fulfill({ json: { result: { ok: true, verified: true, operationId: "fixture-notion-work", pages: [{ id: "fixture-notion-page" }], outcome: "verified" }, context: {} } });
+  });
+  await handoffContext.route(url => url.origin === origin && url.pathname === "/api/mind/pc/status", route => route.fulfill({ json: {
+    ok: true, onlineAgentIds: dropPairedAcknowledgement ? ["fixture-paired"] : [], agents: [],
+  } }));
+  await handoffContext.route(url => url.origin === origin && url.pathname === "/api/mind/build/session", route => {
+    if (dropPairedAcknowledgement) {
+      if (route.request().method() === "POST") {
+        pairedRequest = route.request().postDataJSON();
+        pairedSubmissions++;
+        return route.abort("failed");
+      }
+      const jobId = new URL(route.request().url()).searchParams.get("jobId");
+      if (jobId === pairedRequest?.jobKey) {
+        pairedReads++;
+        return route.fulfill({ json: { ok: true, job: { id: jobId, status: "done", output: "Synthetic recovered paired output", error: "", createdAt: at, updatedAt: at }, receipt: { operationId: jobId }, events: [] } });
+      }
+    }
+    if (route.request().method() === "POST") {
+      if (!runRequested) automaticBuildRuns++;
+      else {
+        observedBuildRequest = route.request().postDataJSON();
+        return route.fulfill({ json: { ok: true, executed: true, operationId: "fixture-build-receipt", verifiedBranch: "feature/fixture", output: "Synthetic completed Build output", outputComplete: true } });
+      }
+    }
+    return route.fulfill({ status: 409, json: { ok: false, error: "No Build run in the handoff fixture." } });
+  });
+  let planningImages = [];
+  await handoffContext.route(url => url.origin === origin && url.pathname === "/api/mind/turn", route => {
+    const request = route.request();
+    if (request.method() === "GET") return route.fulfill({ json: { operationId: `1760000000000-${crypto.randomUUID()}` } });
+    if (request.method() !== "POST") return route.abort("blockedbyclient");
+    planningImages = request.postDataJSON().images ?? [];
+    const done = { text: "Synthetic image-aware plan", provider: "grok", model: "fixture-planning-model", usage: null, usedIds: [], requestId: "fixture-image-plan" };
+    return route.fulfill({ contentType: "text/event-stream", body: `event: done\ndata: ${JSON.stringify(done)}\n\n` });
+  });
+  const handoffPage = await handoffContext.newPage();
+  await handoffPage.goto(origin + "/?section=chat&chat=handoff-chat", { waitUntil: "domcontentloaded" });
+  await handoffPage.locator("#message-reviewed-answer").waitFor();
+  await check(handoffPage, "chat-selected-messages-and-files-to-work", async () => {
+    const continueButton = handoffPage.getByRole("button", { name: "Continue in Work", exact: true });
+    await handoffPage.locator('#message-reviewed-answer summary[aria-label="More"]').click();
+    await continueButton.click();
+    const dialog = handoffPage.getByRole("dialog", { name: "Continue in Work" });
+    await dialog.getByRole("checkbox", { name: /Fixture selected prompt/ }).check();
+    await dialog.getByRole("checkbox", { name: "handoff-notes.txt" }).check();
+    await handoffPage.screenshot({ path: resolve(output, "transition-work-selection-review.png") });
+    await dialog.getByRole("button", { name: "Review in Work" }).click();
+    const review = handoffPage.getByText("Review task from Chat", { exact: true });
+    await review.waitFor();
+    await handoffPage.reload({ waitUntil: "domcontentloaded" });
+    await review.click();
+    await handoffPage.getByText("2 selected messages · 1 selected file").waitFor();
+    await handoffPage.getByRole("button", { name: "Use this task" }).click();
+    const task = handoffPage.getByRole("textbox", { name: "Coding task", exact: true });
+    assert.match(await task.inputValue(), /Fixture selected prompt[\s\S]*Fixture selected answer[\s\S]*Fixture selected file bytes/);
+    assert.doesNotMatch(await task.inputValue(), /Fixture excluded prompt/);
+    await handoffPage.screenshot({ path: resolve(output, "transition-work-accepted-draft.png") });
+    await handoffPage.reload({ waitUntil: "domcontentloaded" });
+    await handoffPage.getByRole("button", { name: "Open source conversation" }).click();
+    await handoffPage.locator("#message-reviewed-answer").waitFor();
+    await handoffPage.locator("#message-excluded-prompt").waitFor();
+    assert.equal(automaticBuildRuns, 0);
+    return { selectedMessages: 2, selectedFiles: 1, pendingAndAcceptedDraftRecoverable: true, originalPreserved: true, automaticBuildRuns };
+  });
+  await check(handoffPage, "work-project-recovery-and-result-handback", async () => {
+    await navigate(handoffPage, "/?section=build&workProject=handoff-project", "build");
+    const project = handoffPage.getByRole("combobox", { name: "Work project", exact: true });
+    const task = handoffPage.getByRole("textbox", { name: "Coding task", exact: true });
+    const branch = handoffPage.getByRole("textbox", { name: "Target Git branch", exact: true });
+    await project.waitFor();
+    assert.equal(await project.inputValue(), "handoff-project");
+    assert.match(await task.inputValue(), /Fixture selected prompt/);
+    await branch.fill("feature/fixture");
+    await project.selectOption("other-project");
+    await handoffPage.waitForURL(/workProject=other-project/);
+    await task.fill("A different project's task");
+    await branch.fill("other-branch");
+    await project.selectOption("handoff-project");
+    await handoffPage.waitForURL(/workProject=handoff-project/);
+    await handoffPage.reload({ waitUntil: "domcontentloaded" });
+    await handoffPage.getByRole("button", { name: "Open source conversation" }).waitFor();
+    assert.equal(await branch.inputValue(), "feature/fixture");
+    assert.doesNotMatch(await task.inputValue(), /different project/);
+    runRequested = true;
+    await handoffPage.getByRole("button", { name: "Review build", exact: true }).click();
+    const returnButton = handoffPage.getByRole("button", { name: "Return result to source chat" });
+    await returnButton.waitFor();
+    assert.equal(observedBuildRequest.projectId, "handoff-project");
+    assert.equal(observedBuildRequest.expectedBranch, "feature/fixture");
+    assert.equal(automaticBuildRuns, 0);
+    await handoffPage.screenshot({ path: resolve(output, "transition-work-completed-run.png") });
+    await returnButton.click();
+    await handoffPage.locator("#message-reviewed-answer").waitFor();
+    const link = handoffPage.getByRole("link", { name: "Open Build run", exact: true });
+    const href = await link.getAttribute("href");
+    assert.match(href, /workProject=handoff-project/);
+    await link.click();
+    await handoffPage.getByRole("heading", { name: "Build run receipt" }).waitFor();
+    await handoffPage.getByText(/Synthetic completed Build output/).waitFor();
+    await handoffPage.reload({ waitUntil: "domcontentloaded" });
+    await handoffPage.getByText(/Synthetic completed Build output/).waitFor();
+    await handoffPage.screenshot({ path: resolve(output, "transition-work-saved-run-link.png") });
+    await handoffPage.goto(origin + href.replace("handoff-project", "other-project"), { waitUntil: "domcontentloaded" });
+    await handoffPage.getByText(/This receipt is unavailable for the current account, project, or browser/).waitFor();
+    await handoffPage.getByRole("button", { name: "Back to Work draft" }).click();
+    await task.waitFor();
+    assert.equal(await task.inputValue(), "A different project's task");
+    assert.equal(await branch.inputValue(), "other-branch");
+    return { separateProjectDrafts: true, branchRestored: true, originalSource: "handoff-chat", savedRunReopened: true, crossProjectLinkRefused: true, execution: "synthetic request and response" };
+  });
+  await check(handoffPage, "control-center-work-cost-and-notion-recovery", async () => {
+    await navigate(handoffPage, "/?section=build&workProject=handoff-project", "build");
+    await handoffPage.getByRole("textbox", { name: "Target Git branch" }).waitFor();
+    await handoffPage.getByRole("button", { name: "Go to Control Center", exact: true }).click();
+    const center = handoffPage.getByRole("region", { name: "Control Center" });
+    await center.getByText("feature/fixture", { exact: true }).waitFor();
+    await center.getByText(/verified checkout feature\/fixture/).waitFor();
+    await center.getByText(/fixture-provider.*Actual \$0\.012/).waitFor();
+    assert.equal(await center.getByText(/other-project-provider/).count(), 0);
+    await center.getByText("Page · fixture-notion-page", { exact: true }).waitFor();
+    await handoffPage.screenshot({ path: resolve(output, "transition-control-center-exact-recovery.png") });
+    await center.getByRole("button", { name: "Check saved Notion write" }).click();
+    await center.getByText("Verified the saved write on the original Notion page.").waitFor();
+    assert.equal(notionRecoveryCalls, 1);
+    await center.getByRole("button", { name: "Return to workspace" }).click();
+    await handoffPage.getByRole("textbox", { name: "Target Git branch" }).waitFor();
+    return { scopedCostReceipt: true, selectedAndVerifiedBranches: true, exactNotionChecks: notionRecoveryCalls, liveOperations: 0 };
+  });
+  await check(handoffPage, "work-reviewed-media-and-originals", async () => {
+    await navigate(handoffPage, "/?section=chat&chat=handoff-chat", "chat");
+    await handoffPage.locator('#message-reviewed-answer summary[aria-label="More"]').click();
+    await handoffPage.getByRole("button", { name: "Continue in Work", exact: true }).click();
+    const dialog = handoffPage.getByRole("dialog", { name: "Continue in Work" });
+    await dialog.getByRole("checkbox", { name: /Fixture selected answer/ }).uncheck();
+    await dialog.getByRole("checkbox", { name: "fixture-handoff.png" }).check();
+    await dialog.getByRole("checkbox", { name: /fixture-original.bin/ }).check();
+    await dialog.getByRole("button", { name: "Review in Work" }).click();
+    await handoffPage.getByText("Review task from Chat", { exact: true }).click();
+    await handoffPage.getByRole("button", { name: "Add to current task" }).click();
+    await handoffPage.reload({ waitUntil: "domcontentloaded" });
+    await handoffPage.getByRole("group", { name: "Carried from Chat" }).waitFor();
+    await handoffPage.evaluate(({ bytes, id }) => new Promise((resolve, reject) => {
+      const draft = Object.keys(sessionStorage).find(key => key.startsWith("amcos.work-project.v1.") && key.endsWith('.editor') && key.includes('"handoff-project"'));
+      const owner = JSON.parse(sessionStorage.getItem(draft)).owner;
+      if (owner !== "dev-user" && owner !== "fixture-owner") return reject(Error("Unexpected synthetic owner"));
+      const request = indexedDB.open(`amcos.documents.v1.owner.${encodeURIComponent(owner)}`, 1);
+      request.onupgradeneeded = () => request.result.createObjectStore("originals");
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        const db = request.result;
+        const tx = db.transaction("originals", "readwrite");
+        tx.objectStore("originals").put(new Blob([bytes], { type: "application/octet-stream" }), id);
+        tx.oncomplete = () => { db.close(); resolve(); };
+        tx.onerror = () => reject(tx.error);
+      };
+    }), { bytes: originalBytes, id: `document_${originalHash}` });
+    const downloading = handoffPage.waitForEvent("download");
+    await handoffPage.getByRole("button", { name: "Download fixture-original.bin" }).click();
+    const download = await downloading;
+    assert.equal(download.suggestedFilename(), "fixture-original.bin");
+    const chunks = [];
+    for await (const chunk of await download.createReadStream()) chunks.push(chunk);
+    assert.equal(Buffer.concat(chunks).toString(), originalBytes);
+    const confirmedRuns = observedBuildRequest?.operationId;
+    await handoffPage.getByRole("button", { name: "Review build", exact: true }).click();
+    await handoffPage.getByText(/Use Plan with Grok to review these images/).waitFor();
+    assert.equal(observedBuildRequest?.operationId, confirmedRuns);
+    await handoffPage.getByRole("button", { name: "Plan with Grok", exact: true }).click();
+    await handoffPage.getByText("Synthetic image-aware plan", { exact: true }).waitFor();
+    assert.equal(planningImages.length, 1);
+    assert.equal(planningImages[0].dataUrl, handoffPixel);
+    const viewport = handoffPage.viewportSize();
+    const form = handoffPage.locator(".build-task-and-reply form");
+    const reply = handoffPage.getByRole("region", { name: "Build reply" });
+    await handoffPage.setViewportSize({ width: 1600, height: 960 });
+    const desktop = await form.boundingBox(), wide = await reply.boundingBox();
+    assert.ok(wide.x >= desktop.x + desktop.width - 1 && wide.width > desktop.width);
+    await reply.scrollIntoViewIfNeeded();
+    await handoffPage.screenshot({ path: resolve(output, "build-reply-desktop.png") });
+    await handoffPage.setViewportSize({ width: 390, height: 844 });
+    const narrow = await form.boundingBox(), stacked = await reply.boundingBox();
+    assert.ok(stacked.y >= narrow.y + narrow.height - 1 && stacked.width <= 390);
+    await reply.scrollIntoViewIfNeeded();
+    await handoffPage.screenshot({ path: resolve(output, "build-reply-mobile.png") });
+    await handoffPage.setViewportSize(viewport);
+    return { binaryBytesMatched: true, selectedImagesReachedPlanningFixture: planningImages.length, textOnlyExecutionRefusedAttachedImages: true };
+  });
+  await check(handoffPage, "work-paired-lost-acknowledgement-recovery", async () => {
+    dropPairedAcknowledgement = true;
+    await handoffPage.reload({ waitUntil: "domcontentloaded" });
+    await handoffPage.getByRole("region", { name: "Build reply" }).getByText("Synthetic image-aware plan", { exact: true }).waitFor();
+    await handoffPage.getByRole("button", { name: "Remove image fixture-handoff.png" }).click();
+    await handoffPage.getByRole("textbox", { name: "Target Git branch" }).fill("");
+    await handoffPage.getByRole("navigation", { name: "Build sections" }).getByRole("button", { name: "Actions", exact: true }).click();
+    await handoffPage.getByText("Ready to queue", { exact: true }).waitFor();
+    await handoffPage.getByRole("navigation", { name: "Build sections" }).getByRole("button", { name: "Task", exact: true }).click();
+    await handoffPage.getByRole("button", { name: "Review build", exact: true }).click();
+    await handoffPage.getByText(/Build could not verify the outcome/).waitFor();
+    await handoffPage.getByRole("button", { name: "Open latest Build run" }).click();
+    await handoffPage.getByText("Synthetic recovered paired output", { exact: true }).waitFor();
+    const returnButton = handoffPage.getByRole("button", { name: "Return result to source chat" });
+    await returnButton.waitFor();
+    assert.equal(pairedRequest.agentId, "fixture-paired");
+    assert.equal(pairedRequest.projectId, "handoff-project");
+    assert.equal(pairedSubmissions, 1);
+    assert.ok(pairedReads >= 1);
+    return { pairedSubmissions, pairedReads, exactJob: pairedRequest.jobKey, automaticRetry: false, fixture: true };
+  });
+  await check(handoffPage, "provider-capability-inventory", async () => {
+    await navigate(handoffPage, "/?section=settings&pane=connections", "settings");
+    const inventory = handoffPage.getByRole("region", { name: "Provider capabilities" });
+    const xai = inventory.locator("details").filter({ has: handoffPage.getByText("xAI", { exact: true }) });
+    const gemini = inventory.locator("details").filter({ has: handoffPage.getByText("Gemini", { exact: true }) });
+    await xai.locator("summary").click();
+    await xai.getByText("Realtime audio", { exact: true }).waitFor();
+    await gemini.locator("summary").click();
+    await gemini.getByText("No confirmed answer receipt for this model.", { exact: true }).waitFor();
+    assert.match(await gemini.locator("summary").innerText(), /Unavailable for Chat/);
+    return { accountAvailabilitySeparateFromCapability: true, liveProviderCalls: 0 };
+  });
+  await check(handoffPage, "workspace-tool-pins-and-keyboard-focus", async () => {
+    const rail = handoffPage.getByRole("navigation", { name: "Workspace shortcuts" });
+    const customize = rail.getByRole("button", { name: "Customize shortcuts" });
+    const dialog = handoffPage.getByRole("dialog", { name: "Customize shortcuts" });
+    await customize.press("Enter");
+    await dialog.getByRole("checkbox", { name: "Tools", exact: true }).check();
+    await handoffPage.keyboard.press("Escape");
+    assert.equal(await rail.getByRole("button", { name: "Go to Tools" }).count(), 0);
+    assert.equal(await customize.evaluate(button => button === document.activeElement), true);
+    await customize.press("Enter");
+    await dialog.getByRole("checkbox", { name: "Tools", exact: true }).check();
+    await dialog.getByRole("checkbox", { name: "Dashboard", exact: true }).uncheck();
+    await dialog.getByRole("button", { name: "Save shortcuts" }).press("Enter");
+    await handoffPage.reload({ waitUntil: "domcontentloaded" });
+    await rail.getByRole("button", { name: "Go to Tools" }).waitFor();
+    assert.equal(await rail.getByRole("button", { name: "Go to Dashboard" }).count(), 0);
+    await rail.getByRole("button", { name: "Go to Tools" }).press("Enter");
+    await handoffPage.locator('#mind-workspace[data-view="tools"]').waitFor();
+    return { toggledPinsRetained: true, escapeRestoredFocus: true, canceledChangesDiscarded: true };
+  });
+  await handoffContext.close();
+
   const mobile = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, serviceWorkers: "block" });
-  const mobileTransport = await installVisualFixture(mobile, origin, "chat-interrupted", { workspace });
+  const mobileTransport = await installVisualFixture(mobile, origin, "chat-interrupted", { workspace, preserveOnReload: true });
   // A seeded message exists only after client hydration; the SSR home alone is not an interaction-ready signal.
   const phone = await mobile.newPage(); await phone.goto(origin + "/?section=chat&chat=long-a", { waitUntil: "domcontentloaded" }); await phone.locator(lastLongMessage).waitFor();
   await check(phone, "mobile-keyboard-viewport-and-draft", async () => {
@@ -257,7 +1061,10 @@ try {
         && pane && pane.scrollHeight - pane.scrollTop - pane.clientHeight <= 2;
     }, normalHeight);
     assert.equal(await message.inputValue(), draft);
-    return { normalHeight, keyboardHeight, input: "synthetic visual viewport resize", retainedDraftAndFocus: true };
+    const queueButton = await composer.getByRole("button", { name: "Queue", exact: true }).boundingBox();
+    const sendButton = await composer.getByRole("button", { name: "Send", exact: true }).boundingBox();
+    assert.ok(queueButton && sendButton && Math.abs(queueButton.y - sendButton.y) <= 3, "Queue and Send share the 390px composer row");
+    return { normalHeight, keyboardHeight, input: "synthetic visual viewport resize", retainedDraftAndFocus: true, queueAndSendShareRow: true };
   });
   await navigate(phone, "/?section=command", "command"); await phone.locator("#command-home").waitFor();
   await check(phone, "mobile-drawer-current-focus", async () => {
@@ -289,6 +1096,34 @@ try {
       await phone.screenshot({ path: resolve(output, `transition-mobile-${theme}.png`), fullPage: false });
     }
     return { themes: ["light", "dark"], savedLocally: true };
+  });
+  await check(phone, "settings-preset-and-shortcut-recovery", async () => {
+    const preset = phone.getByLabel("Theme preset");
+    await preset.selectOption("paper");
+    assert.equal(await preset.inputValue(), "paper");
+    await phone.getByRole("button", { name: "Apply appearance" }).click();
+    await phone.reload();
+    await preset.waitFor();
+    await phone.waitForFunction(() => document.documentElement.style.getPropertyValue("--color-accent") === "#7c3b24");
+    assert.equal(await preset.inputValue(), "paper");
+    await phone.getByRole("button", { name: "Restore default colors" }).click();
+    assert.equal(await preset.inputValue(), "device");
+    await preset.selectOption("ocean");
+    await phone.getByRole("button", { name: "Restore default colors" }).click();
+    assert.equal(await preset.inputValue(), "device");
+    const colors = phone.getByRole("region", { name: "Theme colors and fonts" });
+    await colors.locator("summary").click();
+    await colors.getByLabel("Font", { exact: true }).selectOption("Monospace");
+    assert.equal(await colors.getByRole("status").textContent(), "");
+    assert.equal(await preset.inputValue(), "custom");
+    const send = phone.getByLabel("Send message key");
+    await send.selectOption("modified");
+    await phone.getByRole("button", { name: "Keep current shortcut" }).click();
+    assert.equal(await send.inputValue(), "enter");
+    await send.selectOption("modified");
+    await phone.getByRole("button", { name: "Move shortcut" }).click();
+    assert.equal(await send.inputValue(), "modified");
+    return { savedPreset: "Reading room", shortcutConflict: "cancel and confirm" };
   });
   await check(phone, "page-reading-position", async () => {
     await navigate(phone, "/?section=settings&pane=data", "settings");
@@ -327,6 +1162,68 @@ try {
     return { buildModule: "rendered", voiceStudioModule: "rendered", providerOperations: "all intercepted; none invoked" };
   });
   report.mobileTransport = mobileTransport.summary(); await mobile.close();
+
+  const fleetContext = await browser.newContext({ viewport: { width: 1440, height: 900 }, serviceWorkers: "block" });
+  const fleetTransport = await installVisualFixture(fleetContext, origin, "chat-interrupted");
+  let fleetHealth = "healthy";
+  await fleetContext.route((url) => url.origin === origin && url.pathname === "/api/mind/dashboard/status", (route) => route.fulfill({
+    json: { ok: true, generatedAt: new Date().toISOString(),
+      bots: [{ id: "dashboard", name: "Synthetic fleet lane", health: fleetHealth, lock: null, branch: null, lastActivityAt: null, commits: [], notes: "", reason: "Synthetic development status" }],
+      commits: [], projects: null, constellations: [], constellationEdges: [], notionGraph: { available: false, pages: [], edges: [], botPageMap: {} },
+      sources: { gitOk: false, locksOk: false, commitsSource: "none" }, spend: { available: false } },
+  }));
+  const fleetPath = origin + "/?section=dashboard";
+  // Dashboard introduces a lazy dependency graph. Warm it before the timed poll.
+  const fleetWarmup = await fleetContext.newPage();
+  startupPage = fleetWarmup;
+  try {
+    await fleetWarmup.goto(fleetPath, { waitUntil: "domcontentloaded" });
+    await fleetWarmup.getByTestId("dash3d-graph-chrome").waitFor({ timeout: 15000 });
+  } catch {
+    await fleetWarmup.reload({ waitUntil: "domcontentloaded" });
+    await fleetWarmup.getByTestId("dash3d-graph-chrome").waitFor();
+  }
+  await fleetWarmup.close();
+  const fleetPage = await fleetContext.newPage();
+  startupPage = fleetPage;
+  await fleetPage.clock.install();
+  await fleetPage.goto(fleetPath, { waitUntil: "domcontentloaded" });
+  await check(fleetPage, "fleet-list-filtered-selection", async () => {
+    const chrome = fleetPage.getByTestId("dash3d-graph-chrome");
+    await chrome.getByRole("button", { name: "List", exact: true }).click();
+    await fleetPage.getByRole("heading", { name: "Fleet list", exact: true }).waitFor();
+    const list = fleetPage.getByRole("region", { name: "Operations list", exact: true });
+    const record = list.getByRole("button", { name: "Synthetic fleet lane, healthy", exact: true });
+    await chrome.getByRole("button", { name: "Filters", exact: true }).click();
+    await chrome.getByTestId("graph-filter-health-healthy").click();
+    await fleetPage.keyboard.press("Escape");
+    await record.press("Enter");
+    const detail = fleetPage.getByTestId("node-detail");
+    await detail.getByText("Synthetic fleet lane", { exact: true }).waitFor();
+    await fleetPage.waitForFunction(() => document.activeElement === document.querySelector('[data-testid="node-detail"]'));
+    fleetHealth = "blocked";
+    await fleetPage.clock.fastForward(21000);
+    const filterNotice = detail.getByText("Synthetic fleet lane is hidden by the current fleet filters. Its details remain open.", { exact: true });
+    await filterNotice.waitFor();
+    assert.equal(await detail.getByText("blocked", { exact: true }).count(), 1);
+    assert.equal(await detail.evaluate((element) => {
+      const list = element.closest('[data-fleet-list="1"]').querySelector(".dash3d-fleet-list");
+      return element.getBoundingClientRect().top >= list.getBoundingClientRect().bottom;
+    }), true);
+    await filterNotice.evaluate((element) => element.scrollIntoView({ block: "center", inline: "nearest" }));
+    assert.equal(await filterNotice.evaluate((element) => {
+      const position = element.getBoundingClientRect();
+      return element.contains(document.elementFromPoint(position.x + 8, position.y + position.height / 2));
+    }), true);
+    await fleetPage.screenshot({ path: resolve(output, "transition-fleet-filter-explanation.png") });
+    await detail.getByRole("button", { name: "Close details", exact: true }).press("Enter");
+    await fleetPage.waitForFunction(() => document.activeElement?.textContent?.trim() === "List");
+    assert.equal(await list.getByRole("button", { name: /^Synthetic fleet lane,/ }).count(), 0);
+    assert.equal(await chrome.getByRole("button", { name: "List", exact: true }).getAttribute("aria-pressed"), "true");
+    assert.equal(await fleetPage.locator("canvas").count(), 0);
+    return { statusChange: "healthy to blocked", selectedRecordRetained: true, filteredRecordExcluded: true, listIsExplicit: true, detailFocusAndReturn: true, transport: "synthetic snapshot" };
+  });
+  report.fleetTransport = fleetTransport.summary(); await fleetContext.close();
 
   for (const outcome of ["rejected", "accepted"]) {
     const videoContext = await browser.newContext({ viewport: { width: 1440, height: 1000 }, serviceWorkers: "block" });

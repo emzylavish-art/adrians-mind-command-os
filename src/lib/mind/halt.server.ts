@@ -89,6 +89,13 @@ async function applyDurableHalt(userId: string, on: boolean, expectedRevision?: 
       writeHaltFile(userId, on);
     }
     if (on) {
+      if (process.env.ADRIAN_MANAGED_BROWSER_URL) {
+        try {
+          const { stopOwnerManagedBrowser } = await import("./managed-browser.server.ts");
+          const { getSql } = await import("../db.ts");
+          await stopOwnerManagedBrowser(await getSql(), userId);
+        } catch { /* The durable halt still blocks requests when the worker is unreachable. */ }
+      }
       try { return { ok: true, halted: true, ...cancelOwnerJobsWithBuildSummary(userId) }; }
       catch { return { ok: true, halted: true, cancellation: { cancelled: 0, pending: 0, unknown: 1 }, buildCancellation: { queuedCancelled: 0, cancellationRequested: 0, unconfirmed: 1 } }; }
     }

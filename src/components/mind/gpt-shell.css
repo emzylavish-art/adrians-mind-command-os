@@ -863,6 +863,23 @@ html.eve-call-open body > *:not([data-testid="speak-stage"]) {
   padding: 0 0.8rem;
 }
 
+.speak-call__attachments {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: .375rem;
+}
+.speak-attachment {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding-inline-start: .75rem;
+  border: 1px solid rgb(255 255 255 / 18%);
+  border-radius: 999px;
+  font-size: .8125rem;
+}
+.speak-attachment > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.speak-attachment button { display: grid; place-items: center; min-width: 44px; min-height: 44px; }
 .speak-call__transcript {
   width: min(100% - 1.5rem, 52rem);
   max-width: none;
@@ -1416,15 +1433,15 @@ img.service-mark.on-tile {
 
 
 /* One row on the phone and the desktop. No letter stacks, no banner over the field. */
-.gpt-home form button {
+.gpt-home form button:not(.queue-add, .queue-view) {
   overflow: hidden !important;
   font-size: 0 !important;
   line-height: 0 !important;
   color: transparent !important;
 }
 
-.main-stage .gpt-home form button.text-sm,
-.main-stage .gpt-home form button {
+.main-stage .gpt-home form button.text-sm:not(.queue-add, .queue-view),
+.main-stage .gpt-home form button:not(.queue-add, .queue-view) {
   font-size: 0 !important;
   line-height: 0 !important;
   color: transparent !important;
@@ -1435,13 +1452,13 @@ img.service-mark.on-tile {
   padding: 0 !important;
 }
 
-.main-stage .gpt-home form button svg {
+.main-stage .gpt-home form button:not(.queue-add, .queue-view) svg {
   color: #fff !important;
   width: 1.15rem !important;
   height: 1.15rem !important;
 }
 
-.gpt-home form button svg {
+.gpt-home form button:not(.queue-add, .queue-view) svg {
   color: #fff !important;
 }
 
@@ -3546,10 +3563,43 @@ button[aria-pressed="true"] {
   opacity: 0.35 !important;
 }
 .suggestion-chip,
-[data-testid="answer-tabs"] .chat-button {
-  background: transparent;
-  border-color: transparent;
+.turn-assistant [role="tablist"] {
+  width: fit-content;
+  max-width: 100%;
+  column-gap: .25rem;
+  margin-block: .125rem .65rem;
 }
+.turn-assistant [role="tab"] {
+  min-height: 44px;
+  padding-inline: .85rem;
+  border: 0;
+  border-radius: .5rem;
+  background: transparent;
+  color: var(--mind-muted);
+  font-size: .8125rem;
+  font-weight: 600;
+}
+.turn-assistant [role="tab"][aria-selected="true"] {
+  background: color-mix(in srgb, currentColor 9%, transparent);
+  color: var(--mind-fg, inherit);
+  box-shadow: none;
+}
+.turn-assistant .md-ol { list-style: decimal outside; }
+.turn-assistant .md-ul { list-style: disc outside; }
+.turn-assistant .md-prose li + li { margin-block-start: .3em; }
+.turn-assistant .md-link {
+  text-decoration: underline;
+  text-underline-offset: .18em;
+}
+.turn-assistant [role="toolbar"] > details > summary {
+  display: inline-flex;
+  min-width: 44px;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  list-style: none;
+}
+.turn-assistant [role="toolbar"] > details > summary::-webkit-details-marker { display: none; }
 
 /* chat-first-paint-2026 */
 .gpt-home {

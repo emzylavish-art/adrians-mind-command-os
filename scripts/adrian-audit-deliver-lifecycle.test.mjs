@@ -3,6 +3,7 @@ import { memoryPolicyRevision, validateMemoryDispatch } from "../src/lib/mind/me
 import { effectiveContextPolicy } from "../src/lib/mind/memory/context-policy.ts";
 import { retrieveProjectPassages } from "../src/lib/mind/knowledge.ts";
 import { projectInstructionsForChat } from "../src/lib/mind/project-workspace.ts";
+import { captureWorkflow, learningEnabled, replyWorkflow } from "../src/lib/mind/workflow-skills.ts";
 import { collectAccountSkillApplications } from "../src/lib/mind/skill-activation.ts";
 import { loadModelControls } from "../src/lib/mind/model-tiers.ts";
 import { researchReferencesInText } from "../src/lib/mind/research-reports.ts";
@@ -14,7 +15,7 @@ import ts from "typescript";
 import { memoriesForChat, emptyWorkspace, workspaceForChat, pushAudit, pushUsage, sha256 } from "../src/lib/mind/workspace.ts";
 import { currentMemoryContext } from "../src/lib/mind/context-permission.ts";
 import { completedHistory, checkpointReply } from "../src/lib/mind/partial-reply.ts";
-import { chatTurnBody, isLogicRouteId, respondedRouteLabel } from "../src/lib/mind/logic-routes.ts";
+import { chatTurnBody, loadModeInstructions, isLogicRouteId, respondedRouteLabel } from "../src/lib/mind/logic-routes.ts";
 import { relevantMemories } from "../src/lib/mind/memory/relevant.ts";
 import { eveAccessNotes } from "../src/lib/mind/eve-access.ts";
 import { routeForBotChat } from "../src/lib/mind/bot-model.ts";
@@ -63,18 +64,18 @@ function fixture(overrides = {}) {
   const state = { busy: false, liveText: "", turnChat: null, failure: null, speak: {} };
   const listeners = new Map();
   const context = {
-    accountPending: false, account: { id: "owner-a" }, draftOwner: "owner-a", turnOwner: { current: "owner-a" },
+    accountPending: false, selectionLoaded: true, account: { id: "owner-a" }, draftOwner: "owner-a", turnOwner: { current: "owner-a" },
     turnInFlight: { current: false }, turnAbort: { current: null }, turnGen: { current: 0 }, deliverStoredUser: { current: false },
     wsRef: { current: ws }, providerChoice: "gemini", modelTier: "Fast", grokConfigured: false, grokModel: null,
     liveProviders: { gemini: true }, providerModels: { gemini: "selected-gemini-model" }, discovered: [], logicRoute: null, logicRoutes: [],
     composerEffort: "normal", consultModel: "grok", consultModules: [], failoverPolicy: "none", routingMode: "single", ADRIAN_MIND_IDENTITY: "fixture identity",
     memorySendRevision, checkMemorySendRevision, memoryPolicyRevision, validateMemoryDispatch, effectiveContextPolicy, retrieveProjectPassages,
-    projectInstructionsForChat, collectAccountSkillApplications, preferenceStorage: { getItem: () => null }, enabledSkills: {}, loadModelControls,
+    captureWorkflow, learningEnabled, replyWorkflow, projectInstructionsForChat, collectAccountSkillApplications, preferenceStorage: { getItem: () => null }, enabledSkills: {}, loadModelControls,
     currentFreeOnly: { current: false }, researchHistory: [], researchReferencesInText, memoriesForChat, withReplyVersion, failureKindForAction,
     ensureChatMedia: async (chat) => chat,
     snapshotImages, shouldBlockForEmergencyStop, routeForBotChat, isLogicRouteId, chosenProvider, failover, parseCustomProviderChoice,
     resolveSendPath: () => ({ path: "direct" }), completedHistory, resolveChatMessages, historyForDeliver,
-    currentMemoryContext, workspaceForChat, relevantMemories, eveAccessNotes, chatTurnBody, contextReceiptNotice,
+    currentMemoryContext, workspaceForChat, relevantMemories, eveAccessNotes, chatTurnBody, loadModeInstructions, contextReceiptNotice,
     historyTextForImages: (text) => text, // This fixture has no image inputs.
     checkpointReply, shouldStoreReply, STOPPED_REPLY, applyExecutionUsage, pushUsage, pushAudit, respondedRouteLabel,
     classifyHonestFailure, honestFailureAuditAction, normalizeClientFailureMessage, sha256, boundAbortSignal,
@@ -239,6 +240,10 @@ test("AA044/061: pending auth and failed preparation create no provider executio
   assert.equal(await pending.start(), null);
   assert.equal(pending.calls.network.length, 0);
   assert.equal(pending.context.wsRef.current.chats[0].messages.length, 0);
+  const loadingSelection = fixture({ selectionLoaded: false });
+  assert.equal(await loadingSelection.start(), null);
+  assert.equal(loadingSelection.calls.network.length, 0);
+  assert.equal(loadingSelection.context.wsRef.current.chats[0].messages.length, 0);
   const failed = fixture();
   failed.context.network = async (url, options) => { failed.calls.network.push({ url: String(url), method: options.method }); return Response.json({ error: "expired" }, { status: 401 }); };
   assert.equal(await failed.start(), null);

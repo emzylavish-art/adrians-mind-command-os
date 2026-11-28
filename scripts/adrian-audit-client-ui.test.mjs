@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import ts from "typescript";
-import { resolveShare, shareWriteForView, shareWriteDropsMissing, writeShareSearch, sameShareLocation, settingsPaneFromSearch, shareMissLabel } from "../src/lib/mind/app-location.ts";
+import { resolveShare, shareWriteForView, shareWriteDropsMissing, writeShareSearch, sameShareLocation, settingsPaneFromSearch, shareMissLabel, workLocation } from "../src/lib/mind/app-location.ts";
 import { prepareLibraryDocument, saveLibraryDocument } from "../src/lib/mind/library-documents.ts";
 import { addLocalFile } from "../src/lib/mind/workspace.ts";
 import { togglePin } from "../src/lib/mind/fleet.ts";
@@ -14,6 +14,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { ModalOverlay } from "../src/components/mind/modal-overlay.ts";
 
 const source = ts.createSourceFile("command-app.tsx", readFileSync(new URL("../src/components/mind/command-app.tsx", import.meta.url), "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+const queueSource = ts.createSourceFile("composer-queue.tsx", readFileSync(new URL("../src/components/mind/composer-queue.tsx", import.meta.url), "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
 const chatSource = ts.createSourceFile("chat-pane.tsx", readFileSync(new URL("../src/components/mind/chat-pane.tsx", import.meta.url), "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
 const cloudSource = ts.createSourceFile("cloud-picker.tsx", readFileSync(new URL("../src/components/mind/media/cloud-picker.tsx", import.meta.url), "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
 function find(file, predicate) {
@@ -42,12 +43,12 @@ test("AA006/007/008: actual location effects preserve first Back entry, Settings
   const listeners = new Map();
   const frames = [];
   let initialLocationResolved = false;
-  const state = { view: "command", settingsPane: null, activeId: null, shareProjectId: null, openFileId: null, shareBotId: null };
+  const state = { view: "command", settingsPane: null, activeId: null, shareProjectId: null, openFileId: null, shareBotId: null, workTarget: { projectId: null, runId: null } };
   const context = {
     ready: true, applyingLocation: { current: false }, locationHistory: { current: "replace" },
     wsRef: { current: { chats: [{ id: "thread-a" }, { id: "thread-b" }], projects: [], files: [], agents: [] } },
-    TITLES: { command: "Home", settings: "Settings", code: "Intelligence", chat: "Chat", files: "Library", connected: "Plugins" },
-    resolveShare, shareWriteForView, shareWriteDropsMissing, writeShareSearch, sameShareLocation, settingsPaneFromSearch, shareMissLabel,
+    TITLES: { command: "Home", settings: "Settings", code: "Intelligence", chat: "Chat", files: "Library", connected: "Plugins", build: "Build" },
+    resolveShare, shareWriteForView, shareWriteDropsMissing, writeShareSearch, sameShareLocation, settingsPaneFromSearch, shareMissLabel, workLocation,
     requestAnimationFrame: (work) => frames.push(work),
     window: { location, addEventListener: (type, callback) => listeners.set(type, callback), removeEventListener: (type) => listeners.delete(type), history: { state: null, replaceState: (_s, _t, path) => { entries[index] = path; updateLocation(path); } } },
     router: { history: {
@@ -56,6 +57,7 @@ test("AA006/007/008: actual location effects preserve first Back entry, Settings
     } },
     setInitialLocationResolved: (value) => { initialLocationResolved = value; },
     setViewState: (value) => { state.view = value; }, setSettingsPane: (value) => { state.settingsPane = value; },
+    setWorkTarget: (value) => { state.workTarget = value; },
     setActiveId: (value) => { state.activeId = value; }, setShareProjectId: (value) => { state.shareProjectId = value; },
     setShareBotId: (value) => { state.shareBotId = value; }, setOpenFileId: (value) => { state.openFileId = value; },
     setSpeakStageOpen: () => {}, setLibraryBand: () => {}, setLibraryProjectId: () => {}, setCardFocus: () => {}, setNotice: () => {},
@@ -83,6 +85,11 @@ test("AA006/007/008: actual location effects preserve first Back entry, Settings
   assert.equal(location.search, "?section=settings&pane=general");
   state.view = "connected"; write();
   assert.equal(location.search.includes("pane="), false);
+  state.view = "build"; state.workTarget = { projectId: "project-a", runId: "abcde123".repeat(4) }; write();
+  assert.match(location.search, /workProject=project-a/);
+  state.view = "code"; write();
+  assert.equal(location.search.includes("workRun="), false);
+  back(); assert.equal(state.workTarget.projectId, "project-a");
   cleanup();
 });
 
@@ -216,14 +223,11 @@ test("AA015: actual scheduler waits for identity and re-registers with the new o
 
 test("AA052: the actual queue removal button is keyboard-focusable, identifies its row and preserves other messages", () => {
   let queue = [{ id: "a", text: "first" }, { id: "b", text: "second" }, { id: "c", text: "third" }];
-  const button = find(chatSource, (n) => ts.isJsxElement(n) && n.openingElement.tagName.getText(chatSource) === "button" && n.openingElement.attributes.getText(chatSource).includes("Remove queued message"));
-  let stopped = false;
-  const rendered = expression(button, { React, item: queue[1], index: 1, onDropCue: (id) => { queue = dropCued(queue, id); } }, chatSource);
+  const button = find(queueSource, (n) => ts.isJsxElement(n) && n.openingElement.tagName.getText(queueSource) === "button" && n.openingElement.attributes.getText(queueSource).includes("Remove queued message"));
+  const rendered = expression(button, { React, item: queue[1], index: 1, onRemove: (id) => { queue = dropCued(queue, id); } }, queueSource);
   assert.equal(rendered.props.type, "button");
   assert.equal(rendered.props["aria-label"], "Remove queued message 2");
-  rendered.props.onPointerDown({ stopPropagation: () => { stopped = true; } });
   rendered.props.onClick();
-  assert.equal(stopped, true);
   assert.deepEqual(queue.map((item) => item.id), ["a", "c"]);
 });
 

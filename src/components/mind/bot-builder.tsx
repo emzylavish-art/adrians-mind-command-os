@@ -30,7 +30,6 @@ export function BotBuilder({ ws, setWs, onChat, onRun, onSchedule, onSelect, foc
   const [checked, setChecked] = useState(false);
   const [archiveId, setArchiveId] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
-  const [telegram, setTelegram] = useState("");
   useEffect(() => {
     if (focusBotId && ws.agents.some((bot) => bot.id === focusBotId && bot.archived)) setShowArchived(true);
   }, [focusBotId, ws.agents]);
@@ -49,6 +48,8 @@ export function BotBuilder({ ws, setWs, onChat, onRun, onSchedule, onSelect, foc
       chatProvider: bot.chatProvider ?? null,
       chatTier: bot.chatTier ?? null,
       knowledge: bot.knowledge ?? "",
+      knowledgeDocumentIds: [...(bot.knowledgeDocumentIds ?? [])],
+      telegramUsername: duplicate ? "" : bot.telegramUsername ?? "",
     } : blank());
     setError("");
     setChecked(false);
@@ -98,7 +99,7 @@ export function BotBuilder({ ws, setWs, onChat, onRun, onSchedule, onSelect, foc
             <legend className="font-semibold">Identity and instructions</legend>
             <label className="block text-sm">Bot name<input required maxLength={80} value={draft.name} autoFocus onChange={(event) => change({ name: event.target.value })} className={fields} /></label>
             <label className="block text-sm">Purpose <span className="text-muted">(optional)</span><input maxLength={400} value={draft.description} onChange={(event) => change({ description: event.target.value })} className={fields} /></label>
-            <label className="block text-sm">Telegram username <span className="text-muted">(optional)</span><input aria-label="Telegram bot username" maxLength={64} value={telegram} onChange={(event) => setTelegram(event.target.value)} placeholder="@yourbot" className={fields} /></label>
+            <label className="block text-sm">Telegram username <span className="text-muted">(optional)</span><input aria-label="Telegram bot username" maxLength={33} value={draft.telegramUsername ?? ""} onChange={(event) => change({ telegramUsername: event.target.value })} placeholder="@yourbot" className={fields} /></label>
             <label className="block text-sm">Instructions<textarea aria-describedby="bot-instruction-limit" maxLength={MAX_CUSTOM_PERSONALITY_CHARS} rows={4} value={draft.instructions} onChange={(event) => change({ instructions: event.target.value })} className={fields} /></label>
             <p id="bot-instruction-limit" className="text-xs text-muted">{draft.instructions.length} / {MAX_CUSTOM_PERSONALITY_CHARS} characters in a bot conversation.</p>
           </fieldset>
@@ -190,6 +191,7 @@ export function BotBuilder({ ws, setWs, onChat, onRun, onSchedule, onSelect, foc
                 <p className="break-words text-sm text-muted">{bot.description}</p>
                 <p className="mt-1 text-xs text-muted">Version {bot.version} · {bot.tools.length} run tools{scheduled > 0 ? ` · ${scheduled} enabled schedules` : ""}</p>
                 <p className="mt-1 text-xs text-muted">{bot.chatProvider || bot.chatTier ? `New chats use ${bot.chatProvider ?? "Chat’s provider"} · ${bot.chatTier ?? "Chat’s tier"}` : "New chats use Chat’s selected model."}</p>
+                {bot.telegramUsername && <p className="mt-1 text-xs text-muted">Telegram username · @{bot.telegramUsername}</p>}
                 {bot.knowledge ? <p className="mt-1 text-xs text-muted">New chats copy this note.</p> : null}
               </div>
             </div>

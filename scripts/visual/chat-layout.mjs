@@ -165,7 +165,10 @@ for (const [width, height, rootPercent] of viewports) {
         await page.locator("header.topbar").evaluate((element) => { element.scrollTop = 0; element.scrollLeft = 0; });
         let skillReceiptReview = { state: "not-applicable", reason: "No final assistant message in this case." };
         if (count > 1 && count % 2 === 0) {
-          const skillDetails = page.locator(`#message-turn-${count - 1} details`).filter({ has: page.locator("summary", { hasText: "Skills considered (4)" }) });
+          const turn = page.locator(`#message-turn-${count - 1}`);
+          const detailsToggle = turn.getByText("Response details", { exact: true });
+          await detailsToggle.click();
+          const skillDetails = turn.locator("details").filter({ has: page.locator(":scope > summary", { hasText: "Skills considered (4)" }) });
           const skillSummary = skillDetails.locator("summary");
           await skillSummary.click();
           assert(await skillDetails.evaluate((element) => element.open), "Skills considered did not open.");
@@ -173,6 +176,7 @@ for (const [width, height, rootPercent] of viewports) {
           await page.screenshot({ path: resolve(artifactDir, `${label}-${count}-skill-receipts.png`) });
           await skillSummary.click();
           assert(!(await skillDetails.evaluate((element) => element.open)), "Skills considered did not close.");
+          await detailsToggle.click();
         }
         const composer = page.locator("form.thread-composer");
         const message = composer.getByRole("textbox", { name: "Message", exact: true });
@@ -182,7 +186,7 @@ for (const [width, height, rootPercent] of viewports) {
         const editMs = performance.now() - interactionStart;
         assert(editMs < 5000, `Draft editing exceeded the 5s fixture ceiling (${editMs}ms).`);
         if (count >= 50) {
-          await page.locator('input[type=file][accept^="image/png"]').setInputFiles({
+          await page.getByTestId('composer-image-input').setInputFiles({
             name: "release-" + "long-file-name-".repeat(12) + "review.png",
             mimeType: "image/png",
             buffer: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVQI12NgAAIAAAUAAWJVMogAAAAASUVORK5CYII=", "base64"),

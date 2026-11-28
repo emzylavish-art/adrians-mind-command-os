@@ -3,18 +3,22 @@ import { machineRequired } from "./account-workspace.ts";
 import { requireUserId } from "../../auth/verify.server";
 import { assertSameOrigin } from "../connectors/oauth-csrf";
 import { haltIsOn } from "../halt.server";
-import { enqueueJob, listJobEvents, onlineAgents, readJob } from "../pc-pairing/coordination.server.ts";
+import { enqueueJob, listAgents, listJobEvents, onlineAgents, readJob } from "../pc-pairing/coordination.server.ts";
 import { readCodingFileSnapshot } from "./hosted/file-receipts.ts";
 import { HOSTED_BUILD_MODEL, adrianBuildCommand, adrianHostedWorkspace, closeHostedCodingSession, packageLabel, resolveBuildWorkspace, runCodingTurn, runHostedPrompt, type CodingMode } from "./hosted/acp-client.ts";
-import { snapshotHostedWorkspace } from "./hosted/shell.server.ts";
+import { readHostedGitBranch, snapshotHostedWorkspace } from "./hosted/shell.server.ts";
 import { recordKimiAttempt } from "./persist.ts";
 import { readBuildSourceReceipt } from "./source-receipt.ts";
 import { createHash } from "node:crypto";
 import { buildRuntimeUsage, observeBuildRuntime, recordUsageObservation, type UsageRecorder } from "../usage-observation.server.ts";
 import { prepareBuildTask } from "./build-guidance.ts";
-import { pairedBuildPayload, pairedBuildReceipt } from "./paired-build-receipt.ts";
+import { pairedBuildPayload, pairedBuildReceipt, pairedBuildReviewScope, pairedBuildRunResult } from "./paired-build-receipt.ts";
 import { dispatchContext, reserveDispatchAttempt, runSettledDispatch } from "../dispatch-attempt.ts";
 import { resolveXaiInferenceApiKey } from "../media/xai-key.ts";
+import { buildBranchName } from "./build-scope.ts";
+import { isShareId } from "../app-location.ts";
+import { buildArtifactName } from "./build-artifact.ts";
+import { buildArtifactBytes } from "./build-artifact.server.ts";
 
 const MAX_CWD = 500;
 
@@ -50,7 +54,7 @@ export async function handleKimiSession(request: Request, deps: { recordUsage?: 
     if (!origin.ok) return json({ ok: false, error: origin.error }, 403);
     try {
       const ownerId = await ownerIdFromRequest(request);
-      const body = (await request.json().catch(() => ({}))) as { prompt?: unknown; skillApplications?: unknown; cwd?: unknown; mode?: unknown; resumeSessionId?: unknown; fork?: unknown; action?: unknown; agentId?: unknown; jobKey?: unknown; operationId?: unknown; taskId?: unknown; projectId?: unknown; sourceReceipt?: unknown };
+      const body = (await request.json().catch(() => ({}))) as { prompt?: unknown; modeInstruction?: unknown; skillApplications?: unknown; cwd?: unknown; mode?: unknown; resumeSessionId?: unknown; fork?: unknown; action?: unknown; agentId?: unknown; jobKey?: unknown; operationId?: unknown; taskId?: unknown; projectId?: unknown; sourceChatId?: unknown; sourceReceipt?: unknown; expectedBranch?: unknown; artifactName?: unknown };
       if ((body as { action?: unknown }).action === "close") {
         if (ownerId !== "dev-user") return json({ ok: false, error: machineRequired }, 409);
         const sessionId = typeof body.resumeSessionId === "string" ? body.resumeSessionId.trim().slice(0, 80) : "";
@@ -58,31 +62,52 @@ export async function handleKimiSession(request: Request, deps: { recordUsage?: 
         return json({ ok: true, closed: closeHostedCodingSession(sessionId), sessionId });
       }
       if (await haltIsOn(ownerId)) return json({ ok: false, error: "Emergency stop is on. No Kimi session was queued." }, 403);
-      const prepared = prepareBuildTask(body.prompt, body.skillApplications);
+      const prepared = prepareBuildTask(body.prompt, body.skillApplications, body.modeInstruction);
       if (!prepared.ok) return json({ ok: false, error: prepared.error }, 400);
       const prompt = prepared.prompt;
       const requestedCwd = typeof body.cwd === "string" && body.cwd.trim() ? body.cwd.trim().slice(0, MAX_CWD) : undefined;
       const mode = body.mode === "plan" || body.mode === "auto" || body.mode === "yolo" || body.mode === "default" ? body.mode as CodingMode : undefined;
       const resumeSessionId = typeof body.resumeSessionId === "string" ? body.resumeSessionId.trim().slice(0, 80) : "";
+      const expectedBranch = body.expectedBranch;
+      if (expectedBranch !== undefined && !buildBranchName(expectedBranch)) return json({ ok: false, error: "Invalid target branch. Nothing was started." }, 400);
       const agents = await onlineAgents(ownerId);
       if (body.agentId === undefined && agents.length > 1) return json({ ok: false, error: "Choose the computer for this Build task. No alternate was selected." }, 409);
-      const agent = body.agentId === "hosted" ? undefined : body.agentId === undefined ? agents[0] : agents.find((item) => item.id === body.agentId);
+      const onlineAgent = body.agentId === "hosted" ? undefined : body.agentId === undefined ? agents[0] : agents.find((item) => item.id === body.agentId);
+      const savedAgent = !onlineAgent && expectedBranch && typeof body.agentId === "string" && body.agentId !== "hosted"
+        ? (await listAgents(ownerId)).find(item => item.id === body.agentId && item.capabilities?.codingRuntime === true) : undefined;
+      const agent = onlineAgent || savedAgent;
       const sourceReceipt = readBuildSourceReceipt(body.sourceReceipt);
       if (body.sourceReceipt !== undefined && !sourceReceipt) return json({ ok: false, error: "The source revision receipt is invalid. Nothing was started." }, 400);
       if (sourceReceipt && (sourceReceipt.workspace !== (agent?.id || "hosted") || sourceReceipt.cwd !== (requestedCwd || ""))) return json({ ok: false, error: "The reviewed source belongs to a different execution workspace. Review it again." }, 409);
       if (body.agentId !== undefined && body.agentId !== "hosted" && !agent) return json({ ok: false, error: "The selected Build PC is offline. Reconnect it before submitting." }, 409);
-      if (agent && !buildRuntimeCapabilities(ownerId, [agent])[1]?.coding) return json({ ok: false, error: "The selected computer has not reported an available coding runtime. Reconnect or update it before submitting." }, 409);
+      if (onlineAgent && !buildRuntimeCapabilities(ownerId, [onlineAgent])[1]?.coding && !(expectedBranch && onlineAgent.capabilities?.codingRuntime === true)) {
+        return json({ ok: false, error: "The selected computer has not reported an available coding runtime. Reconnect or update it before submitting." }, 409);
+      }
       if (body.jobKey !== undefined && (typeof body.jobKey !== "string" || !/^[a-f0-9]{32}$/.test(body.jobKey))) return json({ ok: false, error: "Invalid job ID." }, 400);
+      if (expectedBranch && resumeSessionId) return json({ ok: false, error: "A target branch requires a new coding session." }, 409);
+      if (expectedBranch && agent && (!sourceReceipt?.files.length || sourceReceipt.policy !== "saved" || !requestedCwd || !body.jobKey)) {
+        return json({ ok: false, error: "Review at least one saved source file before queuing a branch-checked Build job." }, 409);
+      }
+      const artifactName = body.artifactName === undefined ? undefined : body.artifactName;
+      if (artifactName !== undefined) {
+        if (!buildArtifactName(artifactName) || (body.projectId != null && (typeof body.projectId !== "string" || !isShareId(body.projectId)))) {
+          return json({ ok: false, error: "Enter a supported filename and valid Work project for the output." }, 400);
+        }
+        if (!agent || !requestedCwd || !sourceReceipt || !body.jobKey) {
+          return json({ ok: false, error: "A saved output requires a specific paired checkout and a reviewed Build job." }, 409);
+        }
+      }
       if (!agent) {
         if (ownerId !== "dev-user") return json({ ok: false, executed: false, error: machineRequired }, 409);
         if (!resolveXaiInferenceApiKey()) return json({ ok: false, executed: false, error: "The hosted Build provider is not configured. Nothing was sent." }, 503);
         const cwd = resolveBuildWorkspace(requestedCwd);
+        if (expectedBranch && await readHostedGitBranch(cwd) !== expectedBranch) return json({ ok: false, executed: false, error: "The active Git branch could not be verified against the target. Check the workspace and branch before running." }, 409);
         for (const file of sourceReceipt?.files ?? []) {
           const current = readCodingFileSnapshot(cwd || adrianHostedWorkspace(), file.path);
           if (!current.ok || !current.exists || createHash("sha256").update(current.content).digest("hex") !== file.sha256) return json({ ok: false, error: "A reviewed source file changed or is unavailable. Review it before running." }, 409);
         }
         const context = dispatchContext({ operationId: body.operationId || body.jobKey || request.headers.get("x-mind-operation-id"), taskId: body.taskId, projectId: body.projectId,
-          provider: "xai", model: HOSTED_BUILD_MODEL, stage: "hosted-build", args: { prompt, cwd, mode, resumeSessionId, sourceReceipt, fork: body.fork === true }, textOnly: false });
+          provider: "xai", model: HOSTED_BUILD_MODEL, stage: "hosted-build", args: { prompt, cwd, mode, resumeSessionId, sourceReceipt, expectedBranch, fork: body.fork === true }, textOnly: false });
         const reserved = await reserveDispatchAttempt(ownerId, context);
         if (!reserved.ok) return json({ ok: false, executed: false, error: reserved.error, approvalId: reserved.approvalId }, reserved.status);
         if (mode || resumeSessionId || body.fork === true) {
@@ -114,6 +139,7 @@ export async function handleKimiSession(request: Request, deps: { recordUsage?: 
             clientCalls: turn.clientCalls || [],
             toolReceipts: turn.toolReceipts || [],
             operationId: turn.operationId,
+            verifiedBranch: expectedBranch,
             outputComplete: turn.outputComplete,
             outputCharacters: turn.outputCharacters,
             verification: turn.verification,
@@ -138,6 +164,7 @@ export async function handleKimiSession(request: Request, deps: { recordUsage?: 
           loginRequired: hosted.status === "authentication_required",
           error: accepted ? undefined : hosted.error || "The coding package did not accept the task. No extra login is requested.",
           runtime: hosted.status,
+          verifiedBranch: expectedBranch,
           version: hosted.version,
           agent: hosted.agentName,
           output: hosted.output || "",
@@ -145,6 +172,9 @@ export async function handleKimiSession(request: Request, deps: { recordUsage?: 
           package: packageLabel(hosted.command),
         }, accepted ? 200 : hosted.status === "not_configured" ? 503 : 409);
       }
+      const sourceScope = body.sourceChatId === undefined ? null : pairedBuildReviewScope(body.projectId, body.sourceChatId, body.jobKey);
+      if (body.sourceChatId !== undefined && !sourceScope) return json({ ok: false, error: "The Build result link has an invalid chat, project or run. Nothing was started." }, 400);
+      const reviewScope = sourceScope ?? (artifactName ? { projectId: body.projectId ?? null, source: null } : null);
       const job = await enqueueJob({
         jobKey: typeof body.jobKey === "string" ? body.jobKey : undefined,
         ownerId,
@@ -152,7 +182,7 @@ export async function handleKimiSession(request: Request, deps: { recordUsage?: 
         kind: "kimi-acp",
         command: "kimi acp",
         confirm: false,
-        payload: { ...pairedBuildPayload(prompt, prepared.skillReceipts, requestedCwd), sourceReceipt },
+        payload: { ...pairedBuildPayload(prompt, prepared.skillReceipts, requestedCwd), sourceReceipt, ...(expectedBranch ? { expectedBranch } : {}), ...(reviewScope ? { reviewScope } : {}), ...(artifactName ? { artifactName } : {}) },
       });
       await observePairedJob(ownerId, job, record);
       return json({
@@ -174,10 +204,33 @@ export async function handleKimiSession(request: Request, deps: { recordUsage?: 
   if (request.method === "GET") {
     try {
       const ownerId = await ownerIdFromRequest(request);
-      const jobId = new URL(request.url).searchParams.get("jobId") || "";
+      const params = new URL(request.url).searchParams;
+      const jobId = params.get("jobId") || "";
       const job = await readJob(jobId);
       if (!job || job.ownerId !== ownerId || job.kind !== "kimi-acp") return json({ ok: false, error: "Kimi job not found." }, 404);
-      await observePairedJob(ownerId, job, record);
+      const reviewProject = params.get("reviewProject");
+      const review = reviewProject === null ? null : pairedBuildRunResult(job, ownerId, reviewProject || null);
+      if (reviewProject !== null && !review) return json({ ok: false, error: "Build run receipt not found for this project." }, 404);
+      if (params.get("artifact") === "1") {
+        const artifact = review?.receipt?.artifact;
+        const bytes = artifact?.status === "saved" ? buildArtifactBytes(job.buildArtifact) : null;
+        if (!bytes || !artifact) return json({ ok: false, error: "Build output is unavailable." }, 404);
+        return new Response(new Uint8Array(bytes), { headers: {
+          "content-type": "application/octet-stream", "content-disposition": 'attachment; filename="' + artifact.name + '"',
+          "cache-control": "private, no-store", "x-content-type-options": "nosniff",
+        } });
+      }
+      if (!review) await observePairedJob(ownerId, job, record);
+      const sourceReceipt = readBuildSourceReceipt(job.payload?.sourceReceipt);
+      const events = await listJobEvents(ownerId, job.id);
+      const sourceDigest = sourceReceipt?.files.length ? createHash("sha256").update(JSON.stringify(sourceReceipt)).digest("hex") : null;
+      const revisionVerified = sourceDigest !== null && events.some(event => event.type === "source_verified"
+        && event.payload.sourceDigest === sourceDigest && event.payload.fileCount === sourceReceipt?.files.length
+        && (job.payload?.expectedBranch === undefined || event.payload.branch === job.payload.expectedBranch));
+      if (review) {
+        if (review.receipt && revisionVerified && buildBranchName(job.payload?.expectedBranch)) review.receipt.verifiedBranch = job.payload.expectedBranch;
+        return json({ ok: true, result: review });
+      }
       return json({
         ok: true,
         job: {
@@ -188,8 +241,8 @@ export async function handleKimiSession(request: Request, deps: { recordUsage?: 
           output: job.output || "",
           error: job.error || "",
         },
-        sourceReceipt: readBuildSourceReceipt(job.payload?.sourceReceipt), revisionVerified: false,
-        events: await listJobEvents(ownerId, job.id),
+        sourceReceipt, revisionVerified,
+        events,
         receipt: pairedBuildReceipt(job, ownerId),
       });
     } catch (error) {

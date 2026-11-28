@@ -19,6 +19,7 @@ import {
   type LoginCallbackFailureKind,
   type LoginProviderId,
 } from "@/lib/auth/login-providers";
+import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { SignInGuide } from "@/components/mind/first-steps";
 
 const LazyMonoMotion = lazy(() =>
@@ -29,6 +30,7 @@ type LoginSearch = {
   next?: string;
   error?: string;
   mode?: Mode;
+  recover?: string;
 };
 
 export const Route = createFileRoute("/login")({
@@ -36,6 +38,7 @@ export const Route = createFileRoute("/login")({
     next: typeof search.next === "string" ? search.next : undefined,
     error: typeof search.error === "string" ? search.error : undefined,
     mode: search.mode === "sign-up" ? "sign-up" : undefined,
+    recover: search.recover === "1" || search.recover === 1 ? "1" : undefined,
   }),
   loader: async () => {
     try {
@@ -44,7 +47,7 @@ export const Route = createFileRoute("/login")({
       return { checkFailed: true as const, configured: false, user: null, brokerConfigured: false, supabaseOAuthProviders: [] };
     }
   },
-  component: Login,
+  component: LoginEntry,
 });
 
 type Mode = "sign-in" | "sign-up";
@@ -178,7 +181,108 @@ const oauthButtons: {
   { id: "x", label: "Continue with X", icon: XIcon },
 ];
 
-function Login() {
+function LoginEntry() {
+  const session = useCurrentUserState();
+  const [authenticatorChallenge, setAuthenticatorChallenge] = useState(false);
+  const [passwordRecovery, setPasswordRecovery] = useState(false);
+  const [recoveryToken, setRecoveryToken] = useState("");
+  const search = Route.useSearch();
+  const data = Route.useLoaderData();
+  const destination = safeRedirectPath(search.next);
+  const next = /^\/(?:login|auth)(?:[/?#]|$)/.test(destination) ? "/dashboard" : destination;
+  const recoveryConfigured = "accountRecoveryConfigured" in data && data.accountRecoveryConfigured === true;
+  useEffect(() => {
+    if (!recoveryConfigured) return;
+    const readToken = () => {
+      const token = new URLSearchParams(window.location.hash.slice(1)).get("reset");
+      if (!token || !/^[A-Za-z0-9_-]{20,100}$/.test(token)) return;
+      setRecoveryToken(token);
+      setPasswordRecovery(true);
+    };
+    readToken();
+    window.addEventListener("hashchange", readToken);
+    return () => window.removeEventListener("hashchange", readToken);
+  }, [recoveryConfigured, search.recover]);
+  useEffect(() => {
+    if (recoveryToken) window.history.replaceState(window.history.state, "", window.location.pathname + window.location.search);
+  }, [recoveryToken]);
+  const authenticated = authEnabled ? Boolean(session.user && !session.user.isDevFallback) : Boolean(data.user);
+  useEffect(() => {
+    if (authenticated && !search.error && !passwordRecovery && !new URLSearchParams(window.location.hash.slice(1)).has("reset")) {
+      window.location.replace(next);
+    }
+  }, [authenticated, next, passwordRecovery, search.error]);
+
+  if (recoveryConfigured && passwordRecovery) return <PasswordRecovery token={recoveryToken} back={() => {
+    setRecoveryToken("");
+    setPasswordRecovery(false);
+  }} />;
+  if (session.isPending || authenticated || session.error) {
+    return <main className="grid min-h-screen place-items-center bg-bg p-4"><AuthCard>
+      {session.error ? <><p role="alert">{session.error}</p>
+        <button className="min-h-11 underline" type="button" onClick={session.retry}>Retry account check</button>
+        <a href="/dashboard" className="block min-h-11 underline">Open account recovery</a></> :
+        authenticated ? <><AuthBrand title="Signed in" subtitle={search.error ? loginErrorBannerFromSearch(search.error) ?? "Your existing session is active." : "Opening your workspace…"} />
+          <a className="mt-3 block min-h-11 underline" href={next}>Continue to workspace</a></> :
+          <p role="status">Checking your account…</p>}
+    </AuthCard></main>;
+  }
+  return <Login authenticatorChallenge={authenticatorChallenge} setAuthenticatorChallenge={setAuthenticatorChallenge}
+    openRecovery={recoveryConfigured ? () => setPasswordRecovery(true) : undefined} />;
+}
+
+function PasswordRecovery({ token, back }: { token: string; back: () => void }) {
+  const [input, setInput] = useState("");
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (busy || done) return;
+    setBusy(true);
+    setError("");
+    try {
+      const result = token
+        ? await authClient.resetPassword({ token, newPassword: input })
+        : await authClient.requestPasswordReset({ email: input.trim() });
+      if (result.error || result.data?.status !== true) throw Error(result.error?.message || "Account recovery could not be completed.");
+      setDone(true);
+      setInput("");
+      setMessage(token ? "Password changed. Sign in with your new password."
+        : "If this email is eligible for password recovery, check its inbox for a reset link.");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Account recovery could not be completed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return <main className="grid min-h-screen place-items-center bg-bg p-4"><AuthCard>
+    <AuthBrand title={token ? "Set a new password" : "Recover your password"} />
+    {!done && <form className="mt-4 grid gap-3" onSubmit={submit}>
+      <label className="grid gap-1 text-sm">
+        {token ? "New password" : "Verified account email"}
+        <input required className={inputClassName} type={token ? "password" : "email"} value={input}
+          autoComplete={token ? "new-password" : "email"} minLength={token ? 8 : undefined} maxLength={token ? 128 : 254}
+          disabled={busy} onChange={event => setInput(event.target.value)} />
+      </label>
+      <button type="submit" className="min-h-11 rounded-panel bg-accent px-4 font-semibold text-accent-ink" disabled={busy}>
+        {token ? "Change password" : "Request a reset link"}
+      </button>
+    </form>}
+    {message && <p role="status" className="mt-3">{message}</p>}
+    {error && <p role="alert" className="mt-3">{error}</p>}
+    <button type="button" className="mt-2 min-h-11 underline" disabled={busy} onClick={back}>Back to sign in</button>
+  </AuthCard></main>;
+}
+
+function Login({ authenticatorChallenge, setAuthenticatorChallenge, openRecovery }: {
+  authenticatorChallenge: boolean;
+  setAuthenticatorChallenge: (pending: boolean) => void;
+  openRecovery?: () => void;
+}) {
   const data = Route.useLoaderData();
   const search = Route.useSearch();
   const next = safeRedirectPath(search.next);
@@ -188,6 +292,8 @@ function Login() {
   const [mode, setMode] = useState<Mode>(search.mode ?? "sign-in");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [useRecoveryCode, setUseRecoveryCode] = useState(false);
+  const [authenticatorCode, setAuthenticatorCode] = useState("");
   const [busy, setBusy] = useState(false);
   // Seed red banner from real /auth/callback ?error= (auth vs server); ignore bare noise.
   const [banner, setBanner] = useState<string | null>(
@@ -197,6 +303,43 @@ function Login() {
     () => loginCallbackFailureKind(search.error),
   );
   const [info, setInfo] = useState<string | null>(null);
+
+  async function onPasskey() {
+    if (busy) return;
+    setBusy(true);
+    setBanner(null);
+    setBannerKind(null);
+    try {
+      const result = await authClient.signIn.passkey();
+      if (result.error) throw Error(result.error.message || "Passkey sign-in did not complete.");
+      window.location.assign(next);
+    } catch (error) {
+      setBanner(error instanceof Error ? error.message : "Passkey sign-in did not complete.");
+      setBannerKind("auth_error");
+    } finally { setBusy(false); }
+  }
+
+  async function onAuthenticatorSubmit(event: FormEvent) {
+    event.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    setBanner(null);
+    setBannerKind(null);
+    try {
+      const code = authenticatorCode.trim();
+      const result = useRecoveryCode
+        ? await authClient.twoFactor.verifyBackupCode({ code })
+        : await authClient.twoFactor.verifyTotp({ code });
+      if (result.error || !result.data) throw Error(result.error?.message || "Code verification failed.");
+      window.location.assign(next);
+    } catch (error) {
+      setBanner(error instanceof Error ? error.message : "Code verification failed.");
+      setBannerKind("auth_error");
+    } finally {
+      setAuthenticatorCode("");
+      setBusy(false);
+    }
+  }
 
   // Drop ?error= after mount so a refresh/stale restore does not re-paint the banner.
   useEffect(() => {
@@ -234,6 +377,12 @@ function Login() {
               ? "That email and password do not match. If this is your first time, switch to Sign up."
               : message,
           );
+          return;
+        }
+        if (result.data && "twoFactorRedirect" in result.data && result.data.twoFactorRedirect === true) {
+          setPassword("");
+          setUseRecoveryCode(false);
+          setAuthenticatorChallenge(true);
           return;
         }
         window.location.assign(next);
@@ -444,7 +593,28 @@ function Login() {
           </div>
         )}
 
-        <form className="mt-5 flex flex-col gap-3.5" onSubmit={onPasswordSubmit}>
+        {!authenticatorChallenge && mode === "sign-in" && "passkeysConfigured" in data && data.passkeysConfigured && <button type="button"
+          className="mt-4 min-h-11 w-full rounded-panel border border-line px-3 text-sm" disabled={busy}
+          onClick={() => void onPasskey()}>Sign in with a passkey</button>}
+
+        {authenticatorChallenge ? <form className="mt-5 flex flex-col gap-3.5" onSubmit={onAuthenticatorSubmit}>
+          <label className="grid gap-1 text-sm">
+            {useRecoveryCode ? "Recovery code" : "Authenticator code"}
+            <input className={inputClassName} value={authenticatorCode} onChange={event => setAuthenticatorCode(event.target.value)}
+              inputMode={useRecoveryCode ? "text" : "numeric"} autoComplete="one-time-code" maxLength={useRecoveryCode ? 64 : 6}
+              pattern={useRecoveryCode ? undefined : "[0-9]{6}"} required disabled={busy} />
+          </label>
+          <button type="submit" disabled={busy} className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink">Verify and sign in</button>
+          <button type="button" disabled={busy} className="min-h-11 text-sm underline" onClick={() => {
+            setAuthenticatorCode("");
+            setUseRecoveryCode(!useRecoveryCode);
+          }}>{useRecoveryCode ? "Use authenticator code" : "Use a recovery code"}</button>
+          <button type="button" disabled={busy} className="min-h-11 text-sm underline" onClick={() => {
+            setAuthenticatorCode("");
+            setAuthenticatorChallenge(false);
+            setBanner(null);
+          }}>Back to password sign-in</button>
+        </form> : <form className="mt-5 flex flex-col gap-3.5" onSubmit={onPasswordSubmit}>
           <label className="block text-sm">
             <span className="text-[13px] font-medium text-muted">Email</span>
             <input
@@ -494,7 +664,9 @@ function Login() {
               "Create account"
             )}
           </button>
-        </form>
+        </form>}
+        {!authenticatorChallenge && mode === "sign-in" && openRecovery &&
+          <button type="button" onClick={openRecovery} disabled={busy} className="mt-2 min-h-11 text-sm underline">Forgot password?</button>}
 
         <div className="my-5 flex items-center gap-3 text-[11px] font-medium uppercase tracking-[0.12em] text-muted">
           <span className="h-px flex-1 bg-line" />

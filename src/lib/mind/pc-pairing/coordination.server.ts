@@ -123,6 +123,7 @@ export async function claimNextJob(agentId: string): Promise<PcJob | null> {
   const offered = await offerNextJob(agentId);
   if (!offered) return null;
   const payload = offered.payload;
+  if (offered.kind === "kimi-acp" && (payload?.expectedBranch || payload?.artifactName)) return null;
   if (offered.kind === "file-op" && (payload?.expectedContent !== undefined || payload?.expectedMissing === true || payload?.expectedRevision !== undefined)) {
     await mutation(offered.id, (job) => job.status === "queued" ? { status: "error", error: "Update the paired Companion before making reviewed changes. Nothing was executed." } : null);
     return null;

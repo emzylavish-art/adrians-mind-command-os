@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { runInNewContext } from "node:vm";
 import ts from "typescript";
+import { snapshotImages } from "./retry-fidelity.ts";
+import { resolveSendPath } from "./composer-modes.ts";
 import { paletteHits, paletteShortcut } from "./palette.ts";
 import { createChat, emptyWorkspace, normalizeWorkspace, updateChatCustomPersonality, updateChatPersonality } from "./workspace.ts";
 import { normalizeCustomPersonality, personalityInstruction } from "./personalities/index.ts";
@@ -119,7 +121,7 @@ test("AA017: actual Speak answer attribution is returned by that turn and cannot
   const handler = actualNode((node) => ts.isFunctionDeclaration(node) && node.name?.text === "speakChatTurn");
   const made = createChat(emptyWorkspace(), { memory: "off", temporary: false, autonomy: "ask", projectId: null });
   let provideReceipt = true;
-  const context: any = { exports: {}, activeId: made.chat.id, preferenceStorage: { getItem: () => null }, wsRef: { current: made.ws }, speakStylePersonality: () => "assistant", localStorage: { getItem: () => null }, parseCreateBot: () => false,
+  const context: any = { exports: {}, view: "chat", voiceSession: { current: null }, draftScope: "fixture", persistDraft: false, pendingImagesRef: { current: [] }, snapshotImages, composerEffort: "auto", resolveSendPath, activeId: made.chat.id, preferenceStorage: { getItem: () => null }, wsRef: { current: made.ws }, speakStylePersonality: () => "assistant", localStorage: { getItem: () => null }, parseCreateBot: () => false,
     deliver: async (_chat: unknown, _text: string, _source: unknown, _resume: boolean, _images: unknown, options: { onReply: (receipt: unknown) => void }) => { if (provideReceipt) options.onReply({ provider: "Gemini", model: "fixture-reported" }); return "fixture answer"; } };
   runInNewContext(ts.transpileModule(`${handler}\nexports.speakChatTurn = speakChatTurn;`, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText, context);
   const first = await context.exports.speakChatTurn("one", { stay: true });

@@ -30,13 +30,17 @@
  * a verified id via `@/lib/auth/middleware`.
  */
 import { betterAuth } from "better-auth";
-import { bearer, genericOAuth } from "better-auth/plugins";
+import { passkey } from "@better-auth/passkey";
+import { bearer, genericOAuth, twoFactor } from "better-auth/plugins";
 import { tanstackStartCookies } from "better-auth/tanstack-start";
 import { getCookie } from "@tanstack/react-start/server";
 import { randomBytes } from "node:crypto";
 import { ensureDbReady, getPglite } from "../db";
 import { resolveDatabaseUrl } from "../env.server.ts";
 import { emailAndPasswordEnabled } from "./email-password";
+import { passkeyConfiguration } from "./passkey-policy";
+import { accountMailConfiguration } from "./account-mail";
+import { sendAccountMail } from "./account-mail.server";
 import { postgresPool } from "./pg-pool";
 import { vercelRuntimeHosts } from "./runtime-origins";
 import { GATE_PROVIDER_ID, gateIdentitySessions } from "./gate-session.server";
@@ -96,6 +100,8 @@ export const authConfigured =
 // preview allowlist, which makes the OAuth `redirect_uri` the concrete preview URL
 // the broker's preview client accepts.
 const explicitBaseURL = env("BETTER_AUTH_URL");
+const passkeys = passkeyConfiguration(process.env);
+const accountMail = accountMailConfiguration(process.env);
 // Explicit `string[]` (not a readonly tuple) — Better Auth's DynamicBaseURLConfig
 // requires a mutable `allowedHosts: string[]`.
 const previewAllowedHosts: string[] = [...PREVIEW_ALLOWED_HOSTS];
@@ -215,14 +221,39 @@ function createAuth() {
     },
   },
 
-  // Cache the session in the short-lived signed `session_data` cookie so reads
-  // (incl. the client's `/get-session`) skip the DB — this shrinks the "loading"
-  // window and reduces auth flicker. See the `auth` skill for the full
-  // flicker-prevention guidance (gate on `isPending`; SSR the session).
-  session: { cookieCache: { enabled: true, maxAge: 300 } },
+  // A remote revocation must take effect on the next session read, including the account UI.
+  session: { cookieCache: { enabled: false } },
 
   // Local email/password — toggled only via `./email-password` (not a plugin).
-  ...(emailAndPasswordEnabled ? { emailAndPassword: { enabled: true } } : {}),
+  ...(emailAndPasswordEnabled ? { emailAndPassword: {
+    enabled: true,
+    ...(accountMail ? {
+      revokeSessionsOnPasswordReset: true,
+      resetPasswordTokenExpiresIn: 900,
+      sendResetPassword: async ({ user, token }: { user: { id: string; email: string; emailVerified: boolean }; token: string }) => {
+        const credential = user.emailVerified ? await (await auth.$context).internalAdapter.findCredentialAccount(user.id) : null;
+        if (credential?.password) {
+          // Return the same public response for eligible and ineligible accounts.
+          if (!await sendAccountMail(accountMail, "reset", user.email, token)) console.warn("Password recovery email was not acknowledged.");
+        }
+      },
+      onPasswordReset: async ({ user }: { user: { id: string } }) => {
+        const { adapter } = await auth.$context;
+        for (const prefix of ["reset-password:", "2fa-"]) {
+          await adapter.deleteMany({ model: "verification", where: [
+            { field: "value", value: user.id },
+            { field: "identifier", operator: "starts_with", value: prefix },
+          ] });
+        }
+      },
+    } : {}),
+  } } : {}),
+  ...(accountMail ? { emailVerification: {
+    expiresIn: 1800,
+    sendVerificationEmail: async ({ user, token }: { user: { email: string }; token: string }) => {
+      if (!await sendAccountMail(accountMail, "verify", user.email, token)) throw Error("Verification email was not acknowledged.");
+    },
+  } } : {}),
 
   // `__Host-` prefixed cookies: the browser REFUSES any same-named cookie that
   // carries a `Domain` attribute, so a sibling `*.grok.me` app cannot "toss" a
@@ -239,11 +270,25 @@ function createAuth() {
       session_data: { name: "__Host-grok-auth.session_data" },
       account_data: { name: "__Host-grok-auth.account_data" },
       dont_remember: { name: "__Host-grok-auth.dont_remember" },
+      passkey_challenge: { name: "__Host-adrian.passkey_challenge" },
+      two_factor: { name: "__Host-adrian.two_factor" },
     },
   },
 
   plugins: [
     gateIdentitySessions(),
+    twoFactor({
+      issuer: "Adrian's Mind",
+      allowPasswordless: false,
+      skipVerificationOnEnable: false,
+      backupCodeOptions: { storeBackupCodes: "encrypted" },
+    }),
+    ...(passkeys ? [passkey({
+      rpID: passkeys.rpID, rpName: "Adrian's Mind", origin: passkeys.origin,
+      advanced: { webAuthnChallengeCookie: "passkey_challenge" },
+      registration: { requireSession: true },
+      authenticatorSelection: { userVerification: "required", residentKey: "required" },
+    })] : []),
 
     // One genericOAuth provider per upstream (when auth is on), all federating
     // to the broker with the SAME client and differing only by the `idp` hint.

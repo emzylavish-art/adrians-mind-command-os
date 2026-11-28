@@ -129,7 +129,7 @@ export function planModelConsult(input: {
   for (const item of candidates) {
     const allowedCost = item.cost === "free" || item.cost === "local" || (explicit && input.allowPaidHelpers === true && !input.freeOnly);
     if (!allowedCost) {
-      if (explicit) return { ok: false, error: "A selected helper has paid or unknown pricing. Explicit helper spending authorization is required. Nothing was sent." };
+      if (explicit) return { ok: false, error: `The selected helper ${item.label} has paid or unknown pricing. Remove it from the helper selection to continue without it. Nothing was sent.` };
       continue;
     }
     const route = item.routeKey || item.id;

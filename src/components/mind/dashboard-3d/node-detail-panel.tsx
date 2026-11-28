@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import type { BotNode } from "@/lib/mind/dashboard/types";
 import type { NotionSnapPage } from "@/lib/mind/dashboard/notion-graph-core";
 import {
@@ -149,6 +150,8 @@ export function NodeDetailPanel({
   notionNeighbors,
   portraitSrc,
   healthTimeLabel,
+  hiddenByFilters,
+  inlineView,
 }: {
   bot: BotNode | null;
   notionPage: NotionSnapPage | null;
@@ -159,6 +162,8 @@ export function NodeDetailPanel({
   notionNeighbors?: NotionSnapPage[];
   portraitSrc?: string | null;
   healthTimeLabel?: string;
+  hiddenByFilters?: boolean;
+  inlineView?: boolean;
 }) {
   const detail =
     bot && status
@@ -174,12 +179,21 @@ export function NodeDetailPanel({
       : null;
 
   const visible = open && Boolean(bot || notionPage);
+  const panel = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (!inlineView || !visible) return;
+    panel.current?.focus({ preventScroll: true });
+    panel.current?.scrollIntoView({ block: "start", inline: "nearest" });
+  }, [inlineView, visible]);
   return (
-    <aside className={`dash3d-side ${visible ? "is-open" : ""}`} aria-hidden={!visible} inert={!visible} data-testid="node-detail">
+    <aside ref={panel} className={`dash3d-side ${visible ? "is-open" : ""}`} aria-hidden={!visible} inert={!visible} tabIndex={inlineView && visible ? -1 : undefined} aria-label={inlineView ? "Fleet record details" : undefined} data-testid="node-detail">
       <div className="dash3d-glass">
         <button type="button" className="dash3d-side-close" onClick={onClose} aria-label="Close details">
           ×
         </button>
+        <div role="status">
+          {hiddenByFilters && bot && <p className="dash3d-muted">{bot.name} is hidden by the current fleet filters. Its details remain open.</p>}
+        </div>
         {detail ? <BotDetailBody detail={detail} spend={spend} portraitSrc={portraitSrc} healthTimeLabel={healthTimeLabel} /> : null}
         {!detail && bot ? (
           <p className="dash3d-muted">Detail data {NO_SOURCE}</p>
@@ -187,7 +201,7 @@ export function NodeDetailPanel({
 
         {notionPage ? (
           <>
-            <h2 style={{ marginTop: bot ? "1.25rem" : 0 }}>Notion page</h2>
+            <h2 style={{ marginTop: bot ? "1.25rem" : 0 }}>{notionPage.kind.includes("agent") ? "Notion AI agent" : "Notion page"}</h2>
             <p className="dash3d-title">{notionPage.title || NO_SOURCE}</p>
             <p className="dash3d-muted" style={{ fontSize: "0.78rem" }}>
               {notionPage.excerpt || NO_SOURCE}
@@ -202,16 +216,16 @@ export function NodeDetailPanel({
               {notionNeighbors && notionNeighbors.length ? (
                 notionNeighbors.map((n) => (
                   <li key={n.id}>
-                    <a className="dash3d-pill" href={n.url} target="_blank" rel="noreferrer">
+                    {n.url ? <a className="dash3d-pill" href={n.url} target="_blank" rel="noreferrer">
                       {n.title || n.id}
-                    </a>
+                    </a> : <span>{n.title}</span>}
                   </li>
                 ))
               ) : (
                 <li className="dash3d-muted">{NO_SOURCE}</li>
               )}
             </ul>
-            <a
+            {notionPage.url && <a
               className="dash3d-pill"
               href={notionPage.url}
               target="_blank"
@@ -219,7 +233,7 @@ export function NodeDetailPanel({
               style={{ marginTop: "0.5rem", display: "inline-flex" }}
             >
               Open in Notion
-            </a>
+            </a>}
           </>
         ) : null}
       </div>

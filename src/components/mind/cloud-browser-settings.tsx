@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
+import { ManagedBrowserSettings } from "./managed-browser-settings";
+import { BrowserActivity } from "./browser-activity";
 import { BrowserEnvironments } from "@/components/mind/browser-environments";
 import {
   browserAddress, browserPermissions, browserPreferencesKey, defaultBrowserPreferences,
-  parseBrowserPreferences, authorizeBrowserAction, type BrowserPermission, type BrowserPreferences,
+  parseBrowserPreferences, websitePermission, type BrowserPermission, type BrowserPreferences,
 } from "@/lib/mind/browser-permissions";
 
 const labels: Record<BrowserPermission, string> = { ask: "Always ask", allow: "Allow opening", block: "Block" };
@@ -14,16 +16,15 @@ function PermissionSelect({ label, value, onChange }: { label: string; value: Br
   </select>;
 }
 
-export function CloudBrowserSettings({ owner }: { owner: string | null }) {
+export function CloudBrowserSettings({ owner, halted }: { owner: string | null; halted?: boolean }) {
   const [settings, setSettings] = useState<BrowserPreferences | null>(null);
   const [site, setSite] = useState("");
   const [newPermission, setNewPermission] = useState<BrowserPermission>("ask");
-  const [address, setAddress] = useState("");
   const [notice, setNotice] = useState("");
   const key = owner ? browserPreferencesKey(owner) : null;
 
   useEffect(() => {
-    setSettings(null); setNotice(""); setAddress(""); setSite("");
+    setSettings(null); setNotice(""); setSite("");
     if (!key) return;
     function read() {
       try { setSettings(parseBrowserPreferences(localStorage.getItem(key!))); }
@@ -49,24 +50,12 @@ export function CloudBrowserSettings({ owner }: { owner: string | null }) {
     }
   }
 
-  function handoff() {
-    const target = browserAddress(address);
-    if (!key || !target) { setNotice("Enter an HTTP or HTTPS website address."); return; }
-    let authorization;
-    try { authorization = authorizeBrowserAction(parseBrowserPreferences(localStorage.getItem(key)), target, "open"); }
-    catch { setNotice("Could not verify browser permissions."); return; }
-    if (!authorization.allowed) { setNotice(authorization.reason); return; }
-    if (authorization.needsConfirmation && !window.confirm(`Open ${target.href} in your browser?`)) { setNotice("Website handoff cancelled. No agent action was dispatched."); return; }
-    window.open(target.href, "_blank", "noopener,noreferrer");
-    setNotice(`Requested a personal-browser tab for ${target.origin}. Check your browser if it blocked the popup. Adrian cannot inspect or control that tab.`);
-  }
-
   return <section className="settings-card space-y-5 rounded-panel p-4 text-sm" aria-labelledby="cloud-browser-title">
     <h3 id="cloud-browser-title" className="font-display text-xl font-bold">Cloud browser</h3>
-    <p className="text-muted">Mind OS can hand a website over to your browser. You control that tab. Autonomous cloud browsing is unavailable.</p>
+    <p className="text-muted">Use a personal tab for account actions or request an isolated managed view of a public website.</p>
     <BrowserEnvironments />
     {!key ? <p>Sign in to manage your website permissions.</p> : settings && <>
-      <div className="settings-row flex-wrap"><div><p className="font-semibold">Default permissions</p><p className="text-muted">Applies to website handoffs from this panel.</p></div>
+      <div className="settings-row flex-wrap"><div><p className="font-semibold">Default permissions</p><p className="text-muted">Applies to website handoffs opened through Adrian.</p></div>
         <PermissionSelect label="Default permissions" value={settings.defaultPermission} onChange={(defaultPermission) => update((prev) => ({ ...prev, defaultPermission }))} /></div>
       <div><p className="font-semibold">Email verification codes</p><p className="text-muted">Enter your code on the website yourself.</p></div>
       <div><p className="font-semibold">CAPTCHAs</p><p className="text-muted">Complete the challenge yourself in the website tab.</p></div>
@@ -79,7 +68,8 @@ export function CloudBrowserSettings({ owner }: { owner: string | null }) {
           })}>Remove</button>
         </div>)}
         <form className="flex flex-wrap gap-2" onSubmit={(event) => {
-          event.preventDefault(); const url = browserAddress(site);
+          event.preventDefault();
+          const url = browserAddress(site);
           if (!url) { setNotice("Enter an HTTP or HTTPS website address."); return; }
           if (update((prev) => ({ ...prev, sites: { ...prev.sites, [url.origin]: newPermission } }))) setSite("");
         }}>
@@ -89,10 +79,8 @@ export function CloudBrowserSettings({ owner }: { owner: string | null }) {
         </form>
       </fieldset>
       <div><p className="font-semibold">Browser data</p><p className="text-muted">Website cookies stay in the browser you open. Manage or clear them in that browser’s settings.</p></div>
-      <form className="flex flex-wrap gap-2" onSubmit={(event) => { event.preventDefault(); handoff(); }}>
-        <input aria-label="Website to open" className={control} placeholder="https://example.com" value={address} onChange={(event) => setAddress(event.target.value)} />
-        <button className={control} type="submit">Open website</button>
-      </form>
+      {owner && owner !== "dev-user" && <ManagedBrowserSettings key={owner} owner={owner} halted={halted} canOpen={(url) => websitePermission(settings, url) !== "block"} />}
+      <BrowserActivity owner={owner} halted={halted} scope="browser-settings" />
     </>}
     {key && !settings && notice && <button className={control} type="button" onClick={() => {
       if (!window.confirm("Reset browser permissions for this account on this device?")) return;

@@ -73,7 +73,7 @@ export type VoiceCloningServiceDeps = {
 };
 
 export function createVoiceCloningService(deps: VoiceCloningServiceDeps = {}) {
-  const store = deps.store ?? getVoiceCloningStore();
+  const store = () => deps.store ?? getVoiceCloningStore();
   const now = deps.now ?? Date.now;
   const transcribe = deps.transcribe ?? transcribeWavBytes;
   async function authorized<T extends { ok: boolean }>(owner: string, providerId: string, operation: "consent-stt" | "clone" | "speech", run: () => Promise<T>): Promise<T | { ok: false; code: string; error: string; dispatched: false }> {
@@ -107,12 +107,12 @@ export function createVoiceCloningService(deps: VoiceCloningServiceDeps = {}) {
         throw Object.assign(new Error("Too many consent challenges. Wait a minute."), { code: "rate_limited" });
       }
       const challenge = createConsentChallenge(now());
-      await store.putChallenge(userId, challenge);
+      await store().putChallenge(userId, challenge);
       return challenge;
     },
 
     listProfiles(userId: string): VoiceProfile[] {
-      return [...store.listProfiles(userId), ...store.pendingProviderDeletes(userId).map((p) => ({ ...p, providerVoiceId: null }))];
+      return [...store().listProfiles(userId), ...store().pendingProviderDeletes(userId).map((p) => ({ ...p, providerVoiceId: null }))];
     },
 
     async createProfile(userId: string, input: {
@@ -152,12 +152,12 @@ export function createVoiceCloningService(deps: VoiceCloningServiceDeps = {}) {
       if (!consentSniff.ok) return { ok: false, error: `Consent recording: ${consentSniff.error}`, code: consentSniff.code };
       const sampleSniff = sniffAudioMagic(sampleBytes, sampleAudio.mime);
       if (!sampleSniff.ok) return { ok: false, error: `Voice sample: ${sampleSniff.error}`, code: sampleSniff.code };
-      if (store.countActiveProfiles(userId) >= VCS_MAX_PROFILES_PER_USER) {
+      if (store().countActiveProfiles(userId) >= VCS_MAX_PROFILES_PER_USER) {
         return { ok: false, error: `Profile limit reached (${VCS_MAX_PROFILES_PER_USER}). Delete one first.`, code: "limit" };
       }
 
       // Consume challenge once — blocks replay / double-submit of same code.
-      const challenge = await store.takeChallenge(userId, input.challengeId.trim(), now());
+      const challenge = await store().takeChallenge(userId, input.challengeId.trim(), now());
       if (!challenge) {
         return {
           ok: false,
@@ -261,7 +261,7 @@ export function createVoiceCloningService(deps: VoiceCloningServiceDeps = {}) {
         deletedAt: null,
       };
 
-      await store.saveProfile({
+      await store().saveProfile({
         profile,
         consent,
         sampleBase64: sampleAudio.audioBase64,
@@ -280,12 +280,12 @@ export function createVoiceCloningService(deps: VoiceCloningServiceDeps = {}) {
       const textV = validateGenerateText(input.text);
       if (!textV.ok) return textV;
 
-      const profile = store.getProfile(userId, input.profileId.trim());
+      const profile = store().getProfile(userId, input.profileId.trim());
       if (!profile) {
         return { ok: false, error: "Voice profile not found or was deleted. Nothing was generated.", code: "not_found" };
       }
       // Verified consent required (consent record must still exist).
-      const consent = store.getConsent(profile.consentId) ?? store.getConsentForProfile(profile.id);
+      const consent = store().getConsent(profile.consentId) ?? store().getConsentForProfile(profile.id);
       if (!consent) {
         return { ok: false, error: "Consent record missing. Generate is blocked.", code: "missing_consent" };
       }
@@ -321,18 +321,18 @@ export function createVoiceCloningService(deps: VoiceCloningServiceDeps = {}) {
         return { ok: false, error: "Missing voice profile.", code: "missing_profile" };
       }
       const id = profileId.trim();
-      const existing = store.getProfile(userId, id, true);
+      const existing = store().getProfile(userId, id, true);
       if (!existing) {
         return { ok: false, error: "Voice profile not found.", code: "not_found" };
       }
-      const marked = await store.markDeleted(userId, id, now());
+      const marked = await store().markDeleted(userId, id, now());
       if (!marked || marked.status !== "deleted") {
         return { ok: false, error: "Delete did not complete.", code: "delete_failed" };
       }
       // Verifiable: profile gone from active list + consent removed + sample removed.
-      const stillActive = store.getProfile(userId, id);
-      const consentGone = !store.getConsentForProfile(id);
-      const sampleGone = store.readSampleBase64(id) === null;
+      const stillActive = store().getProfile(userId, id);
+      const consentGone = !store().getConsentForProfile(id);
+      const sampleGone = store().readSampleBase64(id) === null;
       if (stillActive || !consentGone || !sampleGone) {
         return { ok: false, error: "Delete could not be verified.", code: "delete_unverified" };
       }
@@ -348,7 +348,7 @@ export function createVoiceCloningService(deps: VoiceCloningServiceDeps = {}) {
         if (!providerDeleted) {
           return { ok: false, code: "provider_delete_pending", error: "Local voice and consent removed. Provider deletion pending. Retry when the original provider is available." };
         }
-        await store.confirmProviderDelete(userId, id);
+        await store().confirmProviderDelete(userId, id);
       }
       return {
         ok: true,
@@ -372,11 +372,11 @@ export function createVoiceCloningService(deps: VoiceCloningServiceDeps = {}) {
       if (typeof input.profileId !== "string" || !input.profileId.trim()) {
         return { ok: false, error: "Missing voice profile.", code: "missing_profile" };
       }
-      const profile = store.getProfile(userId, input.profileId.trim(), true);
+      const profile = store().getProfile(userId, input.profileId.trim(), true);
       if (!profile || profile.status === "deleted") {
         return { ok: false, error: "Voice profile was deleted. Export is not allowed.", code: "deleted" };
       }
-      const consent = store.getConsent(profile.consentId) ?? store.getConsentForProfile(profile.id);
+      const consent = store().getConsent(profile.consentId) ?? store().getConsentForProfile(profile.id);
       if (!consent) {
         return { ok: false, error: "Verified consent is required to export.", code: "missing_consent" };
       }
@@ -408,11 +408,11 @@ export function createVoiceCloningService(deps: VoiceCloningServiceDeps = {}) {
       if (typeof profileId !== "string" || !profileId.trim()) {
         return { ok: false, error: "Missing voice profile.", code: "missing_profile" };
       }
-      const profile = store.getProfile(userId, profileId.trim(), true);
+      const profile = store().getProfile(userId, profileId.trim(), true);
       if (!profile || profile.status === "deleted") {
         return { ok: false, error: "Voice profile was deleted. Consent export is not allowed.", code: "deleted" };
       }
-      const consent = store.getConsent(profile.consentId) ?? store.getConsentForProfile(profile.id);
+      const consent = store().getConsent(profile.consentId) ?? store().getConsentForProfile(profile.id);
       if (!consent) {
         return { ok: false, error: "Verified consent is required to export.", code: "missing_consent" };
       }

@@ -9,7 +9,10 @@ export const Route = createFileRoute("/api/mind/dispatch-policy")({ server: { ha
   GET: async ({ request }) => {
     try {
       const owner = await requireUserId(request.headers.get("authorization")?.replace(/^Bearer\s+/i, ""));
-      if (new URL(request.url).searchParams.get("section") === "financial") return reply({ ok: true, financial: await readFinancialSnapshot(owner) });
+      const query = new URL(request.url).searchParams;
+      const expectedOwner = query.get("ownerId");
+      if (expectedOwner !== null && expectedOwner !== owner) return reply({ ok: false, error: "The account changed. Reload its monetary evidence." }, 403);
+      if (query.get("section") === "financial") return reply({ ok: true, financial: await readFinancialSnapshot(owner) });
       return reply({ ok: true, policy: await readDispatchPolicy(owner) });
     } catch (error) { return reply({ ok: false, error: "Account request limits or monetary evidence could not be read." }, sessionErrorStatus(error)); }
   },

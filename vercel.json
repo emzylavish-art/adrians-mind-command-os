@@ -1,4 +1,9 @@
 {
+  "git": {
+    "deploymentEnabled": {
+      "fix/image-generation-receipts-20261127": false
+    }
+  },
   "installCommand": "npm install --include=dev --no-audit --no-fund",
   "buildCommand": "npm run build",
   "redirects": [

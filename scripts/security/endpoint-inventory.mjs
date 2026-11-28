@@ -15,6 +15,7 @@ export const ENDPOINT_POLICIES = Object.freeze({
   credential_establishment: 'Origin-protected pre-login action; supplied credentials/provider flow establishes identity, no preexisting owner required.',
   session_probe: 'Verify current session or return signed-out state; no mutation or provider dispatch.',
   schedule_worker: "A separately provisioned worker bearer authorizes a bounded scheduler pass with owner-scoped claims and emergency-stop checks.",
+  notification_worker: "A dedicated worker bearer authorizes bounded delivery for current account opt-ins. Each outbound attempt requires a durable claim.",
   paired_device: 'Verify device token/code, revocation and job ownership. Cookie presence alone never authorizes device execution.',
   mixed_owner_device: 'Dispatch-specific owner or device credentials; browser owner mutations require origin guard; device actions keep job binding.',
   public_status: 'Explicit sanitized readiness/manifest result; never return credentials, private account records or execute an action.',

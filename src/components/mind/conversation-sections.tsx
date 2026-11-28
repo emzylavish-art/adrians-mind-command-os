@@ -31,7 +31,7 @@ export function ConversationSections<T extends Row>({
   const active = chats.filter((chat) => chat.archived !== true);
   const archived = chats.filter((chat) => chat.archived === true);
   const groups = groupConversationSections(active);
-  if (groups.length === 0 && archived.length === 0) return null;
+
   const openMenu = (title: string, ids: string[]) => setMenu({ title, ids });
   const chosen = menu ? chats.filter((chat) => menu.ids.includes(chat.id)) : [];
   return (
@@ -57,9 +57,10 @@ export function ConversationSections<T extends Row>({
           </ul>
         </section>
       ))}
-      {archived.length > 0 && (
+      {(
         <details className="adrian-layer rounded-panel border border-line p-2">
-          <summary className="min-h-11 cursor-pointer text-xs font-semibold uppercase tracking-wide text-muted">Archived</summary>
+          <summary className="min-h-11 cursor-pointer text-xs font-semibold uppercase tracking-wide text-muted">Archived chats ({archived.length})</summary>
+          {archived.length === 0 && <p className="px-2 text-sm text-muted">No archived chats</p>}
           <ul className="mt-2 grid gap-2">
             {archived.map((chat) => (
               <ConversationRow
@@ -69,6 +70,7 @@ export function ConversationSections<T extends Row>({
                 active={activeId === chat.id}
                 scheduled={scheduledChatIds.includes(chat.id)}
                 onOpen={() => onOpen(chat.id)}
+                onUnarchive={() => onAction("archive", [chat.id])}
                 onHold={() => openMenu(titleFor ? titleFor(chat) : chat.title, [chat.id])}
               />
             ))}
@@ -101,6 +103,7 @@ function ConversationRow<T extends Row>({
   scheduled,
   onOpen,
   onHold,
+  onUnarchive,
 }: {
   chat: T;
   title: string;
@@ -108,6 +111,7 @@ function ConversationRow<T extends Row>({
   scheduled: boolean;
   onOpen: () => void;
   onHold: () => void;
+  onUnarchive?: () => void;
 }) {
   const hold = useRef<number | null>(null);
   const held = useRef(false);
@@ -116,10 +120,10 @@ function ConversationRow<T extends Row>({
     hold.current = null;
   };
   return (
-    <li className="min-w-0">
+    <li className="flex min-w-0 items-center gap-1">
       <button
         type="button"
-        className={`adrian-row min-h-11 w-full rounded-2xl border border-line px-3 text-left text-sm ${active ? "bg-accent text-accent-ink" : ""}`}
+        className={`adrian-row min-h-11 min-w-0 flex-1 rounded-2xl border border-line px-3 text-left text-sm ${active ? "bg-accent text-accent-ink" : ""}`}
         aria-current={active ? "true" : undefined}
         onPointerDown={() => {
           held.current = false;
@@ -142,6 +146,8 @@ function ConversationRow<T extends Row>({
       >
         <span className="block truncate">{title}{chat.favorite ? " · Favorite" : ""}{scheduled ? " · Schedule saved" : ""}</span>
       </button>
+      {onUnarchive && <button type="button" className="min-h-11 px-2 text-xs" aria-label={`Unarchive ${title}`} onClick={onUnarchive}>Unarchive</button>}
+      <ActionsButton label={title} onOpen={onHold} />
     </li>
   );
 }

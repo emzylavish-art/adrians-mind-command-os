@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { isShareId } from "./app-location.ts";
+import { buildArtifactName } from "./kimi/build-artifact.ts";
+import { buildArtifactBytes } from "./kimi/build-artifact.server.ts";
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { join } from "node:path";
@@ -10,6 +13,7 @@ import { buildRuntimeUsage, observeBuildRuntime, type UsageRecorder } from "./us
 import type { UsageReceipt } from "./usage-ledger.ts";
 import { normalizeWorkspace } from "./workspace.ts";
 import { readBuildSourceReceipt } from "./kimi/source-receipt.ts";
+import { buildBranchName } from "./kimi/build-scope.ts";
 
 const pixel = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
 const imageResponse = () => Response.json({ data: [{ b64_json: pixel }], model: "reported-image-model", usage: { prompt_tokens: 0 } }, { headers: { "x-request-id": "image-fixture-1" } });
@@ -72,6 +76,10 @@ function buildHandlerFixture() {
     "./runtime-capabilities.ts": { buildRuntimeCapabilities: () => [{}, { coding: true }] },
     "./hosted/file-receipts.ts": { readCodingFileSnapshot: () => ({ ok: true, exists: true, content: "fixture source" }) },
     "./build-guidance.ts": { prepareBuildTask: (prompt: string) => ({ ok: true, prompt, skillReceipts: [] }) },
+    "./build-scope.ts": { buildBranchName },
+    "../app-location.ts": { isShareId },
+    "./build-artifact.ts": { buildArtifactName },
+    "./build-artifact.server.ts": { buildArtifactBytes },
     "./paired-build-receipt.ts": { pairedBuildPayload: () => ({}), pairedBuildReceipt: () => null },
     "../media/xai-key.ts": { resolveXaiInferenceApiKey: () => "fixture" },
     "../dispatch-attempt.ts": { dispatchContext: () => ({ operationId: "build:fixture-" + runtimeCalls }), reserveDispatchAttempt: async () => ({ok:true}), runSettledDispatch: async (_owner: string, _id: string, work: () => Promise<unknown>) => work() },
@@ -84,7 +92,7 @@ function buildHandlerFixture() {
     "./hosted/acp-client.ts": { adrianBuildCommand: () => "fixture.mjs", adrianHostedWorkspace: () => "/fixture", closeHostedCodingSession: () => true, packageLabel: () => "fixture", resolveBuildWorkspace: () => "/fixture",
       runCodingTurn: async () => { runtimeCalls++; return { ok: true, output: "private output", command: "fixture" }; },
       runHostedPrompt: async () => { runtimeCalls++; return { status: "session_created", output: "partial private output", command: "fixture" }; } },
-    "./hosted/shell.server.ts": { snapshotHostedWorkspace: () => ({}) }, "./persist.ts": { recordKimiAttempt: async () => {} },
+    "./hosted/shell.server.ts": { snapshotHostedWorkspace: () => ({}), readHostedGitBranch: async () => "feature/fixture" }, "./persist.ts": { recordKimiAttempt: async () => {} },
     "./source-receipt.ts": { readBuildSourceReceipt }, "node:crypto": { createHash, randomUUID: () => `local-${runtimeCalls}` },
     "../usage-observation.server.ts": { buildRuntimeUsage, observeBuildRuntime, recordUsageObservation: async () => { throw Error("must inject recorder"); } },
   };
@@ -93,6 +101,21 @@ function buildHandlerFixture() {
   runInNewContext(code, { module, exports: module.exports, require: (name: string) => { assert.ok(name in imports, name); return imports[name]; }, Response, URL });
   return { run: module.exports.handleKimiSession, job, owner: (value: string) => { owner = value; }, local: () => { paired = false; owner = "dev-user"; }, runtimeCalls: () => runtimeCalls };
 }
+
+test("Build route verifies the checkout before dispatch and refuses named branches on unsupported runtimes", async () => {
+  const fixture = buildHandlerFixture();
+  const deps = { recordUsage: async () => {} };
+  const run = (expectedBranch: string) => fixture.run(new Request("https://fixture.test/api/mind/build/session", { method: "POST", body: JSON.stringify({ prompt: "fixture", mode: "plan", expectedBranch }) }), deps);
+  assert.equal((await run("feature/fixture")).status, 409);
+  fixture.local();
+  assert.equal((await run("--invalid")).status, 400);
+  assert.equal((await run("main")).status, 409);
+  assert.equal(fixture.runtimeCalls(), 0);
+  const matched = await run("feature/fixture");
+  assert.equal(matched.status, 200);
+  assert.equal((await matched.json()).verifiedBranch, "feature/fixture");
+  assert.equal(fixture.runtimeCalls(), 1);
+});
 
 test("C5 AA041 actual Build handler retains queued and observed job lifecycle under one owner-bound identity", async () => {
   const fixture = buildHandlerFixture();

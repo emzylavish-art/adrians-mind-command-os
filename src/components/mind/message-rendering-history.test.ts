@@ -53,3 +53,12 @@ it("AA033: missing attachment references say unavailable rather than indefinitel
   assert.match(JSON.stringify(rendered), /Reattach it to use its contents/);
   assert.doesNotMatch(JSON.stringify(rendered), /still loading|stored offline/);
 });
+
+it("shows only populated reply sections and counts a Markdown image as media", () => {
+  const app = renderer();
+  const tabs = (text: string) => nodes(app.render(app.jsx(app.AnswerTabs, { text })))
+    .filter(element => element.props.role === "tab").map(element => element.props.children);
+  assert.deepEqual(tabs("A plain reply"), []);
+  assert.deepEqual(tabs("[Guide](https://example.invalid/guide)"), ["Answer", "Links 1"]);
+  assert.deepEqual(tabs("![Screenshot](https://example.invalid/photo.png)"), ["Answer", "Images 1"]);
+});

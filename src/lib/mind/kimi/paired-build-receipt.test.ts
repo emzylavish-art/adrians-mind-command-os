@@ -3,12 +3,13 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { stripTypeScriptTypes } from "node:module";
 import { activateReviewedSkill, collectAccountSkillApplications, SKILL_ACTIVATIONS_KEY, skillReceiptSummary, validateSkillFixture, type SkillActivation } from "../skill-activation.ts";
 import { createDraft, emptyLibrary, reviewDraft, serializeLibrary, STORAGE_KEY } from "../skill-library.ts";
 import { claimNextJob, completeJob, enqueueJob, readJob, requestJobCancel, setPcPairingDirectory } from "../pc-pairing/store.ts";
 import { prepareBuildTask } from "./build-guidance.ts";
 import { parseBuildResult, serializeBuildResult, type BuildStoredJob } from "./build-result.ts";
-import { pairedBuildPayload, pairedBuildReceipt } from "./paired-build-receipt.ts";
+import { pairedBuildPayload, pairedBuildReceipt, pairedBuildReviewScope, pairedBuildRunResult } from "./paired-build-receipt.ts";
 
 function preparedFixture() {
   const task = "Build an accessible React interface, verify its tests and use the cloud browser.";
@@ -93,11 +94,69 @@ test("queued selection accepts only bounded non-use reports and cannot escalate 
 test("the mounted paired Build queue, polling and browser recovery paths carry the same receipt", () => {
   const route = readFileSync(new URL("./acp.server.ts", import.meta.url), "utf8");
   const component = readFileSync(new URL("../../../components/mind/build-workspace.tsx", import.meta.url), "utf8");
-  assert.match(route, /payload: \{ \.\.\.pairedBuildPayload\(prompt, prepared\.skillReceipts, requestedCwd\), sourceReceipt \}/);
+  assert.match(route, /payload: \{ \.\.\.pairedBuildPayload\(prompt, prepared\.skillReceipts, requestedCwd\), sourceReceipt, \.\.\.\(expectedBranch \? \{ expectedBranch \}/);
+  assert.match(route, /event\.payload\.branch === job\.payload\.expectedBranch/);
+  assert.match(component, /checked: data\.revisionVerified === true/);
   assert.equal(route.match(/receipt: pairedBuildReceipt\(job, ownerId\)/g)?.length, 2);
   assert.doesNotMatch(route, /queued_for_coding/);
   assert.match(component, /setJob\(data\.job\);\s*setBuildReceipt\(data\.receipt \?\? null\)/);
   assert.match(component, /setJob\(\{ id: data\.jobId,[\s\S]*?setBuildReceipt\(data\.receipt \?\? null\)/);
-  assert.match(component, /if \(!props\.ownerId \|\| !job\) return;\s*try \{ localStorage\.setItem\(buildResultKey/);
-  assert.match(component, /if \(saved\) \{ setJob\(saved\.job\); setBuildReceipt\(saved\.receipt\); \}/);
+  assert.match(component, /const resultKey = buildResultKey\(ownerKey, projectId\)/);
+  assert.match(component, /if \(!props\.ownerId \|\| !job\) return;\s*try \{ localStorage\.setItem\(resultKey, serializeBuildResult\(\{[^\n]*projectId, job, receipt: buildReceipt, source: resultSource/);
+  assert.match(component, /if \(saved\) \{ setJob\(saved\.job\); setBuildReceipt\(saved\.receipt\); setResultSource\(saved\.source\); \}/);
+});
+
+test("completed paired run links reopen from the saved job for the same account and project", (t) => {
+  const directory = mkdtempSync(join(tmpdir(), "paired-link-review-"));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  setPcPairingDirectory(directory);
+  const jobKey = "a".repeat(32);
+  const reviewScope = pairedBuildReviewScope("project-a", "chat-a", jobKey);
+  assert.ok(reviewScope);
+  assert.equal(pairedBuildReviewScope("/wrong-project", "chat-a", jobKey), null);
+  assert.equal(pairedBuildReviewScope("project-a", "chat-a", "different-run"), null);
+  const request = { jobKey, ownerId: "owner-a", agentId: "fixture-agent", kind: "kimi-acp" as const, command: "kimi acp", confirm: false,
+    payload: { ...pairedBuildPayload("Private prompt", [], "fixture-workspace"), reviewScope } };
+  const job = enqueueJob(request);
+  assert.equal(pairedBuildRunResult(job, "owner-a", "project-a"), null);
+  assert.equal(enqueueJob(request).id, jobKey);
+  assert.equal(claimNextJob("fixture-agent")?.id, jobKey);
+  assert.equal(completeJob({ jobId: jobKey, agentId: "fixture-agent", ok: true, output: "Paired run fixture output" })?.status, "done");
+  const reloaded = readJob(jobKey)!;
+  assert.equal(pairedBuildRunResult(reloaded, "owner-b", "project-a"), null);
+  assert.equal(pairedBuildRunResult(reloaded, "owner-a", "project-b"), null);
+  assert.equal(pairedBuildRunResult({ ...reloaded, payload: {} }, "owner-a", "project-a"), null);
+  const result = pairedBuildRunResult(reloaded, "owner-a", "project-a")!;
+  const encoded = serializeBuildResult(result);
+  assert.doesNotMatch(encoded, /Private prompt/);
+  assert.equal(parseBuildResult(encoded, "owner-a", "project-a")?.job.output, "Paired run fixture output");
+  assert.deepEqual(result.source, reviewScope.source);
+});
+
+test("mounted Build polling applies a slow result and ignores an older response after switching jobs", async () => {
+  const component = readFileSync(new URL("../../../components/mind/build-workspace.tsx", import.meta.url), "utf8");
+  const code = component.slice(component.indexOf("  async function refreshJob("), component.indexOf("  async function runFileOperation("));
+  const requests: Array<{ id: string; resolve: (response: Response) => void }> = [];
+  const visible: string[] = [];
+  const source: unknown[] = [];
+  const context = {
+    pollSequence: { current: 0 }, inFlightPoll: { current: null }, mounted: { current: true }, pendingSource: { current: undefined },
+    fetch: (url: string) => new Promise<Response>((resolve) => requests.push({ id: url.split("jobId=")[1], resolve })),
+    setJob: (job: { id: string }) => visible.push(job.id), setNotice: assert.fail, setExecutionReceipt: (receipt: unknown) => source.push(receipt),
+    setBuildReceipt() {}, setResultSource() {}, setEvents() {},
+  };
+  const refreshJob = new Function(...Object.keys(context), `${stripTypeScriptTypes(code)}; return refreshJob;`)(...Object.values(context)) as (id: string) => Promise<void>;
+  const first = refreshJob("first");
+  await refreshJob("first");
+  assert.equal(requests.length, 1);
+  requests[0].resolve(Response.json({ ok: true, job: { id: "first" }, sourceReceipt: { workspace: "first" }, revisionVerified: true }));
+  await first;
+  const old = refreshJob("first");
+  const next = refreshJob("second");
+  requests[2].resolve(Response.json({ ok: true, job: { id: "second" }, sourceReceipt: null }));
+  await next;
+  requests[1].resolve(Response.json({ ok: true, job: { id: "first" }, sourceReceipt: { workspace: "late" }, revisionVerified: true }));
+  await old;
+  assert.deepEqual(visible, ["first", "second"]);
+  assert.deepEqual(source, [{ workspace: "first", checked: true }, null]);
 });

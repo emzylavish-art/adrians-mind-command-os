@@ -141,7 +141,7 @@ export async function mintNuanceSession(input: {
   apiUrl?: string;
 }): Promise<MintResult> {
   if (!isNuanceKey(input.key)) {
-    return { ok: false, error: "A Nuance key is not saved on this computer.", status: 409 };
+    return { ok: false, error: "A Nuance key is not saved for this account.", status: 409 };
   }
   const personaId = input.personaId ?? "sonia";
   if (!isSelectablePersona(personaId)) {
@@ -176,19 +176,19 @@ export async function mintNuanceSession(input: {
   return { ok: true, token };
 }
 
-export function activeConversationIds(body: string): string[] {
+export function activeConversationIds(body: string): string[] | null {
   const text = redactSecrets(body);
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
   } catch {
-    return [];
+    return null;
   }
   const items = parsed && typeof parsed === "object" && "items" in parsed
     ? (parsed as { items?: unknown }).items
     : null;
-  if (!Array.isArray(items)) return [];
-  return items
-    .map((item) => (item && typeof item === "object" && "id" in item ? String((item as { id?: unknown }).id ?? "") : ""))
-    .filter((id) => isConversationId(id));
+  if (!Array.isArray(items)) return null;
+  const ids = items.map(item => item && typeof item.id === "string" ? item.id : "");
+  if (ids.some(id => !isConversationId(id))) return null;
+  return [...new Set(ids)];
 }

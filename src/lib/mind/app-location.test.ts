@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   canonicalShareSearch,
+  embeddedWorkspaceSearch,
   backShareHistory,
   currentShareSearch,
   forwardShareHistory,
@@ -13,10 +14,23 @@ import {
   shareWriteForView,
   shareWriteDropsMissing,
   startShareHistory,
+  socialLegacyReturn,
   writeShareSearch,
 } from "./app-location.ts";
 
 const sections = ["command", "chat", "projects", "files", "agents", "settings"];
+
+it("returns from embedded tools to workspace selectors and discards unrelated search values", () => {
+  assert.equal(embeddedWorkspaceSearch("?section=chat&chat=fixture-1&token=synthetic&resume=speak"), "?section=chat&chat=fixture-1");
+  assert.equal(embeddedWorkspaceSearch("?section=files&file=fixture-2"), "?section=files&file=fixture-2");
+  assert.equal(embeddedWorkspaceSearch("?section=%2F%2Fevil.invalid&chat=%2Fescape"), "");
+});
+
+it("keeps the Social compatibility exit within the local workspace", () => {
+  const search = new URLSearchParams({ section: "social", socialReturn: "?section=chat&chat=thread-a&token=redacted" });
+  assert.equal(socialLegacyReturn(search.toString()), "/?section=chat&chat=thread-a#mind-workspace");
+  assert.equal(socialLegacyReturn("?socialReturn=https%3A%2F%2Fexample.invalid"), undefined);
+});
 const catalog = {
   chats: [{ id: "chat-1" }],
   projects: [{ id: "project-1" }],

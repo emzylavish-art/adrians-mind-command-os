@@ -13,7 +13,7 @@ import vm from "node:vm";
 import { describe, it } from "node:test";
 import { addMemory, createChat, deleteMemory, emptyWorkspace, memoriesForChat, pushAudit, pushUsage, reviseMemory, sha256 } from "./workspace.ts";
 import { memorySendRevision, checkMemorySendRevision } from "./memory-send-policy.ts";
-import { chatTurnBody, isLogicRouteId, respondedRouteLabel } from "./logic-routes.ts";
+import { chatTurnBody, loadModeInstructions, isLogicRouteId, respondedRouteLabel } from "./logic-routes.ts";
 import { boundAbortSignal } from "./turn-timeouts.ts";
 import { consumeMindTurn, prepareTurn, shouldStoreReply, STOPPED_REPLY } from "./live-turn.ts";
 import { historyForDeliver, resolveChatMessages, shouldBlockForEmergencyStop, snapshotImages } from "./retry-fidelity.ts";
@@ -76,7 +76,7 @@ function harness(options: { pause?: "prepare" | "fingerprint"; uncertainFirst?: 
   const noop = () => undefined;
   const context = vm.createContext({
     document: { hidden: false, addEventListener: noop, removeEventListener: noop },
-    completedHistory, checkpointReply, withReplyVersion, currentMemoryContext, accountPending: false, account: { id: "fixture-owner" },
+    completedHistory, checkpointReply, withReplyVersion, currentMemoryContext, accountPending: false, selectionLoaded: true, account: { id: "fixture-owner" },
     speakStageOpenRef: { current: false }, checkTurnReceipt: (url: string, id: string, headers: HeadersInit) => checkTurnReceipt(url, id, headers, undefined, fetchImpl),
     crypto, TextEncoder, TextDecoder, AbortController, DOMException, setTimeout, clearTimeout, Date,
     window: { location: { hostname: "fixture.test", pathname: "/" } },
@@ -95,7 +95,7 @@ function harness(options: { pause?: "prepare" | "fingerprint"; uncertainFirst?: 
     classifyHonestFailure: () => "chat_failed", honestFailureAuditAction: (value: string) => value,
     normalizeClientFailureMessage,
     reportFailure: (message: string, _kind: string, _target: string, retry: (() => void) | null) => { failure = { message, retry }; },
-    chatTurnBody, memoriesForChat, relevantMemories, boundAbortSignal, historyForDeliver, resolveChatMessages, shouldBlockForEmergencyStop, snapshotImages, respondedRouteLabel, shouldStoreReply, STOPPED_REPLY,
+    chatTurnBody, loadModeInstructions, memoriesForChat, relevantMemories, boundAbortSignal, historyForDeliver, resolveChatMessages, shouldBlockForEmergencyStop, snapshotImages, respondedRouteLabel, shouldStoreReply, STOPPED_REPLY,
     sha256: async (text: string) => { if (options.pause === "fingerprint") { reached.resolve(); await release.promise; } return sha256(text); },
     prepareTurn: (url: string, headers: HeadersInit, signal: AbortSignal) => prepareTurn(url, headers, signal, fetchImpl),
     ensureChatMedia: async (chat: Chat) => chat, effectiveContextPolicy, memoryPolicyRevision, validateMemoryDispatch, retrieveProjectPassages,

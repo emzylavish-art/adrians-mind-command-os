@@ -10,12 +10,14 @@ export function InlineImage({
   onSave,
   onDownload,
   onUseAsAgentInput,
+  wide = false,
 }: {
   src: string;
   alt: string;
   onEditImagine?: (src: string) => void;
   onSave?: (src: string, alt: string) => void;
   onDownload?: (src: string, alt: string) => void;
+  wide?: boolean;
   onUseAsAgentInput?: (src: string, alt: string) => void;
 }) {
   const viewer = useRef<HTMLDialogElement>(null);
@@ -30,7 +32,7 @@ export function InlineImage({
       <div className="my-2 space-y-2">
         <button
           type="button"
-          className="block max-w-full overflow-hidden rounded-panel border border-line"
+          className={`block max-w-full overflow-hidden rounded-panel border border-line ${wide ? "w-full bg-bg" : ""}`}
           ref={trigger}
           onClick={() => viewer.current?.showModal()}
           aria-label={`Enlarge ${safeAlt}`}
@@ -42,7 +44,7 @@ export function InlineImage({
             event.dataTransfer.effectAllowed = "copy";
           }}
         >
-          <img src={safeSrc} alt={safeAlt} className="max-h-64 max-w-full object-contain" draggable={false} />
+          <img src={safeSrc} alt={safeAlt} className={wide ? "max-h-[56dvh] w-full object-contain" : "max-h-64 max-w-full object-contain"} draggable={false} />
         </button>
         <div className="flex flex-wrap gap-2">
           {onEditImagine && (
