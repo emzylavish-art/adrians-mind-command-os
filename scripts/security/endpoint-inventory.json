@@ -3,6 +3,19 @@
   "scope": "all AST-discovered direct route methods and exported createServerFn handlers under src; background worker internal functions retain service/owner checks at their dispatch boundary",
   "routes": [
     {
+      "file": "src/routes/api/mind/account-photo.ts",
+      "path": "/api/mind/account-photo",
+      "methods": ["GET", "POST"],
+      "policy": "owner_origin",
+      "notes": "Reads bind to the verified account. Same-origin edits require the account and saved photo revision.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/account-photo.ts",
+          "requires": ["assertSameOrigin(request)", "requireUserId", "searchParams.get(\"owner\") !== owner", "body.owner !== owner", "saveAccountPhoto(await getSql(), owner"]
+        }
+      ]
+    },
+    {
       "file": "src/routes/api/auth/$.ts",
       "path": "/api/auth/$",
       "methods": [

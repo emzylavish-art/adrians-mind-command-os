@@ -65,7 +65,7 @@ import { LibraryDocumentPreview } from "@/components/mind/library-document-previ
 import { accountOriginalFileStore, prepareLibraryDocument, readAccountOriginal, saveLibraryDocument, updateLibraryDocument } from "@/lib/mind/library-documents";
 import { createResearchRunGuard, loadResearchReports, makeResearchReport, researchAttachment, researchReferencesInText, saveResearchReport, type ResearchReport } from "@/lib/mind/research-reports";
 import type { ResearchResult } from "@/lib/mind/research";
-import { WorkspaceProfile } from "./workspace-profile";
+import { useAccountPhoto, WorkspaceProfile } from "./workspace-profile";
 import { InboxNotificationSettings, NotificationInbox, useWorkspaceInbox } from "./notification-inbox";
 import { BackgroundNotifications } from "./background-notifications";
 import { ARCHIVE_CATEGORIES, selectArchiveCategories, type ArchiveCategory, deleteLocalFile, deleteProject, refreshBotChat } from "@/lib/mind/workspace";
@@ -814,6 +814,8 @@ export function CommandApp() {
 
 function CommandSession({ account, accountPending }: { account: ReturnType<typeof useCurrentUserState>["user"]; accountPending: boolean }) {
   const preferenceStorage = useAccountPreferences();
+  const profilePhoto = useAccountPhoto(account?.isDevFallback ? null : account?.id ?? null);
+  const accountPhotoUrl = profilePhoto.photo?.dataUrl ?? account?.profileImageUrl;
   const interfaceSettings = useInterfaceSettings();
   const [dictationPrefs, setDictationPrefs] = useState(defaultVoicePreferences);
   const dictationPrefsRef = useRef(dictationPrefs);
@@ -7257,7 +7259,7 @@ ${message.content}`;
               setAccountOpen(next);
             }}
           >
-            {account?.profileImageUrl ? <img src={account.profileImageUrl} alt="" width={32} height={32} className="size-8 rounded-full object-cover" /> : <span aria-hidden="true" className="grid size-8 place-items-center rounded-full bg-surface-2 font-semibold">{accountLabel.slice(0, 1).toUpperCase()}</span>}
+            {accountPhotoUrl ? <img src={accountPhotoUrl} alt="" width={32} height={32} className="size-8 rounded-full object-cover" /> : <span aria-hidden="true" className="grid size-8 place-items-center rounded-full bg-surface-2 font-semibold">{accountLabel.slice(0, 1).toUpperCase()}</span>}
             <span className="hidden max-w-32 truncate text-sm md:inline">{accountLabel}</span>
           </button>
         </header>
@@ -9203,11 +9205,11 @@ ${message.content}`;
               {settingsPane === "keyboard" && <KeyboardSettings {...interfaceSettings}/>}
               {settingsPane === "bits" && <div ref={setBitsPanel}/>}
               {settingsPane === "sessions" && (account ? <SessionCenter key={account.id} /> : <Link to="/login" search={{ next: loginReturnPath() }}>Sign in to check sessions</Link>)}
-              {settingsPane === "usage" && (account ? <><SpendingControls usage={ws.usage} /><p className="text-sm text-muted">Provider invoices are available through your provider account. Adrian displays the usage it received.</p></> : <Link to="/login" search={{ next: loginReturnPath() }}>Sign in to check usage</Link>)}
+              {settingsPane === "usage" && (account ? <SpendingControls usage={ws.usage} /> : <Link to="/login" search={{ next: loginReturnPath() }}>Sign in to check usage</Link>)}
               {settingsPane === "archived" && <ArchiveSettings chats={ws.chats} ready={ready} onRestore={(id)=>runConversationAction("archive",[id])}/>}
               {settingsPane === "storage" && <StorageSettings ws={ws} ready={ready} onOpen={(kind)=>{setLibraryBand(kind);setLibraryProjectId(null);setView("files");}}/>}
               {settingsPane === "general" && <><AppearanceSettings {...interfaceSettings} light={theme==="light" || (theme==="system" && typeof window!=="undefined" && window.matchMedia("(prefers-color-scheme: light)").matches)}/><div className="settings-card rounded-panel p-4"><SendKey {...interfaceSettings}/></div></>}
-              {settingsPane === "profile" && account && <WorkspaceProfile key={account.id} account={account} workspace={ws} onBuild={() => setView("build")} />}
+              {settingsPane === "profile" && account && <WorkspaceProfile key={account.id} account={account} workspace={ws} accountPhoto={profilePhoto} onBuild={() => setView("build")} />}
               {settingsPane === "personalization" && <label className="settings-card grid gap-2 rounded-panel p-4 text-sm">
                 Default style for new conversations
                 <select value={defaultPersonalityId} onChange={(event) => setDefaultPersonalityId(resolvePersonalityId(event.target.value))} className="min-h-11 rounded-panel border border-line bg-surface px-3">

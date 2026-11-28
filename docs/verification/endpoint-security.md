@@ -2,7 +2,7 @@
 
 This checked-in inventory covers every direct route handler and exported TanStack server function discovered from TypeScript AST. A new route, HTTP method, RPC export, removed guard marker or undocumented public exception fails the normal test runner. Guard-source checks establish code reachability contracts; they do not substitute for live penetration testing or prove that a browser/provider/device was exercised.
 
-86 routes · 125 HTTP method contracts · 65 RPC exports.
+87 routes · 127 HTTP method contracts · 65 RPC exports.
 
 ## Shared policies
 
@@ -29,6 +29,7 @@ This checked-in inventory covers every direct route handler and exported TanStac
 
 | Route | Methods | Policy | Guard source / ownership boundary |
 |---|---|---|---|
+| `/api/mind/account-photo` | GET, POST | owner_origin | Reads bind to the verified account. Same-origin edits require the account and saved photo revision. Sources: `src/routes/api/mind/account-photo.ts` |
 | `/api/auth/$` | GET, POST | framework_auth | Better Auth and explicit trusted origins own login and callbacks. Passkey routes check the configured origin and protect account credential changes with a fresh verified session. Authenticator changes use the canonical account and login challenges are verified by Better Auth. Account email is origin-bound, and address verification is scoped to the signed-in credential account. Sources: `src/routes/api/auth/$.ts`, `src/lib/auth/server.ts` |
 | `/api/mind/agent` | POST | owner_fetch_metadata | Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation. Sources: `src/lib/mind/agent-run.server.ts` |
 | `/api/mind/build/browser` | DELETE, GET, POST | owner_origin | Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation. Build and legacy Kimi aliases share the named runtime-specific handler; target selection is explicit. Sources: `src/lib/mind/kimi/hosted/browser-route.server.ts` |

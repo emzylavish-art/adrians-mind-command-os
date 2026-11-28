@@ -3,10 +3,13 @@ import type { Workspace } from "@/lib/mind/types";
 import type { AppUser } from "@/lib/auth/use-current-user";
 import { profileActivity, profileInsights, type ChartInterval } from "@/lib/mind/profile-activity";
 import { useAccountPreferences } from "./account-preferences-context";
+import { AccountPhotoSettings, type useAccountPhoto } from "./account-photo-settings";
 import { UsageHistory } from "./usage-history";
 
+export { useAccountPhoto } from "./account-photo-settings";
+
 type Profile = { avatar?: string; name: string; handle: string; projects: string[] };
-export function WorkspaceProfile({ account, workspace, onBuild }: { account: AppUser; workspace: Workspace; onBuild: () => void }) {
+export function WorkspaceProfile({ account, workspace, onBuild, accountPhoto }: { account: AppUser; workspace: Workspace; onBuild: () => void; accountPhoto: ReturnType<typeof useAccountPhoto> }) {
   const storage = useAccountPreferences();
   const [profile, setProfile] = useState<Profile>(() => {
     const fallback = { name: account.isDevFallback ? "Local workspace" : account.displayName || "My workspace", handle: "", projects: [] };
@@ -46,7 +49,7 @@ export function WorkspaceProfile({ account, workspace, onBuild }: { account: App
   const projects = workspace.projects.filter(project => !project.archived && project.lifecycle !== "archived");
   const featured = projects.filter(project => profile.projects.includes(project.id));
   const shareText = [profile.name, profile.handle && "@" + profile.handle, ...featured.map(project => project.name)].filter(Boolean).join("\n");
-  const avatar = profile.avatar || account.profileImageUrl;
+  const avatar = accountPhoto.photo?.dataUrl || profile.avatar || account.profileImageUrl;
   const control = "min-h-11 rounded-panel border border-line px-3 text-sm";
   const summary = [
     ["Known tokens", stats.knownTokens.toLocaleString()], ["Peak UTC day", stats.peak.toLocaleString()],
@@ -83,6 +86,7 @@ export function WorkspaceProfile({ account, workspace, onBuild }: { account: App
       catch { setStatus("Select and copy the text in the preview."); }
     }}>Copy profile summary</button></section>}
     <p role="status" className="text-sm">{status}</p>
+    {!account.isDevFallback && <AccountPhotoSettings state={accountPhoto} />}
     <h3 className="font-semibold">Workspace activity</h3>
     <dl className="grid grid-cols-2 gap-2 md:grid-cols-5">{summary.map(([label, value]) => <div className="rounded-panel border border-line p-3" key={label}><dt className="text-xs text-muted">{label}</dt><dd className="font-semibold">{value}</dd></div>)}</dl>
     <section className="rounded-panel border border-line p-4"><h3 className="font-semibold">Token activity</h3><p className="mb-2 text-xs text-muted">Last 84 UTC days from retained workspace receipts. {stats.missing} receipts have incomplete token counts.</p>

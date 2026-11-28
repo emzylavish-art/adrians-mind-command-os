@@ -22,6 +22,7 @@ import { Route as SocialRouteImport } from './routes/social'
 import { Route as UnauthorizedRouteImport } from './routes/unauthorized'
 import { Route as AuthCallbackRouteImport } from './routes/auth/callback'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as ApiMindAccountPhotoRouteImport } from './routes/api/mind/account-photo'
 import { Route as ApiMindAgentRouteImport } from './routes/api/mind/agent'
 import { Route as ApiMindDesktopUpdateRouteImport } from './routes/api/mind/desktop-update'
 import { Route as ApiMindDispatchPolicyRouteImport } from './routes/api/mind/dispatch-policy'
@@ -170,6 +171,11 @@ const AuthCallbackRoute = AuthCallbackRouteImport.update({
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   id: '/api/auth/$',
   path: '/api/auth/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMindAccountPhotoRoute = ApiMindAccountPhotoRouteImport.update({
+  id: '/api/mind/account-photo',
+  path: '/api/mind/account-photo',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiMindAgentRoute = ApiMindAgentRouteImport.update({
@@ -618,6 +624,7 @@ export interface FileRoutesByFullPath {
   '/unauthorized': typeof UnauthorizedRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/mind/account-photo': typeof ApiMindAccountPhotoRoute
   '/api/mind/agent': typeof ApiMindAgentRoute
   '/api/mind/desktop-update': typeof ApiMindDesktopUpdateRoute
   '/api/mind/dispatch-policy': typeof ApiMindDispatchPolicyRoute
@@ -717,6 +724,7 @@ export interface FileRoutesByTo {
   '/unauthorized': typeof UnauthorizedRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/mind/account-photo': typeof ApiMindAccountPhotoRoute
   '/api/mind/agent': typeof ApiMindAgentRoute
   '/api/mind/desktop-update': typeof ApiMindDesktopUpdateRoute
   '/api/mind/dispatch-policy': typeof ApiMindDispatchPolicyRoute
@@ -817,6 +825,7 @@ export interface FileRoutesById {
   '/unauthorized': typeof UnauthorizedRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/mind/account-photo': typeof ApiMindAccountPhotoRoute
   '/api/mind/agent': typeof ApiMindAgentRoute
   '/api/mind/desktop-update': typeof ApiMindDesktopUpdateRoute
   '/api/mind/dispatch-policy': typeof ApiMindDispatchPolicyRoute
@@ -918,6 +927,7 @@ export interface FileRouteTypes {
     | '/unauthorized'
     | '/auth/callback'
     | '/api/auth/$'
+    | '/api/mind/account-photo'
     | '/api/mind/agent'
     | '/api/mind/desktop-update'
     | '/api/mind/dispatch-policy'
@@ -1017,6 +1027,7 @@ export interface FileRouteTypes {
     | '/unauthorized'
     | '/auth/callback'
     | '/api/auth/$'
+    | '/api/mind/account-photo'
     | '/api/mind/agent'
     | '/api/mind/desktop-update'
     | '/api/mind/dispatch-policy'
@@ -1116,6 +1127,7 @@ export interface FileRouteTypes {
     | '/unauthorized'
     | '/auth/callback'
     | '/api/auth/$'
+    | '/api/mind/account-photo'
     | '/api/mind/agent'
     | '/api/mind/desktop-update'
     | '/api/mind/dispatch-policy'
@@ -1216,6 +1228,7 @@ export interface RootRouteChildren {
   UnauthorizedRoute: typeof UnauthorizedRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
+  ApiMindAccountPhotoRoute: typeof ApiMindAccountPhotoRoute
   ApiMindAgentRoute: typeof ApiMindAgentRoute
   ApiMindDesktopUpdateRoute: typeof ApiMindDesktopUpdateRoute
   ApiMindDispatchPolicyRoute: typeof ApiMindDispatchPolicyRoute
@@ -1392,6 +1405,13 @@ declare module '@tanstack/react-router' {
       path: '/api/auth/$'
       fullPath: '/api/auth/$'
       preLoaderRoute: typeof ApiAuthSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/account-photo': {
+      id: '/api/mind/account-photo'
+      path: '/api/mind/account-photo'
+      fullPath: '/api/mind/account-photo'
+      preLoaderRoute: typeof ApiMindAccountPhotoRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/mind/agent': {
@@ -2010,6 +2030,7 @@ const rootRouteChildren: RootRouteChildren = {
   UnauthorizedRoute: UnauthorizedRoute,
   AuthCallbackRoute: AuthCallbackRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
+  ApiMindAccountPhotoRoute: ApiMindAccountPhotoRoute,
   ApiMindAgentRoute: ApiMindAgentRoute,
   ApiMindDesktopUpdateRoute: ApiMindDesktopUpdateRoute,
   ApiMindDispatchPolicyRoute: ApiMindDispatchPolicyRoute,

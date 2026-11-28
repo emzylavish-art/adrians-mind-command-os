@@ -100,6 +100,64 @@ try {
   assert.equal((await unrelated.request.post(auth + "/passkey/delete-passkey", {
     headers: { origin }, data: { id: registered[0].id },
   })).ok(), false);
+  const photoPath = origin + "/api/mind/account-photo";
+  const photoRead = photoPath + "?" + new URLSearchParams({ owner });
+  const profilePath = origin + "/?section=settings&pane=profile";
+  await page.goto(profilePath, { waitUntil: "domcontentloaded" });
+  const photoPanel = page.getByRole("region", { name: "Account photo" });
+  const preparedPng = await page.evaluate(async () => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 48;
+    canvas.height = 48;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#3b5bdb";
+    ctx.fillRect(0, 0, 48, 48);
+    return canvas.toDataURL("image/png");
+  });
+  const file = { name: "account.png", mimeType: "image/png", buffer: Buffer.from(preparedPng.split(",")[1], "base64") };
+  await photoPanel.getByLabel("Choose an account photo").setInputFiles(file);
+  await photoPanel.getByRole("button", { name: "Save account photo" }).click();
+  await photoPanel.getByText("Account photo saved.", { exact: true }).waitFor();
+  const savedPhoto = await (await context.request.get(photoRead)).json();
+  assert.equal(typeof savedPhoto.revision, "string");
+  assert.match(savedPhoto.dataUrl, /^data:image\/png;base64,/);
+  const avatar = page.getByRole("button", { name: /^Account menu for/ }).locator("img");
+  assert.equal(await avatar.getAttribute("src"), savedPhoto.dataUrl);
+  assert.equal((await unrelated.request.get(photoRead)).status(), 409);
+  assert.equal((await unrelated.request.post(photoPath, {
+    headers: { origin }, data: { owner, ...savedPhoto },
+  })).status(), 409);
+  assert.equal((await context.request.post(photoPath, {
+    headers: { origin: "https://outside.example" }, data: { owner, ...savedPhoto },
+  })).status(), 403);
+  const second = await browser.newContext();
+  const secondSignin = await second.request.post(auth + "/sign-in/email", {
+    headers: { origin }, data: { email: "passkey-owner@example.test", password },
+  });
+  assert.equal(secondSignin.status(), 200);
+  const secondPage = await second.newPage();
+  await secondPage.goto(profilePath, { waitUntil: "domcontentloaded" });
+  assert.equal(await secondPage.getByRole("button", { name: /^Account menu for/ }).locator("img").getAttribute("src"), savedPhoto.dataUrl);
+  secondPage.once("dialog", dialog => void dialog.accept());
+  await secondPage.getByRole("button", { name: "Remove account photo" }).click();
+  await secondPage.getByText("Account photo removed.", { exact: true }).waitFor();
+  assert.equal((await context.request.post(photoPath, { headers: { origin }, data: { owner, ...savedPhoto } })).status(), 409);
+  assert.equal((await (await context.request.get(photoRead)).json()).dataUrl, null);
+  await second.close();
+  await page.goto(origin + "/?section=settings&pane=usage", { waitUntil: "domcontentloaded" });
+  const billing = page.getByRole("region", { name: "Provider billing" });
+  const expectedPortals = new Map([
+    ["xAI billing", "https://console.x.ai/team/default/settings/billing"],
+    ["OpenAI billing", "https://platform.openai.com/account/billing/overview"],
+    ["Claude billing", "https://platform.claude.com/settings/billing"],
+    ["Gemini billing", "https://aistudio.google.com/billing"],
+    ["OpenRouter billing", "https://openrouter.ai/settings/credits"],
+  ]);
+  for (const [label, href] of expectedPortals) {
+    const link = billing.getByRole("link", { name: label, exact: true });
+    assert.equal(await link.getAttribute("href"), href);
+    assert.equal(await link.getAttribute("rel"), "noopener noreferrer");
+  }
   await unrelated.close();
 
   const signedOut = await context.request.post(auth + "/sign-out", { headers: { origin }, data: {} });
@@ -270,6 +328,8 @@ try {
     verifiedRecoveryEmail: true, passwordResetTokenSingleUse: true, resetRevokedOldSession: true, resetPreservedAuthenticator: true,
     resetInvalidatedOtherLinksAndPendingChallenges: true,
     independentNotificationPreferences: true,
+    accountPhotoSecondSessionReadback: true, accountPhotoIsolationAndStaleWriteDenial: true,
+    providerBillingLinksVerified: true,
   };
   console.log(JSON.stringify(receipt));
   if (process.env.VISUAL_ARTIFACT_DIR) {
