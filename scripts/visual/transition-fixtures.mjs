@@ -839,6 +839,25 @@ try {
     }
     return { themes: ["light", "dark"], savedLocally: true };
   });
+  await check(phone, "settings-preset-and-shortcut-recovery", async () => {
+    const preset = phone.getByLabel("Theme preset");
+    await preset.selectOption("paper");
+    assert.equal(await preset.inputValue(), "paper");
+    await phone.getByRole("button", { name: "Apply appearance" }).click();
+    await phone.reload();
+    await preset.waitFor();
+    await phone.waitForFunction(() => document.documentElement.style.getPropertyValue("--color-accent") === "#7c3b24");
+    assert.equal(await preset.inputValue(), "paper");
+    await phone.getByRole("button", { name: "Restore default colors" }).click();
+    const send = phone.getByLabel("Send message key");
+    await send.selectOption("modified");
+    await phone.getByRole("button", { name: "Keep current shortcut" }).click();
+    assert.equal(await send.inputValue(), "enter");
+    await send.selectOption("modified");
+    await phone.getByRole("button", { name: "Move shortcut" }).click();
+    assert.equal(await send.inputValue(), "modified");
+    return { savedPreset: "Reading room", shortcutConflict: "cancel and confirm" };
+  });
   await check(phone, "page-reading-position", async () => {
     await navigate(phone, "/?section=settings&pane=data", "settings");
     await phone.getByRole("heading", { name: "Data and retention", exact: true }).waitFor();

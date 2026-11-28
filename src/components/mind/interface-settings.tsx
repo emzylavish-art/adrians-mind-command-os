@@ -25,14 +25,32 @@ export function useInterfaceSettings() {
 type Settings = ReturnType<typeof useInterfaceSettings>;
 const field = "min-h-11 rounded-panel border border-line bg-surface px-3";
 export function SendKey({ prefs, save }: Settings) {
-  return <label className="settings-row"><span><strong>Send message</strong><small className="block text-muted">Shift + Enter always adds a new line.</small></span>
-    <select className={field} value={prefs.sendKey} onChange={(event) => {
-      const modified = event.target.value === "modified";
-      const bindings = { ...prefs.bindings };
-      if (modified) for (const [id] of KEY_ACTIONS) if (bindings[id] === "Mod+Enter") bindings[id] = "";
-      save({ ...prefs, sendKey: modified ? "modified" : "enter", bindings });
-    }}><option value="enter">Enter</option><option value="modified">Ctrl / ⌘ + Enter</option></select></label>;
+  const [review, setReview] = useState(false);
+  const conflict = KEY_ACTIONS.find(([id]) => prefs.bindings[id] === "Mod+Enter");
+  return <>
+    <label className="settings-row"><span><strong>Send message</strong><small className="block text-muted">Shift + Enter always adds a new line.</small></span>
+      <select aria-label="Send message key" className={field} value={prefs.sendKey} onChange={(event) => {
+        const modified = event.target.value === "modified";
+        setReview(modified && !!conflict);
+        if (!modified || !conflict) save({ ...prefs, sendKey: modified ? "modified" : "enter" });
+      }}><option value="enter">Enter</option><option value="modified">Ctrl / ⌘ + Enter</option></select>
+    </label>
+    {review && conflict && prefs.sendKey === "enter" && <div className="space-y-2">
+      <p role="status">Ctrl / ⌘ + Enter currently runs {conflict[2]}. Move this shortcut to Send message?</p>
+      <button type="button" className={field} onClick={() => {
+        if (save({ ...prefs, sendKey: "modified", bindings: { ...prefs.bindings, [conflict[0]]: "" } })) setReview(false);
+      }}>Move shortcut</button>{" "}
+      <button type="button" className={field} onClick={() => setReview(false)}>Keep current shortcut</button>
+    </div>}
+  </>;
 }
+
+const appearancePresets: Record<string, Appearance> = {
+  device: defaultAppearance,
+  ocean: { accent: "#72d8ce", background: "#08181e", foreground: "#f0f9fa", font: "System" },
+  paper: { accent: "#7c3b24", background: "#f7f2e9", foreground: "#27231c", font: "Serif" },
+};
+
 export function AppearanceSettings(settings: Settings & { light: boolean }) {
   const { prefs, save, light } = settings;
   const base = light ? { background: "#f5f7fb", foreground: "#0a0d14", accent: "#111827" } : { background: "#05070d", foreground: "#f4f6fb", accent: "#e8ecf5" };
@@ -40,12 +58,16 @@ export function AppearanceSettings(settings: Settings & { light: boolean }) {
   const [status, setStatus] = useState("");
   useEffect(() => { setDraft(prefs.appearance); }, [prefs.appearance]);
   const fg = draft.foreground || base.foreground, bg = draft.background || base.background;
+  const preset = Object.entries(appearancePresets).find(([, value]) =>
+    value.accent === draft.accent && value.background === draft.background &&
+    value.foreground === draft.foreground && value.font === draft.font
+  )?.[0] ?? "custom";
   const contrast = contrastRatio(fg, bg);
   return <section className="settings-card rounded-panel p-4 text-sm space-y-3" aria-label="Theme colors and fonts">
     <h3>Theme colors and fonts</h3>
-    <label className="settings-row">Theme preset<select className={field} value={Object.values(draft).join() === Object.values(defaultAppearance).join() ? "device" : "custom"} onChange={(e) => {
-      setDraft(e.target.value === "device" ? defaultAppearance : e.target.value === "paper" ? { accent: "#7c3b24", background: "#f7f2e9", foreground: "#27231c", font: "Serif" } : { accent: "#72d8ce", background: "#08181e", foreground: "#f0f9fa", font: "System" });
-    }}><option value="device">Mind OS</option><option value="ocean">Midnight tide</option><option value="paper">Reading room</option>{Object.values(draft).join() !== Object.values(defaultAppearance).join() && <option value="custom">Custom</option>}</select></label>
+    <label className="settings-row">Theme preset<select className={field} value={preset} onChange={(e) => {
+      setDraft(appearancePresets[e.target.value]); setStatus("");
+    }}><option value="device">Mind OS</option><option value="ocean">Midnight tide</option><option value="paper">Reading room</option>{preset === "custom" && <option value="custom" disabled>Custom</option>}</select></label>
     {(["accent", "background", "foreground"] as const).map((key) => <label className="settings-row capitalize" key={key}>{key}<span className="flex items-center gap-3"><code>{draft[key] || base[key]}</code><input type="color" value={draft[key] || base[key]} onChange={(e) => setDraft({ ...draft, [key]: e.target.value })}/></span></label>)}
     <details><summary className="cursor-pointer py-3">Advanced</summary><label className="settings-row">Font<select className={field} value={draft.font} onChange={(e) => setDraft({ ...draft, font: e.target.value })}>{fonts.map((font) => <option key={font}>{font}</option>)}</select></label></details>
     <div className="rounded-panel border border-line p-4" style={{color: fg, background: bg, fontFamily: fontValues[draft.font]}}><strong>Conversation preview</strong><p>Text contrast {contrast.toFixed(1)} to 1</p></div>
