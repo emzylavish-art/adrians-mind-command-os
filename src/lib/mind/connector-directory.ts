@@ -26,6 +26,7 @@ export const curatedConnectors = [
 ] as const;
 
 export function registryPageUrl(query: string, cursor = "") {
+  query = query.trim().replace(/\bsuperbase\b/gi, "supabase");
   const url = new URL("/v0.1/servers", registryOrigin);
   url.searchParams.set("version", "latest");
   url.searchParams.set("limit", "20");

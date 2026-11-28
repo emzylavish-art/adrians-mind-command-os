@@ -6,7 +6,8 @@ import { normalizeWorkMedia, type WorkMedia } from "./build-handoff.ts";
 export type BuildFileTarget = { workspace: string; cwd?: string };
 export type BuildEditorSelection = { anchor: number; head: number };
 export type BuildEditorBuffer = BuildFileTarget & { path: string; saved: string; draft: string; selection?: BuildEditorSelection };
-export type BuildDraft = { version: 1; owner: string; projectId?: string | null; buffers: Record<string, BuildEditorBuffer>; tabs: string[]; selectedFile: string; prompt: string; cwd?: string; branch?: string; mode?: "default" | "plan" | "auto"; planningTier?: ModelTier; sourceChatId?: string; media?: WorkMedia };
+export type BuildPlanReply = { text: string; model: string; request: string };
+export type BuildDraft = { version: 1; owner: string; projectId?: string | null; buffers: Record<string, BuildEditorBuffer>; tabs: string[]; selectedFile: string; prompt: string; cwd?: string; branch?: string; mode?: "default" | "plan" | "auto"; planningTier?: ModelTier; reply?: BuildPlanReply; sourceChatId?: string; media?: WorkMedia };
 
 export function buildBufferKey(target: BuildFileTarget, path: string): string {
   return JSON.stringify([target.workspace, target.cwd || "", path]);
@@ -44,6 +45,8 @@ export function parseBuildDraft(raw: string | null, owner: string, projectId: st
   return {
     version: 1, owner, projectId, buffers,
     planningTier: ["Auto", "Fast", "Expert", "Heavy", "Build"].includes(data.planningTier) ? data.planningTier : undefined,
+    reply: data.reply && typeof data.reply.text === "string" && typeof data.reply.model === "string" && typeof data.reply.request === "string"
+      ? { text: data.reply.text, model: data.reply.model, request: data.reply.request } : undefined,
     cwd: typeof data.cwd === "string" ? data.cwd : undefined,
     branch: typeof data.branch === "string" ? data.branch.slice(0, 160) : undefined,
     mode: data.mode === "default" || data.mode === "plan" || data.mode === "auto" ? data.mode : undefined,

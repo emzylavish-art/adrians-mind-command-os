@@ -26,7 +26,7 @@ export function ComposerQueue({ title, items, description, canQueue, canRestore,
     setOpen(false);
   }
   return <div className="composer-queue">
-    {onQueue && <button type="button" className="queue-add" aria-label="Queue" disabled={!canQueue} onClick={onQueue}>
+    {onQueue && <button type="button" className="queue-add" aria-label="Queue" disabled={!canQueue || items.length >= CUE_LIMIT} onClick={onQueue}>
       <ListEnd size={18} aria-hidden="true" /> Queue
     </button>}
     <button type="button" className="queue-view" aria-haspopup="dialog"
@@ -46,7 +46,7 @@ export function ComposerQueue({ title, items, description, canQueue, canRestore,
         {items.length === 0 ? <p className="queue-empty">The queue is empty.</p> : <ol className="queue-list">
           {items.map((item, index) => <li key={item.id} className="queue-row" data-testid="cued-message">
             <div className="queue-row-header"><span>{index + 1}</span><span>{item.claimed ? "Dispatch started" : item.paused === false ? "Waiting" : "Held for review"}</span></div>
-            {edit?.id === item.id ? <>
+            {edit?.id === item.id && !item.claimed ? <>
               <textarea autoFocus aria-label={`Edit queued message ${index + 1}`} value={edit.text} maxLength={CUE_TEXT_LIMIT}
                 onChange={event => setEdit({ id: item.id, text: event.target.value })} />
               <div className="queue-actions">

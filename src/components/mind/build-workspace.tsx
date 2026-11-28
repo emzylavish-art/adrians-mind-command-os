@@ -21,10 +21,9 @@ import { ComposerQueue } from "@/components/mind/composer-queue";
 import { cueMessage, dropCued, EMPTY_CUE, moveCued, readCue } from "@/lib/mind/message-cue";
 import { useComposerDraft } from "@/lib/mind/use-composer-draft";
 import { chatTurnBody } from "@/lib/mind/logic-routes";
-import { consumeMindTurn, prepareTurnId } from "@/lib/mind/live-turn";
+import { checkTurnReceipt, consumeMindTurn, prepareTurnId } from "@/lib/mind/live-turn";
 import { boundAbortSignal } from "@/lib/mind/turn-timeouts";
-import { createBuildPlanningGate } from "@/lib/mind/kimi/build-lifecycle";
-import { applyBuildSave, buildBufferKey as bufferKey, buildDraftKey, buildResultHandoff, matchesBuildSave, parseBuildDraft, serializeBuildDraft, type BuildEditorBuffer as EditorBuffer, type BuildFileTarget as FileTarget } from "@/lib/mind/kimi/build-review";
+import { applyBuildSave, buildBufferKey as bufferKey, buildDraftKey, buildResultHandoff, matchesBuildSave, parseBuildDraft, serializeBuildDraft, type BuildPlanReply, type BuildEditorBuffer as EditorBuffer, type BuildFileTarget as FileTarget } from "@/lib/mind/kimi/build-review";
 import { buildResultKey, canReturnBuildResult, parseBuildResult, readBuildReturnSource, serializeBuildResult, type BuildReturnSource, type BuildStoredReceipt, type BuildStoredResult } from "@/lib/mind/kimi/build-result";
 import { buildBranchName, workRunStorageKey, workStorageKey } from "@/lib/mind/kimi/build-scope";
 import { buildHandoffKey, normalizeWorkMedia, parseChatBuildHandoff, workImageKey, type ChatBuildHandoff, type WorkImageRef, type WorkMedia, type WorkOriginalRef } from "@/lib/mind/kimi/build-handoff";
@@ -192,9 +191,12 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
   const [rowMenu, setRowMenu] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [plan, setPlan] = useState("");
+  const [savedPlan, setSavedPlan] = useState<BuildPlanReply>();
   const [planModel, setPlanModel] = useState("");
   const [planningTier, setPlanningTier] = useState<ModelTier | null>(null);
   const planFlight = useRef(false);
+  const [legacyReview, setLegacyReview] = useState("");
+  const [separatePlan, setSeparatePlan] = useState("");
   const planAttempts = useRef(new Map<string, string>());
   const planOwner = useRef(props.ownerId);
   planOwner.current = props.ownerId;
@@ -547,6 +549,11 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
       const restored = parseBuildDraft(sessionStorage.getItem(draftKey), owner, projectId);
       if (restored) {
         setBuffers(restored.buffers); setTabs(restored.tabs); setSelectedFile(restored.selectedFile); setPrompt(restored.prompt); setCwd(restored.cwd ?? ""); setPlanningTier(restored.planningTier ?? null); setSourceChatId(restored.sourceChatId);
+        if (restored.reply) {
+          setSavedPlan(restored.reply);
+          setPlan(restored.reply.text);
+          setPlanModel(restored.reply.model);
+        }
         setBranch(restored.branch ?? "");
         setMode(restored.mode ?? "default");
         setWorkMedia(restored.media);
@@ -565,9 +572,9 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
   useEffect(() => {
     if (!draftHydrated || !props.ownerId) return;
     try {
-      sessionStorage.setItem(draftKey, serializeBuildDraft({ owner: props.ownerId, projectId, buffers, tabs, selectedFile, prompt, cwd, branch, mode, sourceChatId, media: workMedia, planningTier: planningTier ?? undefined }));
+      sessionStorage.setItem(draftKey, serializeBuildDraft({ owner: props.ownerId, projectId, buffers, tabs, selectedFile, prompt, cwd, branch, mode, sourceChatId, media: workMedia, reply: savedPlan, planningTier: planningTier ?? undefined }));
     } catch (error) { setFileNotice(error instanceof Error ? error.message : "Draft recovery could not be saved. Save or copy your changes before leaving Build."); }
-  }, [buffers, tabs, selectedFile, prompt, cwd, branch, mode, planningTier, props.ownerId, projectId, draftKey, draftHydrated, sourceChatId, workMedia]);
+  }, [buffers, tabs, selectedFile, prompt, cwd, branch, mode, planningTier, props.ownerId, projectId, draftKey, draftHydrated, sourceChatId, workMedia, savedPlan]);
 
   useEffect(() => {
     if (draftHydrated) void browseWorkspace(false);
@@ -608,7 +615,7 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
     const media = normalizeWorkMedia({ images, originals });
     const nextMode = incomingTask.mode === "auto" || incomingTask.mode === "plan" || incomingTask.mode === "default" ? incomingTask.mode : mode;
     try {
-      const encoded = serializeBuildDraft({ owner, projectId, buffers: buffersRef.current, tabs, selectedFile, prompt: nextPrompt, cwd, branch, mode: nextMode, sourceChatId: source, media, planningTier: planningTier ?? undefined });
+      const encoded = serializeBuildDraft({ owner, projectId, buffers: buffersRef.current, tabs, selectedFile, prompt: nextPrompt, cwd, branch, mode: nextMode, sourceChatId: source, media, reply: savedPlan, planningTier: planningTier ?? undefined });
       sessionStorage.setItem(draftKey, encoded);
       if (sessionStorage.getItem(draftKey) !== encoded) throw new Error("Build draft did not read back.");
       if (incomingTask.threadId) sessionStorage.setItem(`adrian-human-return.${owner}`, incomingTask.threadId);
@@ -874,13 +881,10 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
     }
     planFlight.current = true;
     setPlanning(true);
-    setPlan("");
-    setPlanModel("");
     setNotice(github ? "Contacting GitHub…" : "Asking Grok for a plan.");
     const controller = new AbortController();
     planningController.current = controller;
-    const timeout = AbortSignal.timeout(30_000);
-    const signal = typeof AbortSignal.any === "function" ? AbortSignal.any([controller.signal, timeout]) : timeout;
+    const { signal, cleanup } = boundAbortSignal(controller.signal, 30_000);
     try {
       const carried = github ? [] : workMedia?.images ?? [];
       if (carried.length + (github ? 0 : images.length) > MAX_IMAGES_PER_TURN) { setNotice("Choose up to four total planning images before submitting."); return; }
@@ -904,17 +908,33 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
       });
       const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(body)));
       const fingerprint = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
-      const key = `adrian.build.plan.${owner ?? "local"}.${fingerprint}`;
+      const legacyKey = `adrian.build.plan.${owner ?? "local"}.${fingerprint}`;
+      const key = workStorageKey(owner ?? "local", projectId, "plan." + fingerprint, legacyKey);
       let id = planAttempts.current.get(key);
       if (!id) {
         try { id = sessionStorage.getItem(key) || undefined; } catch { /* the open tab can still recover */ }
       }
       const token = getBearerToken();
       const headers: Record<string, string> = token ? { authorization: `Bearer ${token}` } : {};
+      if (projectId && !id && separatePlan !== key) {
+        let legacyId: string | null = null;
+        try { legacyId = sessionStorage.getItem(legacyKey); } catch { /* Memory-only recovery is still available. */ }
+        if (legacyId) {
+          const receipt = await checkTurnReceipt("/api/mind/turn", legacyId, headers, signal);
+          if (!mounted.current || signal.aborted || receipt.ownerId !== owner) return;
+          setLegacyReview(key);
+          setNotice(`Earlier matching request ${legacyId} has status ${receipt.state}. Its project was not recorded. No new request was sent.`);
+          return;
+        }
+      }
+      setLegacyReview("");
+      setSeparatePlan("");
       id ??= await prepareTurnId("/api/mind/turn", headers, signal);
-      if (planOwner.current !== owner || signal.aborted) return;
+      if (!mounted.current || planOwner.current !== owner || signal.aborted) return;
       planAttempts.current.set(key, id);
       try { sessionStorage.setItem(key, id); } catch { /* retained in this tab */ }
+      setPlan("");
+      setPlanModel("");
       const result = await consumeMindTurn({
         url: "/api/mind/turn",
         signal,
@@ -931,6 +951,7 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
         setNotice(result.error);
         return;
       }
+      setSavedPlan({ text: result.text, model: result.model, request: words.trim() });
       setPlan(result.text);
       setPlanModel(result.model);
       setNotice(github ? "GitHub request completed." : "Grok returned a plan. No file was written.");
@@ -938,6 +959,8 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
     } catch {
       setNotice(github ? "GitHub did not confirm the request. Check the branch before retrying." : "The Grok plan could not be completed.");
     } finally {
+      cleanup();
+      planningController.current = null;
       planFlight.current = false;
       setPlanning(false);
     }
@@ -1146,7 +1169,7 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
           ))}
         </div>
       ) : null}
-      <section className="intelligence-group" aria-label="Task" hidden={band !== "message"}>
+      <section className="intelligence-group build-task-section" aria-label="Task" hidden={band !== "message"}>
         <h3>Task</h3>
       {executionChoice && <ActionOverlay label="Unsaved Build files" title="Unsaved changes" onClose={() => setExecutionChoice(false)}>
         <p>The editor contains changes not saved to the execution workspace.</p>
@@ -1155,7 +1178,8 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
         <button type="button" onClick={() => setExecutionChoice(false)}>Cancel</button>
       </ActionOverlay>}
       {executionReceipt && <details className="text-xs text-muted"><summary>Submitted source receipt</summary><p>Workspace {executionReceipt.workspace} · {executionReceipt.cwd || "runtime default"} · {executionReceipt.policy === "save" ? "Verified save before submission" : "Saved versions; drafts kept"}. These hashes identify the submitted baseline; runtime readback is required to confirm which revision executed.</p><ul>{executionReceipt.files.map((file) => <li key={file.path}>{file.path} · {file.sha256}</li>)}</ul></details>}
-      <form className="space-y-3" onSubmit={submit}>
+      <div className="build-task-and-reply">
+      <form className="min-w-0 space-y-3" onSubmit={submit}>
         <div className="flex items-center gap-2">
           <FolderOpen className="size-4 text-accent" aria-hidden="true" />
           <p className="font-semibold">Adrian Build</p>
@@ -1268,8 +1292,10 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
         </div>
       </form>
 
+      {plan ? <section className="dense-card min-w-0 space-y-2" aria-label="Build reply"><h3 className="font-semibold">Build reply{planModel ? ` · ${planModel}` : ""}</h3>{savedPlan?.text === plan && <details className="text-xs text-muted"><summary className="cursor-pointer py-2">Submitted task</summary><p className="whitespace-pre-wrap break-words">{savedPlan.request}</p></details>}<div className="build-reading-result text-base">{plan}</div></section> : null}
+      </div>
       {notice ? <p className="dense-card text-sm" role="status">{notice}</p> : null}
-      {plan ? <section className="dense-card min-w-0 space-y-2" aria-label="Build reply"><h3 className="font-semibold">Build reply{planModel ? ` · ${planModel}` : ""}</h3><div className="build-reading-result text-base">{plan}</div></section> : null}
+      {legacyReview && <button type="button" className="min-h-11 underline" onClick={() => { setSeparatePlan(legacyReview); setLegacyReview(""); setNotice("Separate request selected. Review the task and submit when ready."); }}>Prepare a separate request for this project</button>}
       {fileNotice ? <p className="dense-card text-sm" role="status">{fileNotice}</p> : null}
 
       {!hasWorkspaceSurface ? <div className="promo-banner text-sm"><ShieldCheck className="size-5 text-accent" aria-hidden="true" /><div><p className="font-semibold">Honest runtime boundary</p><p className="text-muted">This workspace never fabricates agent output. It shows queued, running, permission, error, and completed states from the ACP event stream.</p></div></div> : null}

@@ -66,8 +66,9 @@ function ApiResults({ query }: { query: string }) {
   const [rows, setRows] = useState<ApiListing[]>([]);
   const [failed, setFailed] = useState(false);
   const [retry, setRetry] = useState(0);
-  const [paging, setPaging] = useState({ query, limit: pageSize });
-  const limit = paging.query === query ? paging.limit : pageSize;
+  const [category, setCategory] = useState("");
+  const [paging, setPaging] = useState({ query, category, limit: pageSize });
+  const limit = paging.query === query && paging.category === category ? paging.limit : pageSize;
   useEffect(() => {
     let active = true;
     const controller = new AbortController();
@@ -80,14 +81,21 @@ function ApiResults({ query }: { query: string }) {
     return () => { active = false; controller.abort(); };
   }, [retry]);
   const needle = query.trim().toLowerCase();
-  const matches = rows.filter(item => (item.id + " " + item.title + " " + item.category).toLowerCase().includes(needle));
+  const categories = [...new Set(rows.map(item => item.category).filter(Boolean))].sort();
+  const matches = rows.filter(item => (!category || category === item.category) && (item.id + " " + item.title + " " + item.category).toLowerCase().includes(needle));
   if (failed) return <button type="button" className="min-h-11 text-accent" onClick={() => {setFailed(false); setRetry(n => n + 1);}}>Retry loading API directory</button>;
   if (!rows.length) return <p role="status">Loading API directory…</p>;
   return <div className="space-y-3">
+    <label className="flex flex-wrap items-center gap-2 text-sm">API category
+      <select className="min-h-11 max-w-full rounded-panel border border-line bg-surface px-3" value={category} onChange={event => setCategory(event.target.value)}>
+        <option value="">All categories</option>
+        {categories.map(name => <option key={name} value={name}>{name}</option>)}
+      </select>
+    </label>
     <p role="status" className="text-sm text-muted">{matches.length.toLocaleString()} of {rows.length.toLocaleString()} API specifications from APIs.guru. Browse the published API contract for each service.</p>
     {matches.slice(0, limit).map(item => <a key={item.id} href={item.specification} target="_blank" rel="noreferrer" className="flex min-h-14 items-center gap-3 rounded-panel border border-line p-3">
       <BrandImage src={item.logo} /><span className="min-w-0"><strong>{item.title}</strong><span className="block break-all text-xs text-muted">{item.id} · OpenAPI ↗</span></span></a>)}
-    {matches.length > limit && <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setPaging({ query, limit: limit + pageSize })}>Show more APIs</button>}
+    {matches.length > limit && <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setPaging({ query, category, limit: limit + pageSize })}>Show more APIs</button>}
   </div>;
 }
 

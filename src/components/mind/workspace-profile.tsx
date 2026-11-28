@@ -1,11 +1,11 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { Workspace } from "@/lib/mind/types";
 import type { AppUser } from "@/lib/auth/use-current-user";
 import { profileActivity, type ChartInterval } from "@/lib/mind/profile-activity";
 import { useAccountPreferences } from "./account-preferences-context";
 import { UsageHistory } from "./usage-history";
 
-type Profile = { name: string; handle: string; projects: string[] };
+type Profile = { avatar?: string; name: string; handle: string; projects: string[] };
 export function WorkspaceProfile({ account, workspace, onBuild }: { account: AppUser; workspace: Workspace; onBuild: () => void }) {
   const storage = useAccountPreferences();
   const [profile, setProfile] = useState<Profile>(() => {
@@ -13,10 +13,30 @@ export function WorkspaceProfile({ account, workspace, onBuild }: { account: App
     try {
       const item = JSON.parse(storage.getItem("workspace-profile") || "null");
       if (!item || typeof item.name !== "string") return fallback;
-      return { name: item.name, handle: typeof item.handle === "string" ? item.handle : "", projects: Array.isArray(item.projects) ? item.projects.filter((id: unknown) => typeof id === "string") : [] };
+      return { avatar: typeof item.avatar === "string" && /^data:image\/(png|jpeg);base64,/.test(item.avatar) ? item.avatar : undefined, name: item.name, handle: typeof item.handle === "string" ? item.handle : "", projects: Array.isArray(item.projects) ? item.projects.filter((id: unknown) => typeof id === "string") : [] };
     } catch { return fallback; }
   });
   const [draft, setDraft] = useState<Profile | null>(null);
+  const photoRequest = useRef(0);
+  const [readingPhoto, setReadingPhoto] = useState(false);
+  async function selectPhoto(file?: File) {
+    if (!file) return;
+    const request = ++photoRequest.current;
+    setReadingPhoto(true);
+    try {
+      if (!["image/jpeg", "image/png", "image/webp"].includes(file.type) || file.size > 10 * 1024 * 1024) throw new Error("Choose a JPEG, PNG or WebP up to 10 MB.");
+      const { fileToDownscaledDataUrl } = await import("./media/downscale");
+      const image = await fileToDownscaledDataUrl(file, 160);
+      if (photoRequest.current === request) {
+        setDraft(current => current && { ...current, avatar: image.dataUrl });
+        setStatus("Photo ready to save.");
+      }
+    } catch (error) {
+      if (photoRequest.current === request) setStatus(error instanceof Error ? error.message : "The photo could not be read.");
+    } finally {
+      if (photoRequest.current === request) setReadingPhoto(false);
+    }
+  }
   const [status, setStatus] = useState("");
   const [preview, setPreview] = useState(false);
   const [interval, setInterval] = useState<ChartInterval>("Daily");
@@ -25,6 +45,7 @@ export function WorkspaceProfile({ account, workspace, onBuild }: { account: App
   const projects = workspace.projects.filter(project => !project.archived && project.lifecycle !== "archived");
   const featured = projects.filter(project => profile.projects.includes(project.id));
   const shareText = [profile.name, profile.handle && "@" + profile.handle, ...featured.map(project => project.name)].filter(Boolean).join("\n");
+  const avatar = profile.avatar || account.profileImageUrl;
   const control = "min-h-11 rounded-panel border border-line px-3 text-sm";
   const summary = [
     ["Known tokens", stats.knownTokens.toLocaleString()], ["Peak UTC day", stats.peak.toLocaleString()],
@@ -33,7 +54,7 @@ export function WorkspaceProfile({ account, workspace, onBuild }: { account: App
   ];
   return <section className="space-y-4">
     <header className="flex flex-wrap items-center gap-3">
-      {account.profileImageUrl ? <img className="size-12 rounded-full" src={account.profileImageUrl} alt="" /> : <span className="grid size-12 place-items-center rounded-full bg-surface-2 text-xl">{profile.name.slice(0, 1)}</span>}
+      {avatar ? <img className="size-12 rounded-full object-cover" src={avatar} alt="" /> : <span className="grid size-12 place-items-center rounded-full bg-surface-2 text-xl">{profile.name.slice(0, 1)}</span>}
       <div className="mr-auto"><h2 className="text-xl font-semibold">{profile.name}</h2><p className="text-sm text-muted">{profile.handle && `@${profile.handle} · `}Private workspace profile</p></div>
       <button className={control} type="button" onClick={() => { setDraft({ ...profile }); setStatus(""); }}>Edit profile</button>
       <button className={control} type="button" aria-expanded={preview} onClick={() => setPreview(!preview)}>Preview sharing</button>
@@ -44,10 +65,17 @@ export function WorkspaceProfile({ account, workspace, onBuild }: { account: App
       try { storage.setItem("workspace-profile", JSON.stringify(saved)); setProfile(saved); setDraft(null); setStatus("Profile saved for this account on this device."); }
       catch { setStatus("Your profile could not be saved. Your edits are still here."); }
     }}>
+      <label className="grid gap-1">Profile photo on this device
+        <input type="file" accept="image/jpeg,image/png,image/webp" onChange={event => { void selectPhoto(event.target.files?.[0]); event.target.value = ""; }} />
+      </label>
+      {draft.avatar && <div className="flex items-center gap-2">
+        <img className="size-12 rounded-full object-cover" src={draft.avatar} alt="Selected profile photo" />
+        <button type="button" className={control} onClick={() => { photoRequest.current++; setReadingPhoto(false); setDraft({ ...draft, avatar: undefined }); }}>Use account photo or initials</button>
+      </div>}
       <label>Display name <input className={control} required maxLength={70} value={draft.name} onChange={event => setDraft({ ...draft, name: event.target.value })} /></label>
       <label>Handle <input className={control} maxLength={40} pattern="[A-Za-z0-9_]+" value={draft.handle} onChange={event => setDraft({ ...draft, handle: event.target.value })} /></label>
       <fieldset><legend>Projects to showcase</legend>{projects.map(project => <label key={project.id} className="flex min-h-11 items-center gap-2"><input type="checkbox" checked={draft.projects.includes(project.id)} onChange={event => setDraft({ ...draft, projects: event.target.checked ? [...draft.projects, project.id] : draft.projects.filter(id => id !== project.id) })} />{project.name}</label>)}</fieldset>
-      <div className="flex gap-2"><button className={control} type="submit">Save profile</button><button className={control} type="button" onClick={() => setDraft(null)}>Cancel</button></div>
+      <div className="flex gap-2"><button className={control} type="submit" disabled={readingPhoto}>Save profile</button><button className={control} type="button" onClick={() => { photoRequest.current++; setReadingPhoto(false); setDraft(null); }}>Cancel</button></div>
     </form>}
     {preview && <section className="rounded-panel border border-line p-4"><h3 className="font-semibold">Share preview</h3><pre className="my-2 whitespace-pre-wrap">{shareText}</pre><button className={control} type="button" onClick={async () => {
       try { await navigator.clipboard.writeText(shareText); setStatus("Profile summary copied."); }
@@ -59,7 +87,7 @@ export function WorkspaceProfile({ account, workspace, onBuild }: { account: App
     <section className="rounded-panel border border-line p-4"><h3 className="font-semibold">Token activity</h3><p className="mb-2 text-xs text-muted">Last 84 UTC days from retained workspace receipts. {stats.missing} receipts have incomplete token counts.</p>
       <div role="group" aria-label="Chart interval" className="flex flex-wrap gap-1">{(["Daily", "Weekly", "Cumulative"] as const).map(value => <button className={control + " aria-pressed:bg-fg aria-pressed:text-bg"} type="button" key={value} aria-pressed={interval === value} onClick={() => setInterval(value)}>{value}</button>)}</div>
       <div className="mt-3 flex h-20 items-end gap-px" aria-hidden="true">{stats.buckets.map(bucket => <span key={bucket.date} className="min-w-0 flex-1 rounded-t-sm" style={{ height: Math.max(2, 100 * bucket.known / max) + "%", backgroundColor: bucket.known ? "var(--accent, currentColor)" : "currentColor", opacity: bucket.known ? 1 : .16 }} />)}</div>
-      <details className="mt-2 text-xs"><summary className="cursor-pointer py-2">Read chart values</summary><div className="max-h-52 overflow-auto"><table><thead><tr><th>Period (UTC)</th><th>Known tokens</th><th>Receipts</th></tr></thead><tbody>{stats.buckets.map(bucket => <tr key={bucket.date}><td>{bucket.date}{interval === "Weekly" && " – " + bucket.end}</td><td>{bucket.known}</td><td>{bucket.receipts}</td></tr>)}</tbody></table></div></details>
+      <details className="mt-2 text-xs"><summary className="cursor-pointer py-2">Read chart values</summary><div className="max-h-52 overflow-auto"><table><thead><tr><th>Period (UTC)</th><th>Known tokens</th><th>Receipts</th><th>Incomplete receipts</th></tr></thead><tbody>{stats.buckets.map(bucket => <tr key={bucket.date}><td>{bucket.date}{interval === "Weekly" && " – " + bucket.end}</td><td>{bucket.known}</td><td>{bucket.receipts}</td><td>{bucket.partial}</td></tr>)}</tbody></table></div></details>
     </section>
     <section className="rounded-panel border border-line p-4"><h3 className="font-semibold">Showcase</h3>{featured.length ? <ul>{featured.map(project => <li key={project.id}>{project.name}</li>)}</ul> : <p className="text-sm text-muted">Choose a project in Edit profile to feature it here.</p>}<button className={control + " mt-2"} type="button" onClick={onBuild}>Create a site in Build</button></section>
     {!account.isDevFallback && <UsageHistory ownerId={account.id} />}

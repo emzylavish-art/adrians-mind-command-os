@@ -331,10 +331,18 @@ try {
     if (request.method() !== "GET") socialWrites.push([request.method(), path]);
     return route.fulfill({ json: socialData.get(path)(request) });
   });
-  await embedded.route(url => url.origin === "http://127.0.0.1:8000", route => route.fulfill({
-    headers: { "access-control-allow-origin": "*", "access-control-allow-headers": "authorization, content-type" },
-    json: new URL(route.request().url()).pathname === "/dashboard-data" ? { session: { logged_in: true }, health: { healthy: true } } : {},
-  }));
+  let bridgeSwitches = 0;
+  await embedded.route(url => url.origin === "http://127.0.0.1:8000", route => {
+    const path = new URL(route.request().url()).pathname;
+    const headers = { "access-control-allow-origin": "*", "access-control-allow-headers": "authorization, content-type, x-gpt-bridge-secret" };
+    if (path === "/v1/browser-models/select" && route.request().method() === "POST") {
+      bridgeSwitches++;
+      return route.fulfill({ headers, status: 409, json: { reason: "Fixture bridge denied this model." } });
+    }
+    const json = path === "/dashboard-data" ? { session: { logged_in: true }, health: { healthy: true } }
+      : path === "/v1/browser-models" ? { current: "Model A", models: [{ name: "Model A", selected: true }, { name: "Model B" }] } : {};
+    return route.fulfill({ headers, json });
+  });
   const embeddedPage = await embedded.newPage();
   const embeddedChat = `${origin}/?section=chat&chat=fixture-chat`;
   const social = embeddedPage.getByTestId("adrian-social-workspace");
@@ -484,6 +492,16 @@ try {
     const frame = embeddedPage.frameLocator('iframe[title="GPT wrapper"]');
     await frame.getByText("Browser signed in", { exact: true }).waitFor();
     return { signedIn: "fixture response", apiExecution: "unverified" };
+  });
+  await check(embeddedPage, "wrapper-refused-model-preserves-verified-selection", async () => {
+    const frame = embeddedPage.frameLocator('iframe[title="GPT wrapper"]');
+    await frame.locator('[data-panel="models-section"]').click();
+    await frame.getByRole("button", { name: "See models" }).click();
+    await frame.getByRole("button", { name: "Model B", exact: true }).click();
+    await frame.getByText("Fixture bridge denied this model.", { exact: true }).waitFor();
+    assert.equal(await frame.locator("#model-current").innerText(), "Current: Model A");
+    assert.equal(bridgeSwitches, 1);
+    return { refused: "Model B", verified: "Model A", selectionRequests: bridgeSwitches };
   });
   await embedded.close();
 
@@ -702,11 +720,26 @@ try {
     await handoffPage.getByText("Synthetic image-aware plan", { exact: true }).waitFor();
     assert.equal(planningImages.length, 1);
     assert.equal(planningImages[0].dataUrl, handoffPixel);
+    const viewport = handoffPage.viewportSize();
+    const form = handoffPage.locator(".build-task-and-reply form");
+    const reply = handoffPage.getByRole("region", { name: "Build reply" });
+    await handoffPage.setViewportSize({ width: 1600, height: 960 });
+    const desktop = await form.boundingBox(), wide = await reply.boundingBox();
+    assert.ok(wide.x >= desktop.x + desktop.width - 1 && wide.width > desktop.width);
+    await reply.scrollIntoViewIfNeeded();
+    await handoffPage.screenshot({ path: resolve(output, "build-reply-desktop.png") });
+    await handoffPage.setViewportSize({ width: 390, height: 844 });
+    const narrow = await form.boundingBox(), stacked = await reply.boundingBox();
+    assert.ok(stacked.y >= narrow.y + narrow.height - 1 && stacked.width <= 390);
+    await reply.scrollIntoViewIfNeeded();
+    await handoffPage.screenshot({ path: resolve(output, "build-reply-mobile.png") });
+    await handoffPage.setViewportSize(viewport);
     return { binaryBytesMatched: true, selectedImagesReachedPlanningFixture: planningImages.length, textOnlyExecutionRefusedAttachedImages: true };
   });
   await check(handoffPage, "work-paired-lost-acknowledgement-recovery", async () => {
     dropPairedAcknowledgement = true;
     await handoffPage.reload({ waitUntil: "domcontentloaded" });
+    await handoffPage.getByRole("region", { name: "Build reply" }).getByText("Synthetic image-aware plan", { exact: true }).waitFor();
     await handoffPage.getByRole("button", { name: "Remove image fixture-handoff.png" }).click();
     await handoffPage.getByRole("textbox", { name: "Target Git branch" }).fill("");
     await handoffPage.getByRole("navigation", { name: "Build sections" }).getByRole("button", { name: "Actions", exact: true }).click();

@@ -89,3 +89,11 @@
   white-space: pre-wrap;
   line-height: 1.65;
 }
+
+.build-task-section { container-type: inline-size; }
+.build-task-and-reply { display: grid; gap: 1rem; align-items: start; }
+@container (min-width: 48rem) {
+  .build-task-and-reply:has([aria-label="Build reply"]) {
+    grid-template-columns: minmax(16rem, 2fr) minmax(0, 3fr);
+  }
+}

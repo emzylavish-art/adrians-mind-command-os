@@ -100,6 +100,7 @@ export function NuanceCallCard(props: { halted: boolean }) {
   const [muted, setMuted] = useState(false);
   const [changingMic, setChangingMic] = useState(false);
   const [live, setLive] = useState(false);
+  const [openingMic, setOpeningMic] = useState(false);
   const [transcript, setTranscript] = useState("");
 
   async function releaseServerCall(id: string) {
@@ -117,6 +118,7 @@ export function NuanceCallCard(props: { halted: boolean }) {
     conversationRef.current = null;
     mintOnce.current = false;
     tokenIssued.current = false;
+    setOpeningMic(false);
     setLive(false);
     setMuted(false);
     setChangingMic(false);
@@ -217,10 +219,11 @@ export function NuanceCallCard(props: { halted: boolean }) {
     }
     const attempt = ++generation.current;
     mintOnce.current = true;
-    setTranscript("");
+    setOpeningMic(true);
     setStatus("Opening the microphone.");
     const microphone = await openMicrophone();
     if (attempt !== generation.current) { if (microphone.ok) microphone.stop(); return; }
+    setOpeningMic(false);
     if (!microphone.ok) {
       mintOnce.current = false;
       setMic(microphone.error);
@@ -258,10 +261,14 @@ export function NuanceCallCard(props: { halted: boolean }) {
         },
       });
       conversationRef.current = conversation;
+      let receivedText = false;
       conversation.onInterfaceEvent((event) => {
         if (attempt !== generation.current) return;
         if (event.type === "session.output_transcript.delta" && typeof event.delta === "string") {
-          setTranscript((current) => `${current}${event.delta}`.slice(-2000));
+          const delta = event.delta;
+          const first = !receivedText;
+          receivedText = true;
+          setTranscript(current => (first ? delta : current + delta));
         }
       });
       conversation.onChange((event) => {
@@ -286,6 +293,7 @@ export function NuanceCallCard(props: { halted: boolean }) {
         }
         if (event.type === "session-ended") {
           if (conversationRef.current !== conversation) return;
+          generation.current++;
           conversationRef.current = null;
           mintOnce.current = false;
           tokenIssued.current = false;
@@ -299,8 +307,9 @@ export function NuanceCallCard(props: { halted: boolean }) {
       await conversation.connect();
     } catch (error) {
       if (attempt !== generation.current) return;
+      const closing = generation.current + 1;
       await hangUp();
-      setStatus(safeStatus(error, callError(error)));
+      if (generation.current === closing) setStatus(safeStatus(error, callError(error)));
     }
   }
 
@@ -321,7 +330,7 @@ export function NuanceCallCard(props: { halted: boolean }) {
         data-testid="nuance-persona"
         className="mt-2 min-h-11 w-full rounded-panel border border-line bg-transparent px-3 text-sm"
         value={persona}
-        disabled={live}
+        disabled={live || openingMic}
         onChange={(event) => setPersona(event.target.value)}
       >
         {personas.filter((item) => item.available).map((item) => (
@@ -330,7 +339,9 @@ export function NuanceCallCard(props: { halted: boolean }) {
       </select>
       {emma && !emma.available ? <p className="mt-2 text-sm text-muted" data-testid="nuance-emma">{emma.reason}</p> : null}
       <div className="mt-3 flex flex-wrap gap-2">
-        {live ? (
+        {openingMic ? (
+          <button type="button" className="min-h-11 rounded-panel border border-line px-4 text-sm" onClick={() => { void hangUp(); setStatus("Microphone request canceled."); }}>Cancel microphone request</button>
+        ) : live ? (
           <>
             <button type="button" className="min-h-11 rounded-panel border border-line px-4 text-sm" data-testid="nuance-mute" disabled={changingMic} aria-pressed={muted} onClick={() => void toggleMute()}>{muted ? "Unmute microphone" : "Mute microphone"}</button>
             <button type="button" className="min-h-11 rounded-panel border border-line px-4 text-sm" data-testid="nuance-hangup" onClick={() => void hangUp()}>Hang up</button>

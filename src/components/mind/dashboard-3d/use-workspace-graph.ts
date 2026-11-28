@@ -24,8 +24,12 @@ export function useWorkspaceGraph(enabled: boolean) {
       loading = true;
       try {
         const result = await ownerNotionGraph();
-        if (!active || result.ownerId !== ownerId) return;
-        setSnapshot({ scope, graph: result.graph, summary: result.graph?.reason || "Connect or reconnect Notion to see your workspace." });
+        if (!active) return;
+        if (result.ownerId !== ownerId) {
+          setSnapshot({ scope, graph: null, summary: "Account verification changed. Refresh Notion to check this workspace." });
+          return;
+        }
+        setSnapshot({ scope, graph: result.graph, summary: result.graph ? (result.graph.reason || (result.graph.available ? "Authorized Notion workspace" : "Notion workspace unavailable")) : "Connect or reconnect Notion to see your workspace." });
       } catch {
         if (active) setSnapshot({ scope, graph: null, summary: "Your private Notion graph could not be loaded." });
       } finally {

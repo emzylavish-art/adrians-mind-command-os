@@ -6,6 +6,7 @@ import { curatedConnectors, parseRegistryPage, registryPageUrl } from "./connect
 const meta = { "io.modelcontextprotocol.registry/official": { status: "active", isLatest: true } };
 test("registry search and cursor are scoped and encoded", () => {
   const url = registryPageUrl("  test & a  ", "x:y&limit=1");
+  assert.equal(registryPageUrl("Superbase").searchParams.get("search"), "supabase");
   assert.equal(url.hostname, "registry.modelcontextprotocol.io");
   assert.equal(url.searchParams.get("search"), "test & a");
   assert.equal(url.searchParams.get("cursor"), "x:y&limit=1");

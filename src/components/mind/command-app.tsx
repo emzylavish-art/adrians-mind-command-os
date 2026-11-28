@@ -9024,13 +9024,13 @@ ${message.content}`;
                   { id: "plugins", label: "Plugins", detail: "Catalog and connection marks. Opening a row does not connect the service.", mark: "/brand/marks/plugins.png", open: () => setView("connected") },
                   { id: "library", label: "Library", detail: "Text copies in this browser. Upload text or open a file you already attached.", mark: "/brand/marks/library.png", open: () => setView("files") },
                   { id: "projects", label: "Projects", detail: "Records on this device. Open chats or notes from a project card.", mark: "/brand/marks/projects.png", open: () => setView("projects") },
-                  { id: "scheduled", label: "Scheduled", detail: "Jobs that wait for a time. Nothing runs until you start it.", mark: "/brand/marks/scheduled.png", open: () => setView("scheduled") },
+                  { id: "scheduled", label: "Scheduled", detail: "Review scheduled jobs, their approval, and the latest worker receipt.", mark: "/brand/marks/scheduled.png", open: () => setView("scheduled") },
                   { id: "build", label: "Build", detail: "Adrian Build workspace. A task can edit the hosted workspace, or a paired computer when one is connected.", mark: "/brand/marks/build.png", open: () => setView("build") },
                   { id: "explore", label: "Explore", detail: "Filter local templates, save one, then open it in Chat.", mark: "/brand/marks/explore.png", open: () => window.location.assign("/explore") },
                   { id: "dashboard", label: "Dashboard", detail: "Opens the workspace map inside this app.", mark: "/brand/marks/activity.png", open: () => setView("dashboard") },
                   { id: "research", label: "Research", detail: "Opens the free-first research website.", mark: "/brand/marks/research.png", open: () => window.location.assign("/research") },
                   { id: "social", label: "Adrian Social", detail: "Open accounts, drafts, and service controls.", mark: "/apps/social/assets/mark.jpg", open: openSocial },
-                  { id: "gpt-wrapper", label: "GPT wrapper", detail: "The GPT wrapper runs inside this software.", mark: "/brand/marks/gpt-wrapper.svg", open: () => window.location.assign("/gpt-wrapper") },
+                  { id: "gpt-wrapper", label: "GPT wrapper", detail: "Check the signed-in browser bridge and its reported model.", mark: "/brand/marks/gpt-wrapper.svg", open: () => window.location.assign("/gpt-wrapper") },
                   ].filter((item) => helpQuery.toLowerCase().trim().split(/\s+/).every((word) => `${item.label} ${item.detail}`.toLowerCase().includes(word)));
                   if (topics.length === 0) return <p className="mt-2 text-sm text-muted" role="status">No matching workspace guides.</p>;
                   return topics.map((item) => (
@@ -9056,7 +9056,7 @@ ${message.content}`;
                   <img src="/brand/marks/settings.png" alt="" className="size-8 rounded-lg" />
                   <div>
                     <h2 id="settings-heading" tabIndex={-1} className="font-display text-3xl font-bold">Settings</h2>
-                    <p className="text-sm text-muted">Preferences stay in this browser. Open a group to reach its pages.</p>
+                    <p className="text-sm text-muted">Manage this account, browser preferences and connected services.</p>
                   </div>
                 </div>
               </div>
@@ -9066,6 +9066,10 @@ ${message.content}`;
                 {([
                   { group: "Account", items: [
                     ...(account ? [["profile", "Profile and usage", "Activity, showcase and token history", () => setSettingsPane("profile")]] as const : []),
+                    ...(account ? [
+                      ["sessions", "Sessions and security", "Check this sign-in and revoke another device session", () => setSettingsPane("sessions")],
+                      ["usage", "Provider usage and spending", "Token receipts, request limits and billing availability", () => setSettingsPane("usage")],
+                    ] as const : []),
                     ...(!account ? [
                       ["sign-in", "Sign in", "Open your workspace", () => window.location.assign("/login?next=" + encodeURIComponent(loginReturnPath()))],
                       ["sign-up", "Sign up", "Create an account", () => window.location.assign("/login?mode=sign-up&next=" + encodeURIComponent(loginReturnPath()))],
@@ -9144,6 +9148,8 @@ ${message.content}`;
               )}
               {settingsPane === "keyboard" && <KeyboardSettings {...interfaceSettings}/>}
               {settingsPane === "bits" && <div ref={setBitsPanel}/>}
+              {settingsPane === "sessions" && (account ? <SessionCenter /> : <Link to="/login" search={{ next: loginReturnPath() }}>Sign in to check sessions</Link>)}
+              {settingsPane === "usage" && (account ? <><SpendingControls usage={ws.usage} /><p className="text-sm text-muted">Provider invoices are available through your provider account. Adrian displays the usage it received.</p></> : <Link to="/login" search={{ next: loginReturnPath() }}>Sign in to check usage</Link>)}
               {settingsPane === "archived" && <ArchiveSettings chats={ws.chats} ready={ready} onRestore={(id)=>runConversationAction("archive",[id])}/>}
               {settingsPane === "storage" && <StorageSettings ws={ws} ready={ready} onOpen={(kind)=>{setLibraryBand(kind);setLibraryProjectId(null);setView("files");}}/>}
               {settingsPane === "general" && <><AppearanceSettings {...interfaceSettings} light={theme==="light" || (theme==="system" && typeof window!=="undefined" && window.matchMedia("(prefers-color-scheme: light)").matches)}/><div className="settings-card rounded-panel p-4"><SendKey {...interfaceSettings}/></div></>}
