@@ -882,6 +882,14 @@ try {
     await phone.waitForFunction(() => document.documentElement.style.getPropertyValue("--color-accent") === "#7c3b24");
     assert.equal(await preset.inputValue(), "paper");
     await phone.getByRole("button", { name: "Restore default colors" }).click();
+    assert.equal(await preset.inputValue(), "device");
+    await preset.selectOption("ocean");
+    await phone.getByRole("button", { name: "Restore default colors" }).click();
+    assert.equal(await preset.inputValue(), "device");
+    const colors = phone.getByRole("region", { name: "Theme colors and fonts" });
+    await colors.locator('input[type="color"]').first().fill("#dd8844");
+    assert.equal(await colors.getByRole("status").textContent(), "");
+    assert.equal(await preset.inputValue(), "custom");
     const send = phone.getByLabel("Send message key");
     await send.selectOption("modified");
     await phone.getByRole("button", { name: "Keep current shortcut" }).click();
