@@ -26,6 +26,7 @@ import { Route as ApiMindAgentRouteImport } from './routes/api/mind/agent'
 import { Route as ApiMindDesktopUpdateRouteImport } from './routes/api/mind/desktop-update'
 import { Route as ApiMindDispatchPolicyRouteImport } from './routes/api/mind/dispatch-policy'
 import { Route as ApiMindMemoryPolicyRouteImport } from './routes/api/mind/memory-policy'
+import { Route as ApiMindNotificationsRouteImport } from './routes/api/mind/notifications'
 import { Route as ApiMindProvidersRouteImport } from './routes/api/mind/providers'
 import { Route as ApiMindQueueTransferRouteImport } from './routes/api/mind/queue-transfer'
 import { Route as ApiMindReceiptsRouteImport } from './routes/api/mind/receipts'
@@ -68,6 +69,7 @@ import { Route as ApiMindMcpCallRouteImport } from './routes/api/mind/mcp/call'
 import { Route as ApiMindMcpServersRouteImport } from './routes/api/mind/mcp/servers'
 import { Route as ApiMindMcpToolsRouteImport } from './routes/api/mind/mcp/tools'
 import { Route as ApiMindMediaGenerateRouteImport } from './routes/api/mind/media/generate'
+import { Route as ApiMindNotificationsTickRouteImport } from './routes/api/mind/notifications/tick'
 import { Route as ApiMindNuanceKeyRouteImport } from './routes/api/mind/nuance/key'
 import { Route as ApiMindNuanceSessionRouteImport } from './routes/api/mind/nuance/session'
 import { Route as ApiMindPairingActionRouteImport } from './routes/api/mind/pairing/action'
@@ -187,6 +189,11 @@ const ApiMindDispatchPolicyRoute = ApiMindDispatchPolicyRouteImport.update({
 const ApiMindMemoryPolicyRoute = ApiMindMemoryPolicyRouteImport.update({
   id: '/api/mind/memory-policy',
   path: '/api/mind/memory-policy',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMindNotificationsRoute = ApiMindNotificationsRouteImport.update({
+  id: '/api/mind/notifications',
+  path: '/api/mind/notifications',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiMindProvidersRoute = ApiMindProvidersRouteImport.update({
@@ -400,6 +407,12 @@ const ApiMindMediaGenerateRoute = ApiMindMediaGenerateRouteImport.update({
   path: '/api/mind/media/generate',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiMindNotificationsTickRoute =
+  ApiMindNotificationsTickRouteImport.update({
+    id: '/tick',
+    path: '/tick',
+    getParentRoute: () => ApiMindNotificationsRoute,
+  } as any)
 const ApiMindNuanceKeyRoute = ApiMindNuanceKeyRouteImport.update({
   id: '/api/mind/nuance/key',
   path: '/api/mind/nuance/key',
@@ -603,6 +616,7 @@ export interface FileRoutesByFullPath {
   '/api/mind/desktop-update': typeof ApiMindDesktopUpdateRoute
   '/api/mind/dispatch-policy': typeof ApiMindDispatchPolicyRoute
   '/api/mind/memory-policy': typeof ApiMindMemoryPolicyRoute
+  '/api/mind/notifications': typeof ApiMindNotificationsRouteWithChildren
   '/api/mind/providers': typeof ApiMindProvidersRoute
   '/api/mind/queue-transfer': typeof ApiMindQueueTransferRoute
   '/api/mind/receipts': typeof ApiMindReceiptsRoute
@@ -645,6 +659,7 @@ export interface FileRoutesByFullPath {
   '/api/mind/mcp/servers': typeof ApiMindMcpServersRoute
   '/api/mind/mcp/tools': typeof ApiMindMcpToolsRoute
   '/api/mind/media/generate': typeof ApiMindMediaGenerateRoute
+  '/api/mind/notifications/tick': typeof ApiMindNotificationsTickRoute
   '/api/mind/nuance/key': typeof ApiMindNuanceKeyRoute
   '/api/mind/nuance/session': typeof ApiMindNuanceSessionRoute
   '/api/mind/pairing/action': typeof ApiMindPairingActionRoute
@@ -699,6 +714,7 @@ export interface FileRoutesByTo {
   '/api/mind/desktop-update': typeof ApiMindDesktopUpdateRoute
   '/api/mind/dispatch-policy': typeof ApiMindDispatchPolicyRoute
   '/api/mind/memory-policy': typeof ApiMindMemoryPolicyRoute
+  '/api/mind/notifications': typeof ApiMindNotificationsRouteWithChildren
   '/api/mind/providers': typeof ApiMindProvidersRoute
   '/api/mind/queue-transfer': typeof ApiMindQueueTransferRoute
   '/api/mind/receipts': typeof ApiMindReceiptsRoute
@@ -741,6 +757,7 @@ export interface FileRoutesByTo {
   '/api/mind/mcp/servers': typeof ApiMindMcpServersRoute
   '/api/mind/mcp/tools': typeof ApiMindMcpToolsRoute
   '/api/mind/media/generate': typeof ApiMindMediaGenerateRoute
+  '/api/mind/notifications/tick': typeof ApiMindNotificationsTickRoute
   '/api/mind/nuance/key': typeof ApiMindNuanceKeyRoute
   '/api/mind/nuance/session': typeof ApiMindNuanceSessionRoute
   '/api/mind/pairing/action': typeof ApiMindPairingActionRoute
@@ -796,6 +813,7 @@ export interface FileRoutesById {
   '/api/mind/desktop-update': typeof ApiMindDesktopUpdateRoute
   '/api/mind/dispatch-policy': typeof ApiMindDispatchPolicyRoute
   '/api/mind/memory-policy': typeof ApiMindMemoryPolicyRoute
+  '/api/mind/notifications': typeof ApiMindNotificationsRouteWithChildren
   '/api/mind/providers': typeof ApiMindProvidersRoute
   '/api/mind/queue-transfer': typeof ApiMindQueueTransferRoute
   '/api/mind/receipts': typeof ApiMindReceiptsRoute
@@ -838,6 +856,7 @@ export interface FileRoutesById {
   '/api/mind/mcp/servers': typeof ApiMindMcpServersRoute
   '/api/mind/mcp/tools': typeof ApiMindMcpToolsRoute
   '/api/mind/media/generate': typeof ApiMindMediaGenerateRoute
+  '/api/mind/notifications/tick': typeof ApiMindNotificationsTickRoute
   '/api/mind/nuance/key': typeof ApiMindNuanceKeyRoute
   '/api/mind/nuance/session': typeof ApiMindNuanceSessionRoute
   '/api/mind/pairing/action': typeof ApiMindPairingActionRoute
@@ -894,6 +913,7 @@ export interface FileRouteTypes {
     | '/api/mind/desktop-update'
     | '/api/mind/dispatch-policy'
     | '/api/mind/memory-policy'
+    | '/api/mind/notifications'
     | '/api/mind/providers'
     | '/api/mind/queue-transfer'
     | '/api/mind/receipts'
@@ -936,6 +956,7 @@ export interface FileRouteTypes {
     | '/api/mind/mcp/servers'
     | '/api/mind/mcp/tools'
     | '/api/mind/media/generate'
+    | '/api/mind/notifications/tick'
     | '/api/mind/nuance/key'
     | '/api/mind/nuance/session'
     | '/api/mind/pairing/action'
@@ -990,6 +1011,7 @@ export interface FileRouteTypes {
     | '/api/mind/desktop-update'
     | '/api/mind/dispatch-policy'
     | '/api/mind/memory-policy'
+    | '/api/mind/notifications'
     | '/api/mind/providers'
     | '/api/mind/queue-transfer'
     | '/api/mind/receipts'
@@ -1032,6 +1054,7 @@ export interface FileRouteTypes {
     | '/api/mind/mcp/servers'
     | '/api/mind/mcp/tools'
     | '/api/mind/media/generate'
+    | '/api/mind/notifications/tick'
     | '/api/mind/nuance/key'
     | '/api/mind/nuance/session'
     | '/api/mind/pairing/action'
@@ -1086,6 +1109,7 @@ export interface FileRouteTypes {
     | '/api/mind/desktop-update'
     | '/api/mind/dispatch-policy'
     | '/api/mind/memory-policy'
+    | '/api/mind/notifications'
     | '/api/mind/providers'
     | '/api/mind/queue-transfer'
     | '/api/mind/receipts'
@@ -1128,6 +1152,7 @@ export interface FileRouteTypes {
     | '/api/mind/mcp/servers'
     | '/api/mind/mcp/tools'
     | '/api/mind/media/generate'
+    | '/api/mind/notifications/tick'
     | '/api/mind/nuance/key'
     | '/api/mind/nuance/session'
     | '/api/mind/pairing/action'
@@ -1183,6 +1208,7 @@ export interface RootRouteChildren {
   ApiMindDesktopUpdateRoute: typeof ApiMindDesktopUpdateRoute
   ApiMindDispatchPolicyRoute: typeof ApiMindDispatchPolicyRoute
   ApiMindMemoryPolicyRoute: typeof ApiMindMemoryPolicyRoute
+  ApiMindNotificationsRoute: typeof ApiMindNotificationsRouteWithChildren
   ApiMindProvidersRoute: typeof ApiMindProvidersRoute
   ApiMindQueueTransferRoute: typeof ApiMindQueueTransferRoute
   ApiMindReceiptsRoute: typeof ApiMindReceiptsRoute
@@ -1381,6 +1407,13 @@ declare module '@tanstack/react-router' {
       path: '/api/mind/memory-policy'
       fullPath: '/api/mind/memory-policy'
       preLoaderRoute: typeof ApiMindMemoryPolicyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/notifications': {
+      id: '/api/mind/notifications'
+      path: '/api/mind/notifications'
+      fullPath: '/api/mind/notifications'
+      preLoaderRoute: typeof ApiMindNotificationsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/mind/providers': {
@@ -1677,6 +1710,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiMindMediaGenerateRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/mind/notifications/tick': {
+      id: '/api/mind/notifications/tick'
+      path: '/tick'
+      fullPath: '/api/mind/notifications/tick'
+      preLoaderRoute: typeof ApiMindNotificationsTickRouteImport
+      parentRoute: typeof ApiMindNotificationsRoute
+    }
     '/api/mind/nuance/key': {
       id: '/api/mind/nuance/key'
       path: '/api/mind/nuance/key'
@@ -1925,6 +1965,17 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface ApiMindNotificationsRouteChildren {
+  ApiMindNotificationsTickRoute: typeof ApiMindNotificationsTickRoute
+}
+
+const ApiMindNotificationsRouteChildren: ApiMindNotificationsRouteChildren = {
+  ApiMindNotificationsTickRoute: ApiMindNotificationsTickRoute,
+}
+
+const ApiMindNotificationsRouteWithChildren =
+  ApiMindNotificationsRoute._addFileChildren(ApiMindNotificationsRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DashboardRoute: DashboardRoute,
@@ -1943,6 +1994,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiMindDesktopUpdateRoute: ApiMindDesktopUpdateRoute,
   ApiMindDispatchPolicyRoute: ApiMindDispatchPolicyRoute,
   ApiMindMemoryPolicyRoute: ApiMindMemoryPolicyRoute,
+  ApiMindNotificationsRoute: ApiMindNotificationsRouteWithChildren,
   ApiMindProvidersRoute: ApiMindProvidersRoute,
   ApiMindQueueTransferRoute: ApiMindQueueTransferRoute,
   ApiMindReceiptsRoute: ApiMindReceiptsRoute,

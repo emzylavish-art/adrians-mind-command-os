@@ -1,0 +1,148 @@
+import { useEffect, useState } from "react";
+import { getBearerToken } from "@/lib/auth/client";
+import type { PreferenceStorage } from "@/lib/mind/account-preferences";
+import { BACKGROUND_PUSH_CHANGED, BACKGROUND_PUSH_KEY, notificationDeviceId, type DeliveryChannel, type NotificationStatus } from "@/lib/mind/notification-delivery";
+import type { NotificationPreferences } from "@/lib/mind/notifications";
+
+const deviceStorageKey = "notifications.browser-device.v1";
+const endpoint = "/api/mind/notifications";
+
+function registeredDevice(storage: PreferenceStorage) {
+  try {
+    if (!storage.persistent) return null;
+    const existing = storage.getItem(deviceStorageKey);
+    if (notificationDeviceId(existing)) return existing;
+    const device = crypto.randomUUID();
+    storage.setItem(deviceStorageKey, device);
+    return storage.getItem(deviceStorageKey) === device ? device : null;
+  } catch { return null; }
+}
+
+async function notificationRequest(params: URLSearchParams, body?: object, signal?: AbortSignal) {
+  const token = getBearerToken();
+  const headers = new Headers(token ? { authorization: `Bearer ${token}` } : {});
+  if (body) headers.set("content-type", "application/json");
+  const response = await fetch(endpoint + (body ? "" : "?" + params), {
+    method: body ? "POST" : "GET", credentials: "same-origin", cache: "no-store", headers, signal,
+    body: body && JSON.stringify(body),
+  });
+  const data = await response.json().catch(() => null);
+  if (!response.ok || !data) throw new Error(typeof data?.error === "string" ? data.error : "Notification settings could not be confirmed.");
+  return data;
+}
+
+function syncBrowserDelivery(storage: PreferenceStorage, subscribed: boolean) {
+  try {
+    if ((storage.getItem(BACKGROUND_PUSH_KEY) === "yes") === subscribed) return;
+    if (subscribed) storage.setItem(BACKGROUND_PUSH_KEY, "yes");
+    else storage.removeItem(BACKGROUND_PUSH_KEY);
+    if (storage.getItem("notifications.browser-since.v1")) storage.setItem("notifications.browser-since.v1", String(Date.now()));
+    window.dispatchEvent(new Event(BACKGROUND_PUSH_CHANGED));
+  } catch { /* Changing browser storage cannot change server consent. */ }
+}
+
+function applicationKey(key: string) {
+  const encoded = key.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(key.length / 4) * 4, "=");
+  return Uint8Array.from(atob(encoded), char => char.charCodeAt(0)).buffer;
+}
+
+export function BackgroundNotifications({ owner, storage, preferences }: {
+  owner: string | null;
+  storage: PreferenceStorage;
+  preferences: NotificationPreferences;
+}) {
+  const [open, setOpen] = useState(false);
+  const [status, setStatus] = useState<NotificationStatus | null>(null);
+  const [device, setDevice] = useState<string | null>(null);
+  const [worker, setWorker] = useState<ServiceWorkerRegistration | null>(null);
+  const [working, setWorking] = useState(false);
+  const [message, setMessage] = useState("");
+  const browserSupported = typeof window !== "undefined" && window.isSecureContext && "Notification" in window
+    && "PushManager" in window && "serviceWorker" in navigator;
+
+  useEffect(() => {
+    if (!open || !owner) return;
+    const controller = new AbortController();
+    const id = registeredDevice(storage);
+    setDevice(id);
+    const query = new URLSearchParams({ owner, ...(id ? { device: id } : {}) });
+    void notificationRequest(query, undefined, controller.signal).then((next: NotificationStatus) => {
+      if (controller.signal.aborted) return;
+      setStatus(next);
+      syncBrowserDelivery(storage, next.push.subscribed);
+    }).catch(() => {
+      if (!controller.signal.aborted) setMessage("Delivery settings could not be loaded. Reopen this panel to try again.");
+    });
+    return () => controller.abort();
+  }, [open, owner, storage]);
+
+  useEffect(() => {
+    if (!open || !device || !browserSupported || !status?.push.available || !status.workerConfigured) return;
+    let current = true;
+    void navigator.serviceWorker.register("/adrian-notifications-sw.js").then(() => navigator.serviceWorker.ready).then(registration => {
+      if (current) setWorker(registration);
+    }).catch(() => { if (current) setMessage("This browser could not start its notification worker."); });
+    return () => { current = false; };
+  }, [open, device, browserSupported, status?.push.available, status?.workerConfigured]);
+
+  async function update(action: "enable" | "disable" | "preferences", channel?: DeliveryChannel) {
+    if (!owner || working) return;
+    setWorking(true);
+    setMessage("");
+    const query = new URLSearchParams({ owner, ...(device ? { device } : {}) });
+    const scopedPreferences = {
+      ...preferences, research: preferences.research !== false, media: preferences.media !== false,
+      zone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    };
+    let subscription: PushSubscription | null = null;
+    let newSubscription = false;
+    try {
+      if (action === "enable" && channel === "push") {
+        if (!worker || !device || !status?.push.publicKey) throw new Error("This browser cannot subscribe to push notifications here.");
+        if (await Notification.requestPermission() !== "granted") throw new Error("Browser permission was not granted. You can change it in site settings.");
+        subscription = await worker.pushManager.getSubscription();
+        if (!subscription) {
+          subscription = await worker.pushManager.subscribe({
+            userVisibleOnly: true, applicationServerKey: applicationKey(status.push.publicKey),
+          });
+          newSubscription = true;
+        }
+      }
+      await notificationRequest(query, { owner, device, channel, action, preferences: scopedPreferences, subscription: subscription?.toJSON() });
+      newSubscription = false;
+      if (channel === "push") {
+        syncBrowserDelivery(storage, action === "enable");
+        if (action === "disable") {
+          // The server grant has already been withdrawn even if browser cleanup fails.
+          try { await (await worker?.pushManager.getSubscription())?.unsubscribe(); } catch { /* The server receipt still refuses display. */ }
+        }
+      }
+      setMessage(action === "enable" ? "Registered for delivery." : action === "disable" ? "Delivery turned off." : "Event choices saved for this email and browser.");
+      setStatus(await notificationRequest(query));
+    } catch (error) {
+      if (newSubscription) await subscription?.unsubscribe().catch(() => {});
+      setMessage(error instanceof Error ? error.message : "Notification settings could not be confirmed.");
+    } finally { setWorking(false); }
+  }
+
+  return <details className="p-3 text-xs" onToggle={event => setOpen(event.currentTarget.open)}>
+    <summary>Background push and email</summary>
+    {!owner ? <p>Sign in to manage background delivery.</p> : <>
+      <p className="py-2">Delivery uses the inbox events and quiet hours you choose above. Push works on supported browsers. On iPhone or iPad, open Adrian from its Home Screen icon.</p>
+      {status && !status.workerConfigured && <p>Background delivery is unavailable until the notification worker is configured.</p>}
+      {status && <div className="flex flex-wrap gap-2">
+        <button type="button" className="min-h-11 rounded-panel border border-line px-3" aria-pressed={status.push.subscribed}
+          disabled={working || (!status.push.subscribed && (!worker || !status.push.available || !status.workerConfigured))}
+          onClick={() => void update(status.push.subscribed ? "disable" : "enable", "push")}>{status.push.subscribed ? "Turn off push on this browser" : "Enable push on this browser"}</button>
+        <button type="button" className="min-h-11 rounded-panel border border-line px-3" aria-pressed={status.email.subscribed}
+          disabled={working || (!status.email.subscribed && (!status.email.available || !status.workerConfigured))}
+          onClick={() => void update(status.email.subscribed ? "disable" : "enable", "email")}>{status.email.subscribed ? "Turn off account email" : "Enable account email"}</button>
+        <button type="button" className="min-h-11 rounded-panel border border-line px-3"
+          disabled={working || (!status.email.subscribed && !status.push.subscribed)}
+          onClick={() => void update("preferences")}>Apply inbox preferences to delivery</button>
+      </div>}
+      {status?.email.address && <p className="break-all pt-2">Verified account email: {status.email.address}</p>}
+      {message && <p className="py-2" role="status">{message}</p>}
+    </>}
+  </details>;
+}

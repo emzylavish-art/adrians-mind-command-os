@@ -67,6 +67,7 @@ import { createResearchRunGuard, loadResearchReports, makeResearchReport, resear
 import type { ResearchResult } from "@/lib/mind/research";
 import { WorkspaceProfile } from "./workspace-profile";
 import { NotificationInbox, useWorkspaceInbox } from "./notification-inbox";
+import { BackgroundNotifications } from "./background-notifications";
 import { ARCHIVE_CATEGORIES, selectArchiveCategories, type ArchiveCategory, deleteLocalFile, deleteProject, refreshBotChat } from "@/lib/mind/workspace";
 import { WorkspaceDialog as Overlay } from "./workspace-dialog";
 import type { NotionPage } from "@/lib/mind/notion";
@@ -1487,6 +1488,11 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
   const [accountOpen, setAccountOpen] = chromeMenus.bind("account");
   const accountLabel = account?.isDevFallback ? "Local workspace" : account?.displayName || account?.primaryEmail || "Guest";
   const [bellOpen, setBellOpen] = chromeMenus.bind("notifications");
+  useEffect(() => {
+    if (window.location.hash !== "#alerts") return;
+    window.history.replaceState(window.history.state, "", window.location.pathname + window.location.search);
+    setBellOpen(true);
+  }, [setBellOpen]);
   const { notifications, unreadNoticeCount, notificationPreferences, readNotices, dismissedNotices,
     browserNotices, markNotices, markNoticesRead, changeNotificationPreferences } =
     useWorkspaceInbox(ws, researchHistory, preferenceStorage, setNotice);
@@ -7272,8 +7278,9 @@ ${message.content}`;
               <button type="button" className="min-h-11 rounded-panel border border-line px-3" disabled={!browserNotices.available} aria-pressed={browserNotices.enabled} onClick={() => void browserNotices.toggle()}>{browserNotices.enabled ? "Disable open-browser alerts" : "Enable open-browser alerts"}</button>
               <p>{browserNotices.available ? "Browser alerts use the selected inbox events while Adrian is open." : "Open-browser alerts are unavailable in this browser."}</p>
               {browserNotices.status && <p role="status">{browserNotices.status}</p>}
-              <p>Quiet hours use this device's time zone. Approvals and errors remain visible. Email and closed-browser push delivery are unavailable here.</p>
+              <p>Quiet hours use this device's time zone. Approvals and errors remain visible.</p>
             </details>
+            <BackgroundNotifications key={account?.id ?? ""} owner={account?.isDevFallback ? null : account?.id ?? null} storage={preferenceStorage} preferences={notificationPreferences} />
           </AnchoredCard>
         )}
         {accountOpen && (
