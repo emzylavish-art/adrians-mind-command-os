@@ -34,6 +34,7 @@ export function BrowserActivity(props: Props) {
 }
 
 function ScopedBrowserActivity({ owner, storageKey, onAttach, halted }: Props & { storageKey: string | null }) {
+  const managedOwner = storageKey && owner !== "dev-user" ? owner : null;
   const titleId = useId();
   const website = useRef<HTMLDialogElement>(null);
   const viewer = useRef<HTMLDialogElement>(null);
@@ -287,9 +288,9 @@ function ScopedBrowserActivity({ owner, storageKey, onAttach, halted }: Props & 
         <p className="text-sm text-muted">Check your browser for the new tab. If the website asks you to sign in, enter your details on its own page. Return here when you’re finished.</p>
         {websiteNotice && <p role="status" className="text-sm text-danger">{websiteNotice}</p>}
         <div className="flex flex-wrap gap-2"><button ref={returnButton} type="button" className={control + " bg-accent text-accent-ink"} onClick={() => void endHandoff(true)}>I’m back</button><button type="button" className={control} onClick={() => void endHandoff(false)}>End handoff</button><button type="button" className={control} onClick={() => website.current?.close()}>Close panel</button></div>
-      </div> : managed && owner ? <div className="mt-3 space-y-3">
-        <ManagedBrowserSettings owner={owner} halted={halted} initialAddress={address} canOpen={url => {
-          try { return websitePermission(parseBrowserPreferences(localStorage.getItem(browserPreferencesKey(owner))), url) !== "block"; }
+      </div> : managed && managedOwner ? <div className="mt-3 space-y-3">
+        <ManagedBrowserSettings owner={managedOwner} halted={halted} initialAddress={address} canOpen={url => {
+          try { return websitePermission(parseBrowserPreferences(localStorage.getItem(browserPreferencesKey(managedOwner))), url) !== "block"; }
           catch { return false; }
         }} onScreenshot={(image, title) => {
           setReviewNotice("");
@@ -303,7 +304,7 @@ function ScopedBrowserActivity({ owner, storageKey, onAttach, halted }: Props & 
         {browserAddress(address) && <p className="break-all text-xs text-muted">{browserAddress(address)?.origin}</p>}
         {websiteNotice && <p role="status" className="text-sm text-danger">{websiteNotice}</p>}
         <div className="flex flex-wrap gap-2"><button type="submit" className={control + " bg-accent text-accent-ink"} disabled={!address.trim() || halted}>Open in browser <ExternalLink size={15} aria-hidden="true" /></button>
-          {owner && <button type="button" className={control} onClick={() => setManaged(true)}>Managed browser</button>}
+          {managedOwner && <button type="button" className={control} onClick={() => setManaged(true)}>Managed browser</button>}
           <button type="button" className={control} onClick={() => website.current?.close()}>Cancel</button></div>
       </form>}
     </dialog>

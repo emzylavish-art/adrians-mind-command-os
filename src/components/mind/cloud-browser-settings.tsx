@@ -79,7 +79,7 @@ export function CloudBrowserSettings({ owner, halted }: { owner: string | null; 
         </form>
       </fieldset>
       <div><p className="font-semibold">Browser data</p><p className="text-muted">Website cookies stay in the browser you open. Manage or clear them in that browser’s settings.</p></div>
-      {owner && <ManagedBrowserSettings key={owner} owner={owner} halted={halted} canOpen={(url) => websitePermission(settings, url) !== "block"} />}
+      {owner && owner !== "dev-user" && <ManagedBrowserSettings key={owner} owner={owner} halted={halted} canOpen={(url) => websitePermission(settings, url) !== "block"} />}
       <BrowserActivity owner={owner} halted={halted} scope="browser-settings" />
     </>}
     {key && !settings && notice && <button className={control} type="button" onClick={() => {
