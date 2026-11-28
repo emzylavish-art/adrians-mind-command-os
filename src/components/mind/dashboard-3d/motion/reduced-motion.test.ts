@@ -91,14 +91,17 @@ describe("reduced-motion", () => {
       bots: [{ id: "logic", health: "healthy", reason: "lock" }],
       commitShas: ["abc"],
       feedIds: ["f1"],
-      pageCount: 2,
-      edgeCount: 1,
+      notionKey: JSON.stringify([["a", "b"], [["a", "b", "parent"]]]),
       projectKey: "logic:healthy:1",
     };
     assert.equal(universeMotionSignature(input), universeMotionSignature({ ...input, bots: [...input.bots] }));
     assert.notEqual(
       universeMotionSignature(input),
       universeMotionSignature({ ...input, bots: [{ id: "logic", health: "blocked", reason: "lock" }] }),
+    );
+    assert.notEqual(
+      universeMotionSignature(input),
+      universeMotionSignature({ ...input, notionKey: JSON.stringify([["a", "c"], [["a", "c", "parent"]]]) }),
     );
   });
 });

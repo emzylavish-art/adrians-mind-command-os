@@ -57,7 +57,7 @@ export function DashboardApp({ embedded = false, status }: { embedded?: boolean;
   const [webglError, setWebglError] = useState<string | null>(null);
   const [rendererMode, setRendererMode] = useState<"graph" | "universe">("graph");
   const [preferFleetList, setPreferFleetList] = useState(false);
-  const workspace = useWorkspaceGraph(rendererMode === "graph");
+  const workspace = useWorkspaceGraph();
   const state = useMemo(() => publicState.status === "ready" && workspace.graph
     ? { ...publicState, data: { ...publicState.data, notionGraph: workspace.graph } }
     : publicState, [publicState, workspace.graph]);
@@ -292,11 +292,11 @@ export function DashboardApp({ embedded = false, status }: { embedded?: boolean;
               {telemetry.label}. Development activity; runtime readiness unverified.
               {state.data.sources?.commitsSource === "snapshot" ? ` Historical commits: ${state.data.sources.commitsSnapshotAt || "date unknown"}.` : ""}
             </p>
-            <p className="dash3d-muted" style={{ margin: "0.2rem 0 0", fontSize: "0.72rem" }}>
+            <p className="dash3d-muted" role="status" style={{ margin: "0.2rem 0 0", fontSize: "0.72rem" }}>
               {workspace.scope && <img src="/brand/logos/notion.svg" alt="" width="16" height="16" style={{ display: "inline-block", verticalAlign: "middle", marginRight: 4, background: "white", borderRadius: 3 }} />}
               {workspace.summary || "Public fleet activity"}
               {workspace.graph?.generatedAt && <> · Graph checked <time dateTime={workspace.graph.generatedAt}>{new Date(workspace.graph.generatedAt).toLocaleString()}</time></>}
-              {workspace.scope && <> · <button type="button" className="underline" onClick={workspace.refresh}>Refresh Notion</button>
+              {workspace.scope && <> · <button type="button" className="underline" disabled={workspace.checking} onClick={workspace.refresh}>Refresh Notion</button>
                 {" · "}<a className="underline" href="/?section=connected#connection-notion">Manage Notion</a></>}
             </p>
           </div>
@@ -394,6 +394,7 @@ export function DashboardApp({ embedded = false, status }: { embedded?: boolean;
           />
         ) : (
           <ClientUniverseScene
+            key={workspace.scope ?? "public-fleet"}
             data={sceneData}
             filter={graphFilter}
             reducedMotion={reducedMotion}

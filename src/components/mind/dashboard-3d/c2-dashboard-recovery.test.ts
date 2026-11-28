@@ -27,6 +27,7 @@ function dashboardFixture() {
   const scrolls: any[] = [];
   let mounted = false;
   let focusedElement = false;
+  const workspace = { scope: null as string | null, graph: null as null | Record<string, unknown>, summary: "", checking: false, refresh() {} };
   const now = Date.now();
   const current = { id: "dashboard", name: "Dashboard", health: "blocked", reason: "Latest blocked", branch: "dashboard-3d", notes: "" };
   const data = {
@@ -48,7 +49,7 @@ function dashboardFixture() {
   const modules: Record<string, any> = {
     react,
     "react/jsx-runtime": { jsx: (type: unknown, props: any) => ({ type, props }), jsxs: (type: unknown, props: any) => ({ type, props }), Fragment: "Fragment" },
-    "./use-workspace-graph": { useWorkspaceGraph: () => ({ scope: null, graph: null, summary: "", refresh() {} }) },
+    "./use-workspace-graph": { useWorkspaceGraph: () => workspace },
     "./use-dashboard-status": { useDashboardStatus: () => ({ state: { status: "ready", data }, refresh() {} }) },
     "./mobile-structure": { MobileChrome: "MobileChrome", MobilePanelCard: "MobilePanelCard", useMobilePanelFocus: () => ({ focused, setFocused(value: string | null) { focused = value; }, clear() { focused = null; } }) },
     "./operator-console": { OperatorConsole: "OperatorConsole", loadInitialOperatorPrefs: () => ({ layers: { sound: false, labels: true, charts: false, feed: true, time: true }, healthFilter: "all" }), useOperatorHotkey() {}, persistOperatorPrefs() {} },
@@ -68,8 +69,30 @@ function dashboardFixture() {
   const compiled = ts.transpileModule(source("dashboard-app.tsx"), { compilerOptions: { jsx: ts.JsxEmit.ReactJSX, module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
   runInNewContext(compiled, { exports, require: (name: string) => modules[name] ?? new Proxy({}, { get: (_o, key) => key }), Date, document, HTMLElement: class {}, window: { matchMedia: () => ({ matches: true, addEventListener() {}, removeEventListener() {} }) } });
   function render() { cursor = 0; effects = []; const tree = exports.DashboardApp({ embedded: true }); mounted = descendants(tree).some((node) => node.props["data-testid"] === "dash3d-panel-stack"); return descendants(tree); }
-  return { render, effects: () => effects, data, now, scrolls, focused: () => focusedElement };
+  return { render, effects: () => effects, data, workspace, now, scrolls, focused: () => focusedElement };
 }
+
+test("the signed-in Notion graph stays available when switching renderers and is hidden on account change", () => {
+  const h = dashboardFixture();
+  const page = { id: "private-page", title: "Workspace page", kind: "page" };
+  h.workspace.scope = "owner-a";
+  h.workspace.graph = { ...h.data.notionGraph, available: true, pages: [page] };
+  let nodes = h.render();
+  nodes.find((n) => n.type === "LazyGraph")!.props.onSelectNotion(page.id);
+  nodes.find((n) => n.props["data-testid"] === "switch-painterly-universe")!.props.onClick();
+  nodes = h.render();
+  const scene = nodes.find((n) => typeof n.type === "function" && n.type.name === "ClientUniverseScene");
+  assert.equal(scene?.props.data.notionGraph.pages[0], page);
+  assert.equal(nodes.find((n) => n.type === "NodeDetailPanel")!.props.notionPage, page);
+
+  h.workspace.scope = "owner-b";
+  h.workspace.graph = null;
+  h.workspace.checking = true;
+  nodes = h.render();
+  assert.equal(nodes.find((n) => typeof n.type === "function" && n.type.name === "ClientUniverseScene")!.props.data.notionGraph.pages.length, 0);
+  assert.equal(nodes.find((n) => n.type === "NodeDetailPanel")!.props.notionPage, null);
+  assert.equal(nodes.find((n) => n.props.children === "Refresh Notion")!.props.disabled, true);
+});
 
 test("C2 AA008/009: fallback, search and selected details retain historical health and filters through retry", () => {
   const h = dashboardFixture();

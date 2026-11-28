@@ -258,8 +258,10 @@ function signatureFromStatus(data: DashboardStatus): string {
     bots: data.bots.map((b) => ({ id: b.id, health: b.health, reason: b.reason })),
     commitShas: data.commits.map((c) => c.sha),
     feedIds: (data.skyFeed?.list ?? data.skyFeed?.events ?? []).map((event) => event.id),
-    pageCount: data.notionGraph?.stats?.pages ?? 0,
-    edgeCount: data.notionGraph?.stats?.edges ?? 0,
+    notionKey: JSON.stringify([
+      data.notionGraph.pages.map((page) => page.id),
+      data.notionGraph.edges.map(({ from, to, kind }) => [from, to, kind]),
+    ]),
     projectKey: projects.map((project) => `${project.id}:${project.health}:${project.progressKnown ? project.progress : "u"}`).join(","),
   });
 }
@@ -275,6 +277,8 @@ export function UniverseScene({ data, reducedMotion: requestedReducedMotion, fil
   dataRef.current = data;
   cbs.current = { onSelectBot, onSelectNotion, onSkyView, onFlyoverChange };
   const motionSig = useMemo(() => signatureFromStatus(data), [data]);
+  const motionSigRef = useRef(motionSig);
+  motionSigRef.current = motionSig;
   useEffect(() => {
     wakeDataRef.current?.();
   }, [motionSig]);
@@ -589,15 +593,19 @@ export function UniverseScene({ data, reducedMotion: requestedReducedMotion, fil
 
     // Notion page galaxy — instanced sprites for perf
     const pageGeo = new THREE.SphereGeometry(0.12, 8, 8);
-    let pageMesh: THREE.InstancedMesh | null = null;
+    let pageMesh: THREE.InstancedMesh<THREE.SphereGeometry, THREE.MeshStandardMaterial> | null = null;
+
+    function disposePages() {
+      pageIdByIndex.length = 0;
+      if (!pageMesh) return;
+      pageGroup.remove(pageMesh);
+      pageMesh.material.dispose();
+      pageMesh.dispose();
+      pageMesh = null;
+    }
 
     function rebuildPages(status: DashboardStatus) {
-      if (pageMesh) {
-        pageGroup.remove(pageMesh);
-        pageMesh.dispose();
-        pageMesh = null;
-      }
-      pageIdByIndex.length = 0;
+      disposePages();
       const pages = status.notionGraph.pages;
       if (!pages.length) return;
       const positions = pageStarPositions(pages.length, 16);
@@ -624,7 +632,7 @@ export function UniverseScene({ data, reducedMotion: requestedReducedMotion, fil
       if (pageMesh.instanceColor) pageMesh.instanceColor.needsUpdate = true;
       pageGroup.add(pageMesh);
 
-      // parent/child edges (cap for perf)
+      // Draw workspace relationships with both endpoints in the scene.
       const idToPos = new Map<string, THREE.Vector3>();
       pages.forEach((p, i) => {
         const [x, y, z] = positions[i]!;
@@ -632,7 +640,6 @@ export function UniverseScene({ data, reducedMotion: requestedReducedMotion, fil
       });
       let drawn = 0;
       for (const e of status.notionGraph.edges) {
-        if (e.kind !== "child") continue;
         const a = idToPos.get(e.from);
         const b = idToPos.get(e.to);
         if (!a || !b) continue;
@@ -643,7 +650,7 @@ export function UniverseScene({ data, reducedMotion: requestedReducedMotion, fil
             new THREE.LineBasicMaterial({ color: 0x4a5d8c, transparent: true, opacity: 0.22 }),
           ),
         );
-        if (++drawn > 80) break;
+        if (++drawn >= 80) break;
       }
     }
 
@@ -1201,6 +1208,13 @@ export function UniverseScene({ data, reducedMotion: requestedReducedMotion, fil
       const dt = sanitizeDt((now - last) / 1000);
       last = now;
 
+      const sig = motionSigRef.current;
+      if (dataDirty || sig !== lastMotionSig || shouldSoftSyncScene(reducedMotion, now - sync)) {
+        lastMotionSig = sig;
+        sync = now;
+        refreshSceneData();
+      }
+
       if (rig.t < 1) {
         const stepped = stepRigSmooth(rig, reducedMotion ? 10 : dt, reducedMotion ? 0.01 : 1.35);
         rig = stepped.rig;
@@ -1282,17 +1296,6 @@ export function UniverseScene({ data, reducedMotion: requestedReducedMotion, fil
       labelRenderer.render(scene, camera);
       cullDomLabels(labelRenderer.domElement, camera.position.distanceTo(lookAt) > 16);
 
-      const sig = signatureFromStatus(dataRef.current);
-      if (sig !== lastMotionSig) {
-        lastMotionSig = sig;
-        dataDirty = true;
-      }
-      if (shouldSoftSyncScene(reducedMotion, now - sync)) {
-        sync = now;
-        refreshSceneData();
-      } else if (reducedMotion && dataDirty) {
-        refreshSceneData();
-      }
       dataDirty = false;
       renderDirty = false;
     };
@@ -1392,6 +1395,7 @@ export function UniverseScene({ data, reducedMotion: requestedReducedMotion, fil
       comets.dispose();
       feedGlyphs.dispose();
       sphereGeo.dispose();
+      disposePages();
       pageGeo.dispose();
       travelerGeo.dispose();
       starTex.dispose();
