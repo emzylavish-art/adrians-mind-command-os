@@ -9,7 +9,7 @@ import { managedBrowserUrl, type BrowserInput, type ManagedBrowserSession } from
 
 function sqlAdapter(db: PGlite | Transaction): Sql {
   const sql = (() => { throw new Error("Use the query interface"); }) as unknown as Sql;
-  sql.query = async (text, params) => (await db.query(text, params)).rows;
+  sql.query = async <T>(text: string, params?: unknown[]) => (await db.query<T>(text, params)).rows;
   if (db instanceof PGlite) sql.transaction = fn => db.transaction(tx => fn(sqlAdapter(tx)));
   return sql;
 }
@@ -72,16 +72,18 @@ test("account halt revokes a reserved start and prevents its late acknowledgemen
     await db.exec(await readFile(new URL("../../../migrations/" + name, import.meta.url), "utf8"));
   }
   const sql = sqlAdapter(db);
-  const dispatched = Promise.withResolvers<void>();
-  const started = Promise.withResolvers<{ phase: "managed" }>();
+  let markDispatched!: () => void;
+  const dispatched = new Promise<void>(resolve => { markDispatched = resolve; });
+  let markStarted!: (result: { phase: "managed" }) => void;
+  const started = new Promise<{ phase: "managed" }>(resolve => { markStarted = resolve; });
   const seen: string[] = [];
   const options = {
     origins: new Set(["https://fixture.example"]), localHalt: async () => "off" as const,
     worker: async (_id: string, input: BrowserInput) => {
       seen.push(input.action);
       if (input.action === "start") {
-        dispatched.resolve();
-        return started.promise;
+        markDispatched();
+        return started;
       }
       return { phase: "closed" as const };
     },
@@ -90,10 +92,10 @@ test("account halt revokes a reserved start and prevents its late acknowledgemen
   const start = managedBrowserRequest(sql, "owner", {
     id, action: "start", approved: true, target: "https://fixture.example",
   }, options);
-  await dispatched.promise;
+  await dispatched;
   await sql.query("update mind_control set halted=true where user_id=$1", ["owner"]);
   await stopOwnerManagedBrowser(sql, "owner", options);
-  started.resolve({ phase: "managed" });
+  markStarted({ phase: "managed" });
   assert.equal((await start).status, 409);
   const { body } = await managedBrowserRequest(sql, "owner", { action: "list" }, options);
   const session = (body as { sessions: ManagedBrowserSession[] }).sessions[0];
