@@ -92,6 +92,7 @@ test("owner schemas are globbed and the auth source stays in migrations/auth", (
       "0021_c3_financial_policy.sql",
       "0022_c3_media_request_identity.sql",
       "0023_c3_environment_model_catalog.sql",
+      "0024_chat_shared_links.sql",
     ],
   );
   assert.ok(readdirSync(join(migrationsDir, "auth")).includes("0001_auth.sql"));

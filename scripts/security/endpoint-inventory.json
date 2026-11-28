@@ -1426,6 +1426,28 @@
       ]
     },
     {
+      "file": "src/routes/api/mind/shared-chats.ts",
+      "path": "/api/mind/shared-chats",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "policy": "owner_origin",
+      "notes": "Owners list, issue and revoke their own grants. Signed-in readers must present a live link for the exact reviewed text.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/shared-chats.ts",
+          "requires": [
+            "assertSameOrigin(request)",
+            "requireUserId",
+            "ownerId !== owner",
+            "revoked_at is null",
+            "chatTextDigest(text) === row.content_hash"
+          ]
+        }
+      ]
+    },
+    {
       "file": "src/routes/api/mind/skills.ts",
       "path": "/api/mind/skills",
       "methods": [

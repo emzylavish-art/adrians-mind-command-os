@@ -1,19 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getBearerToken } from "@/lib/auth/client";
+import { shareRequest } from "@/lib/mind/chat-share-client";
 import { chatTextDigest, shareableChatText } from "@/lib/mind/chat-share";
 import type { Chat } from "@/lib/mind/types";
-
-export async function shareRequest(body?: object) {
-  const bearer = getBearerToken();
-  const response = await fetch("/api/mind/shared-chats", {
-    method: body ? "POST" : "GET", cache: "no-store", credentials: "same-origin",
-    headers: { ...(body ? { "content-type": "application/json" } : {}), ...(bearer ? { authorization: "Bearer " + bearer } : {}) },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  const data = await response.json();
-  if (!response.ok) throw Error(data.error || "The shared link request could not be confirmed.");
-  return data;
-}
 
 type LinkRow = { id: string; chatId: string; createdAt: string };
 export function SharedChatLinks({ owner, chats, initialChatId }: { owner: string; chats: Chat[]; initialChatId?: string }) {
@@ -35,7 +23,11 @@ export function SharedChatLinks({ owner, chats, initialChatId }: { owner: string
       if (revision.current === current) { setLinks(null); setStatus(err instanceof Error ? err.message : "Could not load shared links."); }
     }
   }, [owner]);
-  useEffect(() => { void refresh(); return () => { revision.current++; }; }, [refresh]);
+  useEffect(() => {
+    void refresh();
+    const invalidate = () => { revision.current++; };
+    return invalidate;
+  }, [refresh]);
   const chat = chats.find(item => item.id === selected);
   const preview = chat && shareableChatText(chat);
   function select(id: string) {

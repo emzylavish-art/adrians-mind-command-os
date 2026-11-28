@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import type { SharedText } from "@/lib/mind/chat-share";
-import { shareRequest } from "@/components/mind/shared-chat-links";
+import { shareRequest } from "@/lib/mind/chat-share-client";
 
 export const Route = createFileRoute("/shared-chat")({ component: SharedConversation });
 function SharedConversation() {
@@ -12,11 +12,12 @@ function SharedConversation() {
   const revision = useRef(0);
   useEffect(() => {
     setReady(true);
-    function clear() { revision.current++; setText(null); setStatus(""); setBusy(false); }
+    function invalidate() { revision.current++; }
+    function clear() { invalidate(); setText(null); setStatus(""); setBusy(false); }
     function hidden() { if (document.hidden) clear(); }
     window.addEventListener("hashchange", clear); window.addEventListener("pagehide", clear);
     document.addEventListener("visibilitychange", hidden);
-    return () => { revision.current++; window.removeEventListener("hashchange", clear); window.removeEventListener("pagehide", clear); document.removeEventListener("visibilitychange", hidden); };
+    return () => { invalidate(); window.removeEventListener("hashchange", clear); window.removeEventListener("pagehide", clear); document.removeEventListener("visibilitychange", hidden); };
   }, []);
   async function open() {
     const current = ++revision.current;

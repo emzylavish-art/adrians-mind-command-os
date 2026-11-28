@@ -2,7 +2,7 @@
 
 This checked-in inventory covers every direct route handler and exported TanStack server function discovered from TypeScript AST. A new route, HTTP method, RPC export, removed guard marker or undocumented public exception fails the normal test runner. Guard-source checks establish code reachability contracts; they do not substitute for live penetration testing or prove that a browser/provider/device was exercised.
 
-81 routes · 118 HTTP method contracts · 65 RPC exports.
+82 routes · 120 HTTP method contracts · 65 RPC exports.
 
 ## Shared policies
 
@@ -101,6 +101,7 @@ This checked-in inventory covers every direct route handler and exported TanStac
 | `/api/mind/schedules/tick` | POST | schedule_worker | Rejects missing or mismatched worker authorization and checks stop state before a bounded pass. Sources: `src/lib/mind/schedule-tick.server.ts` |
 | `/api/mind/session` | GET | session_probe | Returns the canonical signed-in owner, a signed-out response, an identity conflict or an unavailable status. Sources: `src/routes/api/mind/session.ts` |
 | `/api/mind/sessions` | GET, POST | owner_origin | Lists the verified owner’s Better Auth devices and revokes only a reviewed session after the same-origin check. Sources: `src/routes/api/mind/sessions.ts` |
+| `/api/mind/shared-chats` | GET, POST | owner_origin | Owners list, issue and revoke their own grants. Signed-in readers must present a live link for the exact reviewed text. Sources: `src/routes/api/mind/shared-chats.ts` |
 | `/api/mind/skills` | GET, POST, PUT | owner_origin | Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation. Sources: `src/routes/api/mind/skills.ts` |
 | `/api/mind/turn` | GET, POST | owner_fetch_metadata | Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation. Sources: `src/lib/mind/turn.server.ts` |
 | `/api/mind/usage` | DELETE, GET | owner_fetch_metadata | Isolation and owner checks cover usage history and confirmed retention deletion. Sources: `src/routes/api/mind/usage.ts` |
