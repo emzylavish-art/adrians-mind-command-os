@@ -57,6 +57,18 @@ export function AppearanceSettings(settings: Settings & { light: boolean }) {
   const [draft, setDraft] = useState<Appearance>(prefs.appearance);
   const [status, setStatus] = useState("");
   useEffect(() => { setDraft(prefs.appearance); }, [prefs.appearance]);
+  function editAppearance(next: Appearance) {
+    setDraft(next);
+    setStatus("");
+  }
+  function applyAppearance(next: Appearance, message: string) {
+    if (save({ ...prefs, appearance: next })) {
+      setDraft(next);
+      setStatus(message);
+    } else {
+      setStatus("");
+    }
+  }
   const fg = draft.foreground || base.foreground, bg = draft.background || base.background;
   const preset = Object.entries(appearancePresets).find(([, value]) =>
     value.accent === draft.accent && value.background === draft.background &&
@@ -66,13 +78,13 @@ export function AppearanceSettings(settings: Settings & { light: boolean }) {
   return <section className="settings-card rounded-panel p-4 text-sm space-y-3" aria-label="Theme colors and fonts">
     <h3>Theme colors and fonts</h3>
     <label className="settings-row">Theme preset<select className={field} value={preset} onChange={(e) => {
-      setDraft(appearancePresets[e.target.value]); setStatus("");
+      editAppearance(appearancePresets[e.target.value]);
     }}><option value="device">Mind OS</option><option value="ocean">Midnight tide</option><option value="paper">Reading room</option>{preset === "custom" && <option value="custom" disabled>Custom</option>}</select></label>
-    {(["accent", "background", "foreground"] as const).map((key) => <label className="settings-row capitalize" key={key}>{key}<span className="flex items-center gap-3"><code>{draft[key] || base[key]}</code><input type="color" value={draft[key] || base[key]} onChange={(e) => setDraft({ ...draft, [key]: e.target.value })}/></span></label>)}
-    <details><summary className="cursor-pointer py-3">Advanced</summary><label className="settings-row">Font<select className={field} value={draft.font} onChange={(e) => setDraft({ ...draft, font: e.target.value })}>{fonts.map((font) => <option key={font}>{font}</option>)}</select></label></details>
+    {(["accent", "background", "foreground"] as const).map((key) => <label className="settings-row capitalize" key={key}>{key}<span className="flex items-center gap-3"><code>{draft[key] || base[key]}</code><input type="color" value={draft[key] || base[key]} onChange={(e) => editAppearance({ ...draft, [key]: e.target.value })}/></span></label>)}
+    <details><summary className="cursor-pointer py-3">Advanced</summary><label className="settings-row">Font<select className={field} value={draft.font} onChange={(e) => editAppearance({ ...draft, font: e.target.value })}>{fonts.map((font) => <option key={font}>{font}</option>)}</select></label></details>
     <div className="rounded-panel border border-line p-4" style={{color: fg, background: bg, fontFamily: fontValues[draft.font]}}><strong>Conversation preview</strong><p>Text contrast {contrast.toFixed(1)} to 1</p></div>
-    <button type="button" className={field} disabled={contrast < 4.5} onClick={() => { if (save({ ...prefs, appearance: draft })) setStatus("Appearance saved."); }}>Apply appearance</button>{" "}
-    <button type="button" className={field} onClick={() => { if (save({ ...prefs, appearance: defaultAppearance })) setStatus("Default colors and font restored."); }}>Restore default colors</button>
+    <button type="button" className={field} disabled={contrast < 4.5} onClick={() => applyAppearance(draft, "Appearance saved.")}>Apply appearance</button>{" "}
+    <button type="button" className={field} onClick={() => applyAppearance(defaultAppearance, "Default colors and font restored.")}>Restore default colors</button>
     <p role="status">{contrast < 4.5 ? "Increase text contrast to at least 4.5 to 1." : status}</p>
   </section>;
 }
