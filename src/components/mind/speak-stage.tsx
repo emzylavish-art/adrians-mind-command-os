@@ -389,7 +389,10 @@ export function SpeakStage(props: {
   const stage = (
     <div ref={dialogRef} tabIndex={-1} className="speak-stage speak-call" role="dialog" aria-modal="true" aria-label="Speak" data-testid="speak-stage"
       onKeyDownCapture={(event) => {
-        if (event.target instanceof Element && event.target.closest("dialog[open]")) return;
+        if (event.target instanceof Element && event.target.closest("dialog[open]")) {
+          if (event.key === "Escape") event.stopPropagation();
+          return;
+        }
         if (event.key === "Escape") {
           event.preventDefault();
           event.stopPropagation();

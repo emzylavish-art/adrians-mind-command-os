@@ -2317,7 +2317,7 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
         setPaletteOpen(true);
         searchRef.current?.focus();
       }
-      if (event.key === "Escape") {
+      if (event.key === "Escape" && !event.defaultPrevented && !(event.target instanceof Element && event.target.closest("dialog[open]"))) {
         if (speakStageOpenRef.current) {
           event.preventDefault();
           setSpeakStageOpen(false);
