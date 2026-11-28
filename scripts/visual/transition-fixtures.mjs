@@ -334,7 +334,13 @@ try {
       window.fetch = async (input, init) => {
         const url = new URL(typeof input === "string" ? input : input.url, location.href);
         if (url.origin !== location.origin || url.pathname !== "/api/mind/turn") return fetchBefore(input, init);
-        if (init?.method !== "POST") return Response.json({ operationId: `1760000000000-${crypto.randomUUID()}` });
+        if (init?.method !== "POST") {
+          if (window.holdNextWorkPlanId) {
+            window.holdNextWorkPlanId = false;
+            await new Promise(resolve => { window.releaseWorkPlanId = resolve; });
+          }
+          return Response.json({ operationId: `1760000000000-${crypto.randomUUID()}` });
+        }
         window.workPlanAttempts.push(JSON.parse(init.body));
         return new Response(new ReadableStream({ start(controller) {
           window.finishWorkPlan = () => {
@@ -377,7 +383,28 @@ try {
     await sheet.getByText("Review automatic plan", { exact: true }).waitFor({ state: "detached" });
     await sheet.getByText("Held for review", { exact: true }).waitFor();
     assert.equal(await queuePage.evaluate(() => window.workPlanAttempts.length), 3);
-    return { explicitApproval: true, followUpRequests: 1, cancelledDraftHeld: true, confirmedProject: attempt.projectId, buildSubmissions };
+    await sheet.getByRole("button", { name: "Remove queued message 1", exact: true }).click();
+    await sheet.getByRole("button", { name: "Close queue", exact: true }).click();
+    await field.fill("Start the late visibility fixture");
+    await domain.getByRole("button", { name: "Plan with Grok", exact: true }).click();
+    await queuePage.waitForFunction(() => window.workPlanAttempts.length === 4);
+    await field.fill("Hold this draft if the tab goes into the background");
+    await domain.getByRole("button", { name: "Queue", exact: true }).click();
+    await domain.getByRole("button", { name: "Open work and build queue, 1 waiting", exact: true }).click();
+    await sheet.getByText("Review automatic plan", { exact: true }).click();
+    await sheet.getByRole("button", { name: "Approve one follow-up plan", exact: true }).click();
+    await queuePage.evaluate(() => { window.holdNextWorkPlanId = true; window.finishWorkPlan(); });
+    await queuePage.waitForFunction(() => typeof window.releaseWorkPlanId === "function");
+    await queuePage.evaluate(() => {
+      Object.defineProperty(document, "hidden", { configurable: true, value: true });
+      document.dispatchEvent(new Event("visibilitychange"));
+      Reflect.deleteProperty(document, "hidden");
+      document.dispatchEvent(new Event("visibilitychange"));
+      window.releaseWorkPlanId();
+    });
+    await sheet.getByText("Held for review", { exact: true }).waitFor();
+    assert.equal(await queuePage.evaluate(() => window.workPlanAttempts.length), 4);
+    return { explicitApproval: true, followUpRequests: 1, cancelledDraftHeld: true, lateBackgroundDraftHeld: true, confirmedProject: attempt.projectId, buildSubmissions };
   });
   report.queueTransport = queueTransport.summary(); await queueContext.close();
 

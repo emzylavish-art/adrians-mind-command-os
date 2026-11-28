@@ -927,7 +927,7 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
     }
   }
 
-  async function planWithGrok(words = prompt, images: unknown[] = props.composer?.images ?? [], github = /^\/github(?:\s|$)/i.test(words), queued?: { scope: string; instruction: string; onDispatch: () => void }) {
+  async function planWithGrok(words = prompt, images: unknown[] = props.composer?.images ?? [], github = /^\/github(?:\s|$)/i.test(words), queued?: { scope: string; instruction: string; buffers: Record<string, EditorBuffer>; onDispatch: () => void }) {
     if (planFlight.current || props.halted) return;
     const owner = props.ownerId;
     if (props.freeOnly && !github) { setNotice("Free-only is selected. Build has no verified free coding model for this action."); return; }
@@ -940,8 +940,13 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
     const previous = !queued && !github && planScope.current ? { id: crypto.randomUUID(), scope: planScope.current } : null;
     activePlan.current = previous;
     let succeeded = false;
-    const revokeWhenHidden = () => { if (document.hidden) revokePlanApproval(); };
-    if (previous) document.addEventListener("visibilitychange", revokeWhenHidden);
+    let leftForeground = false;
+    const revokeWhenHidden = () => {
+      if (!document.hidden) return;
+      leftForeground = true;
+      revokePlanApproval();
+    };
+    if (previous || queued) document.addEventListener("visibilitychange", revokeWhenHidden);
     setPlanning(true);
     setNotice(github ? "Contacting GitHub…" : "Asking Grok for a plan.");
     const controller = new AbortController();
@@ -995,7 +1000,8 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
       setSeparatePlan("");
       id ??= await prepareTurnId("/api/mind/turn", headers, signal);
       if (!mounted.current || planOwner.current !== owner || signal.aborted) return;
-      if (queued && (document.hidden || haltedRef.current || planScope.current !== queued.scope || loadModeInstructions(preferenceStorage).build !== queued.instruction)) {
+      if (queued && (leftForeground || document.hidden || haltedRef.current || planScope.current !== queued.scope ||
+        buffersRef.current !== queued.buffers || loadModeInstructions(preferenceStorage).build !== queued.instruction)) {
         setNotice("The planning context changed. The follow-up is held for review.");
         return;
       }
@@ -1033,7 +1039,7 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
       planningController.current = null;
       planFlight.current = false;
       setPlanning(false);
-      if (previous) document.removeEventListener("visibilitychange", revokeWhenHidden);
+      if (previous || queued) document.removeEventListener("visibilitychange", revokeWhenHidden);
       activePlan.current = null;
       if (previous && queuedPlan.current?.predecessor === previous.id && mounted.current) {
         void releaseApprovedPlan({ id: previous.id, succeeded: succeeded && !signal.aborted });
@@ -1055,7 +1061,10 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
     });
     if (!saved || !claimed) return;
     let attempted = false;
-    const reply = await planWithGrok(approval.text, [], false, { scope: approval.scope, instruction: approval.instruction, onDispatch: () => { attempted = true; } });
+    const reply = await planWithGrok(approval.text, [], false, {
+      scope: approval.scope, instruction: approval.instruction, buffers: approval.buffers,
+      onDispatch: () => { attempted = true; },
+    });
     if (!mounted.current || planOwner.current !== props.ownerId) return;
     if (reply) setQueuedTasks(current => dropCued(readCue(current), approval.itemId));
     else if (!attempted) setQueuedTasks(current => readCue(current).map(row => row.id === approval.itemId ? { ...row, claimed: false, paused: true } : row));
