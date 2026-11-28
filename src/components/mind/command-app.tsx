@@ -66,9 +66,7 @@ import { accountOriginalFileStore, prepareLibraryDocument, readAccountOriginal, 
 import { createResearchRunGuard, loadResearchReports, makeResearchReport, researchAttachment, researchReferencesInText, saveResearchReport, type ResearchReport } from "@/lib/mind/research-reports";
 import type { ResearchResult } from "@/lib/mind/research";
 import { WorkspaceProfile } from "./workspace-profile";
-import { useBrowserNotices } from "./browser-notices";
-import { NotificationInbox } from "./notification-inbox";
-import { workspaceNotices, isQuietHour, notificationIds, readNotificationPreferences, type NotificationPreferences } from "@/lib/mind/notifications";
+import { NotificationInbox, useWorkspaceInbox } from "./notification-inbox";
 import { ARCHIVE_CATEGORIES, selectArchiveCategories, type ArchiveCategory, deleteLocalFile, deleteProject, refreshBotChat } from "@/lib/mind/workspace";
 import { WorkspaceDialog as Overlay } from "./workspace-dialog";
 import type { NotionPage } from "@/lib/mind/notion";
@@ -1481,42 +1479,9 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
   const [accountOpen, setAccountOpen] = chromeMenus.bind("account");
   const accountLabel = account?.isDevFallback ? "Local workspace" : account?.displayName || account?.primaryEmail || "Guest";
   const [bellOpen, setBellOpen] = chromeMenus.bind("notifications");
-  function loadNoticeState() {
-    return {
-      owner: preferenceStorage,
-      read: notificationIds(preferenceStorage, "notifications.read.v1"),
-      dismissed: notificationIds(preferenceStorage, "notifications.dismissed.v1"),
-      preferences: readNotificationPreferences(preferenceStorage),
-    };
-  }
-  const [storedNotices, setStoredNotices] = useState(loadNoticeState);
-  const noticeState = storedNotices.owner === preferenceStorage ? storedNotices : loadNoticeState();
-  const { read: readNotices, dismissed: dismissedNotices, preferences: notificationPreferences } = noticeState;
-  useEffect(() => {
-    setStoredNotices(loadNoticeState());
-    const keys = ["notifications.read.v1", "notifications.dismissed.v1", "notifications.preferences.v1"]
-      .map(key => preferenceStorage.keyFor?.(key));
-    function sync(event: StorageEvent) {
-      if (event.key === null || keys.includes(event.key)) setStoredNotices(loadNoticeState());
-    }
-    window.addEventListener("storage", sync);
-    return () => window.removeEventListener("storage", sync);
-  }, [preferenceStorage]);
-  const notifications = useMemo(() => workspaceNotices(ws, notificationPreferences, researchHistory), [ws.runs, ws.schedules, ws.audit, ws.agents, ws.chats, notificationPreferences, researchHistory]);
-  const browserNotices = useBrowserNotices(preferenceStorage, notifications, notificationPreferences);
-  const unreadNoticeCount = notifications.filter((entry) => !readNotices.includes(entry.id) && !dismissedNotices.includes(entry.id) && (entry.urgent || !isQuietHour(notificationPreferences, new Date().getHours()))).length;
-  function markNotices(field: "read" | "dismissed", ids: string[]) {
-    const key = "notifications." + field + ".v1";
-    const next = [...new Set([...noticeState[field], ...notificationIds(preferenceStorage, key), ...ids])].slice(-5000);
-    setStoredNotices({ ...noticeState, [field]: next });
-    try { preferenceStorage.setItem(key, JSON.stringify(next)); }
-    catch { setNotice("Notification marks apply for this session. Device storage is unavailable."); }
-  }
-  function markNoticesRead(ids: string[]) { markNotices("read", ids); }
-  function changeNotificationPreferences(next: NotificationPreferences) {
-    setStoredNotices({ ...noticeState, preferences: next });
-    try { preferenceStorage.setItem("notifications.preferences.v1", JSON.stringify(next)); } catch { setNotice("Notification preferences apply for this session; browser storage is unavailable."); }
-  }
+  const { notifications, unreadNoticeCount, notificationPreferences, readNotices, dismissedNotices,
+    browserNotices, markNotices, markNoticesRead, changeNotificationPreferences } =
+    useWorkspaceInbox(ws, researchHistory, preferenceStorage, setNotice);
 
   const [now, setNow] = useState<Date | null>(null);
   const greet = typeof document !== "undefined" && document.querySelector("[data-greeting]")?.getAttribute("data-greeting") || greeting(now ?? new Date());

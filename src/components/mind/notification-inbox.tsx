@@ -1,4 +1,8 @@
-import { useState } from "react";
+import type { Workspace } from "@/lib/mind/types";
+import type { PreferenceStorage } from "@/lib/mind/account-preferences";
+import { useBrowserNotices } from "./browser-notices";
+import { workspaceNotices, isQuietHour, notificationIds, readNotificationPreferences, type NotificationPreferences } from "@/lib/mind/notifications";
+import { useState, useMemo, useEffect } from "react";
 import { Activity, Bell, CalendarClock, CheckCheck, FileSearch, Image, ListChecks, X } from "lucide-react";
 import type { WorkspaceNotice } from "@/lib/mind/notifications";
 
@@ -65,4 +69,45 @@ export function NotificationInbox({ notices, read, dismissed = [], onRead, onDis
     </ul>
     {rows.length > count && <button type="button" className="min-h-11 px-3 text-sm" onClick={() => setCount(value => value + 30)}>Show more</button>}
   </section>;
+}
+
+export function useWorkspaceInbox(ws: Workspace, researchHistory: Parameters<typeof workspaceNotices>[2], preferenceStorage: PreferenceStorage, setNotice: (value: string) => void) {
+  function loadNoticeState() {
+    return {
+      owner: preferenceStorage,
+      read: notificationIds(preferenceStorage, "notifications.read.v1"),
+      dismissed: notificationIds(preferenceStorage, "notifications.dismissed.v1"),
+      preferences: readNotificationPreferences(preferenceStorage),
+    };
+  }
+  const [storedNotices, setStoredNotices] = useState(loadNoticeState);
+  const noticeState = storedNotices.owner === preferenceStorage ? storedNotices : loadNoticeState();
+  const { read: readNotices, dismissed: dismissedNotices, preferences: notificationPreferences } = noticeState;
+  useEffect(() => {
+    setStoredNotices(loadNoticeState());
+    const keys = ["notifications.read.v1", "notifications.dismissed.v1", "notifications.preferences.v1"]
+      .map(key => preferenceStorage.keyFor?.(key));
+    function sync(event: StorageEvent) {
+      if (event.key === null || keys.includes(event.key)) setStoredNotices(loadNoticeState());
+    }
+    window.addEventListener("storage", sync);
+    return () => window.removeEventListener("storage", sync);
+  }, [preferenceStorage]);
+  const notifications = useMemo(() => workspaceNotices(ws, notificationPreferences, researchHistory), [ws.runs, ws.schedules, ws.audit, ws.agents, ws.chats, notificationPreferences, researchHistory]);
+  const browserNotices = useBrowserNotices(preferenceStorage, notifications, notificationPreferences);
+  const unreadNoticeCount = notifications.filter((entry) => !readNotices.includes(entry.id) && !dismissedNotices.includes(entry.id) && (entry.urgent || !isQuietHour(notificationPreferences, new Date().getHours()))).length;
+  function markNotices(field: "read" | "dismissed", ids: string[]) {
+    const key = "notifications." + field + ".v1";
+    const next = [...new Set([...noticeState[field], ...notificationIds(preferenceStorage, key), ...ids])].slice(-5000);
+    setStoredNotices({ ...noticeState, [field]: next });
+    try { preferenceStorage.setItem(key, JSON.stringify(next)); }
+    catch { setNotice("Notification marks apply for this session. Device storage is unavailable."); }
+  }
+  function markNoticesRead(ids: string[]) { markNotices("read", ids); }
+  function changeNotificationPreferences(next: NotificationPreferences) {
+    setStoredNotices({ ...noticeState, preferences: next });
+    try { preferenceStorage.setItem("notifications.preferences.v1", JSON.stringify(next)); } catch { setNotice("Notification preferences apply for this session; browser storage is unavailable."); }
+  }
+
+  return { notifications, unreadNoticeCount, notificationPreferences, readNotices, dismissedNotices, browserNotices, markNotices, markNoticesRead, changeNotificationPreferences };
 }
