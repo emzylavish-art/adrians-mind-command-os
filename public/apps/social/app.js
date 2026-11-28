@@ -188,12 +188,16 @@ async function act(path, body) {
     await refresh();
     return result;
   } catch(error) {setNote(explain(error));}
-  finally {document.body.classList.remove("busy");buttons.forEach(b=>b.disabled=false);document.querySelectorAll("[data-approve],[data-reject],[data-save]").forEach(b=>b.disabled=!fresh || b.dataset.held==="true" || connectionDirty());}
+  finally {document.body.classList.remove("busy");buttons.forEach(b=>b.disabled=false);document.querySelectorAll("[data-approve],[data-reject],[data-save],[data-resolve]").forEach(b=>b.disabled=!fresh || b.dataset.held==="true" || connectionDirty());}
 }
 const statusNames = {first_reply:"First reply",reply_due:"Reply due",waiting:"Waiting for customer",held:"Held",stopped:"Stopped"};
 function leadRow(lead) {
   const urgent = lead.age_hours>=24 && ["first_reply","reply_due"].includes(lead.status);
-  return '<article class="lead-row"><div><strong>'+esc(lead.display_name || lead.tiktok_user_id)+'</strong><small>'+esc(lead.account_id)+' · '+esc(lead.campaign || "Campaign unknown")+'</small></div><p class="excerpt">'+esc(lead.latest_message)+'</p><div><span class="badge '+(urgent?"urgent":"")+'">'+esc(statusNames[lead.status])+' · '+esc(lead.age_hours)+'h</span><br><button class="secondary" data-lead="'+esc(lead.id)+'">Open</button></div></article>';
+  const windowText = lead.due_at
+    ? "2-hour reply window from last inbound, due " + new Date(lead.due_at).toLocaleString()
+    : "No 2-hour reply window";
+  const displayClock = urgent ? "24-hour display clock" : "24-hour display clock not reached";
+  return '<article class="lead-row"><div><strong>'+esc(lead.display_name || lead.tiktok_user_id)+'</strong><small>'+esc(lead.account_id)+' · '+esc(lead.campaign || "Campaign unknown")+'</small></div><p class="excerpt">'+esc(lead.latest_message)+'</p><div><span class="badge '+(urgent?"urgent":"")+'">'+esc(statusNames[lead.status])+' · '+esc(lead.age_hours)+'h · '+esc(displayClock)+'</span><small>'+esc(windowText)+'</small><br><button class="secondary" data-lead="'+esc(lead.id)+'">Open</button></div></article>';
 }
 function renderAbandoned(items) {
   const panel = $("#abandoned-attempts");
@@ -205,9 +209,10 @@ function renderAbandoned(items) {
     return;
   }
   panel.hidden = false;
-  panel.innerHTML = '<article class="lead-row"><div><strong>Delivery needs reconciliation</strong><small>Not sent again automatically.</small></div><p class="excerpt">'
-    + rows.map(item => esc(item.draft_id) + " · " + esc(item.reason || "abandoned_attempt") + " · " + esc(item.timestamp)).join("<br>")
-    + '</p></article>';
+  const held = !fresh || connectionDirty();
+  panel.innerHTML = rows.map(item => '<article class="lead-row"><div><strong>Delivery needs reconciliation</strong><small>Not sent again automatically.</small></div><p class="excerpt">'
+    + esc(item.draft_id) + " · " + esc(item.reason || "abandoned_attempt") + " · " + esc(item.timestamp)
+    + '</p><div><button class="secondary" type="button" data-resolve="'+esc(item.draft_id)+'"'+(held?" disabled":"")+'>Record as not sent</button></div></article>').join("");
 }
 function renderLeads() {
   const filter=$("#lead-filter").value;
@@ -418,8 +423,9 @@ async function refreshSection(page, version) {
         $("#weekly-digest").innerHTML = '<h3>This week · ' + esc(new Date(digest.week).toLocaleDateString())
           + '</h3><dl><div><dt>New inquiries</dt><dd>' + esc(digest.new_inbound)
           + '</dd></div><div><dt>Awaiting reply</dt><dd>' + esc(digest.awaiting_reply)
-          + '</dd></div><div><dt>Over 24 hours</dt><dd>' + esc(digest.overdue_24h)
-          + '</dd></div></dl>';
+          + '</dd></div><div><dt>Over 24 hours (display clock)</dt><dd>' + esc(digest.overdue_24h)
+          + '</dd></div><div><dt>Reply window</dt><dd>2 hours from last inbound</dd></div></dl><p>'
+          + esc(digest.basis) + '</p>';
       }),
     ]);
   } else if (page === "connections") {
@@ -613,6 +619,7 @@ document.addEventListener("click",async event=>{
     return;
   }
   if(el.dataset.lead) {
+    if (el.dataset.resolve) return;
     try {
       const result=await call("/api/leads/"+encodeURIComponent(el.dataset.lead));
       $("#lead-detail-body").innerHTML='<h2>'+esc(result.contact.display_name)+'</h2>'+'<div class="pipeline-editor"><label>Stage<select id="stage-value">'+["new","qualified","conversation","booked","won","lost","support"].map(stage=>'<option>'+stage+'</option>').join("")+'</select></label><label>Outcome or next step<textarea id="stage-notes" maxlength="4000"></textarea></label><button data-stage="'+esc(result.contact.id)+'">Save stage</button></div>'+result.messages.map(m=>'<div class="message"><small>'+esc(m.direction)+' · '+esc(m.sent_at)+'</small>'+esc(m.body)+'</div>').join("");
@@ -657,6 +664,11 @@ document.addEventListener("click",async event=>{
       }
       setNote(explain(error));
     }
+  }
+  if(el.dataset.resolve) {
+    const result = await act("/api/deliveries/resolve", {draft_id: el.dataset.resolve, decision: "not_sent"});
+    if (result && result.sends === 0) setNote("Recorded as not sent. This did not send the reply.");
+    return;
   }
 });
 $("#telegram-form").onsubmit=async event=>{
