@@ -6517,7 +6517,7 @@ ${message.content}`;
 
   const compactRail = railCollapsed && !navOpen;
 
-  const browserActivity = <BrowserActivity owner={draftOwner} scope={draftScope} persistent={persistDraft} onAttach={addImageAttachment} />;
+  const browserActivity = <BrowserActivity owner={draftOwner} halted={ws.halted} scope={draftScope} persistent={persistDraft} onAttach={addImageAttachment} />;
   const composerExtras = <ChatComposerExtras key={draftScope} files={ws.files}
     onImage={file => void addImageAttachment(file)}
     onSelect={file => {
@@ -8585,7 +8585,7 @@ ${message.content}`;
               }
             }} />}
           {view === "scheduled" && <FleetPanel key="scheduled" mode="scheduled" ws={ws} setWs={setWs} initialAgentId={botDestinationId} />}
-          {view === "tools" && <FleetPanel browserActivity={<BrowserActivity owner={draftOwner} scope="tools" />} mode="tools" ws={ws} setWs={setWs} onFailure={(message, retry, surface) => reportFailure(message, surface === "mcp" ? "mcp_tool_failed" : "open_page_failed", surface === "mcp" ? "mcp:tools" : "browser", retry)} />}
+          {view === "tools" && <FleetPanel browserActivity={<BrowserActivity owner={draftOwner} halted={ws.halted} scope="tools" />} mode="tools" ws={ws} setWs={setWs} onFailure={(message, retry, surface) => reportFailure(message, surface === "mcp" ? "mcp_tool_failed" : "open_page_failed", surface === "mcp" ? "mcp:tools" : "browser", retry)} />}
           {view === "build" && (
             <section className="page-shell">
               {workTarget.projectId && !ws.projects.some(project => project.id === workTarget.projectId && !project.archived && project.lifecycle !== "archived") ? (
@@ -9159,7 +9159,7 @@ ${message.content}`;
                 </select>
               </label>}
               {settingsPane === "personalization" && <><ModeInstructionsSettings key={draftOwner ?? "guest"} /><AccessibilitySettings onChange={applyAccessibility} /></>}
-              {settingsPane === "browser" && <CloudBrowserSettings key={draftOwner ?? "signed-out"} owner={draftOwner} />}
+              {settingsPane === "browser" && <CloudBrowserSettings key={draftOwner ?? "signed-out"} owner={draftOwner} halted={ws.halted} />}
               <div id="settings-general" hidden={settingsPane !== "general"} className="settings-card card-texture rounded-panel p-4 text-sm">
                 <div className="settings-row">
                   <div>
@@ -9594,7 +9594,7 @@ ${message.content}`;
       />
       <SpeakStage
         open={speakStageOpen}
-        browserActivity={speakStageOpen ? <BrowserActivity owner={draftOwner} scope={draftScope} persistent={persistDraft} onAttach={addImageAttachment} /> : undefined}
+        browserActivity={speakStageOpen ? <BrowserActivity owner={draftOwner} halted={ws.halted} scope={draftScope} persistent={persistDraft} onAttach={addImageAttachment} /> : undefined}
         freeOnly={researchFreeOnly}
         signedIn={statusSignedIn === true || (typeof window !== "undefined" && (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost"))}
         live={voiceListening}

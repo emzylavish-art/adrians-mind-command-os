@@ -50,7 +50,10 @@ export async function clearLocalRetention(ownerId: string, targets: LocalRetenti
         deps.session.removeItem(`adrian-human-return.${ownerId}`);
         deps.session.removeItem(`adrian-build-live-session.${ownerId}`);
       }
-      if (target === "browser-activity") removePrefix(deps.local, activityOwnerPrefix(ownerId));
+      if (target === "browser-activity") {
+        removePrefix(deps.local, activityOwnerPrefix(ownerId));
+        if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("adrian:browser-activity-updated", { detail: null }));
+      }
       if (target === "preferences") removePrefix(deps.local, accountPreferenceKey(ownerId, ""));
       if (target === "composer-drafts") { removePrefix(deps.session, "amcos.draft.v1.[" + JSON.stringify(ownerId) + ","); deps.afterDraftClear?.(); }
       receipts.push({ target, state: "locally-cleared", detail: `${RETENTION_DESCRIPTIONS[target].name} acknowledged removal. ${RETENTION_DESCRIPTIONS[target].retained}`, at: deps.now?.() ?? new Date().toISOString() });

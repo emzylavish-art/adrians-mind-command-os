@@ -10,7 +10,7 @@ import { CodeIde } from "@/components/mind/code-ide";
 import { useAccountPreferences } from "@/components/mind/account-preferences-context";
 import { collectAccountSkillApplications, skillReceiptSummary } from "@/lib/mind/skill-activation";
 import { InlineImage } from "./media/inline-image";
-import { RunActivity } from "./run-activity";
+import { AnswerTabs, RunActivity } from "./message-body";
 import { BrowserEnvironments } from "@/components/mind/browser-environments";
 import { OwnerFlow } from "@/components/mind/owner-flow";
 import { ActionsButton, ActionOverlay } from "@/components/mind/conversation-menu";
@@ -1079,7 +1079,7 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
   }
 
   return (
-    <section className="page-shell intelligence-main" data-testid="build-workspace">
+    <section className="page-shell intelligence-main" data-testid="build-workspace" data-browser-scope>
       <div className="page-hero">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -1300,7 +1300,7 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
         </div>
       </form>
 
-      {plan ? <section className="dense-card min-w-0 space-y-2" aria-label="Build reply"><h3 className="font-semibold">Build reply{planModel ? ` · ${planModel}` : ""}</h3>{savedPlan?.text === plan && <details className="text-xs text-muted"><summary className="cursor-pointer py-2">Submitted task</summary><p className="whitespace-pre-wrap break-words">{savedPlan.request}</p></details>}<div className="build-reading-result text-base">{plan}</div></section> : null}
+      {plan ? <section className="dense-card min-w-0 space-y-2" aria-label="Build reply"><h3 className="font-semibold">Build reply{planModel ? ` · ${planModel}` : ""}</h3>{savedPlan?.text === plan && <details className="text-xs text-muted"><summary className="cursor-pointer py-2">Submitted task</summary><p className="whitespace-pre-wrap break-words">{savedPlan.request}</p></details>}<div className="build-reading-result text-base"><AnswerTabs text={plan} /></div></section> : null}
       </div>
       {notice ? <p className="dense-card text-sm" role="status">{notice}</p> : null}
       {legacyReview && <button type="button" className="min-h-11 underline" onClick={() => { setSeparatePlan(legacyReview); setLegacyReview(""); setNotice("Separate request selected. Review the task and submit when ready."); }}>Prepare a separate request for this project</button>}
@@ -1328,7 +1328,7 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
             {panel === "agent" ? <>
               {buildReceipt?.verifiedBranch && <p className="text-xs text-muted">Git branch verified before dispatch · {buildReceipt.verifiedBranch}</p>}
               {buildReceipt ? <details className="rounded-panel border border-line p-3 text-sm"><summary className="cursor-pointer font-semibold">Execution receipt · implementation unverified</summary><p className="mt-2 break-all text-xs text-muted">Operation: {buildReceipt.operationId || "not supplied"}</p><p className="text-xs text-muted">Builder instruction version: {buildReceipt.verification?.builderInstructionDigest || "not reported"}</p><ul className="mt-2 space-y-1">{buildReceipt.verification?.checks.map(check => <li key={check.id}>{check.id.replaceAll("_", " ")}: {check.status.replaceAll("_", " ")}</li>)}{buildReceipt.skillReceipts?.map(receipt => <li key={receipt.skillId}>{receipt.skillId} · version {receipt.version}: {skillReceiptSummary(receipt)}</li>)}{buildReceipt.toolReceipts?.map((receipt, index) => <li key={index}>{receipt.method}{receipt.path ? ` · ${receipt.path}` : ""}: {receipt.status.replaceAll("_", " ")}{receipt.detail ? ` — ${receipt.detail}` : ""}</li>)}</ul><p className="mt-2 text-xs text-muted">{buildReceipt.fileReviewScope}</p>{buildReceipt.fileReviewWarnings?.map((warning, index) => <p key={index} className="text-xs text-warning">{warning}</p>)}<p className="mt-2 text-xs text-muted">Provider statements are not independent test evidence. Review the changed files and run the required checks before accepting the implementation.</p></details> : null}
-              <div className="build-reading-result min-h-32 rounded-panel border border-line bg-black/10 p-3 text-base">{assistantText || job?.output || job?.error || "No active build task. Submit a task to stream agent output here."}</div>
+              <div className="build-reading-result min-h-32 rounded-panel border border-line bg-black/10 p-3 text-base">{active ? assistantText || job?.output || job?.error : <AnswerTabs text={assistantText || job?.output || job?.error || "No active build task."} />}</div>
               {active ? <button type="button" disabled={job?.status === "cancel_requested"} onClick={() => void cancelBuild()} className="min-h-10 rounded-panel border border-danger/40 px-3 text-sm text-danger">{job?.status === "cancel_requested" ? "Stopping…" : "Stop task"}</button> : null}
               {job?.output ? <button type="button" className="min-h-10 rounded-panel border border-line px-3 text-sm" onClick={() => {
                 const url = URL.createObjectURL(new Blob([JSON.stringify({ job, receipt: buildReceipt }, null, 2)], { type: "application/json" }));

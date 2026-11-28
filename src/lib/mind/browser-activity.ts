@@ -5,7 +5,7 @@ export type BrowserActivityRow = {
   kind: "website" | "screenshot";
   title: string;
   origin?: string;
-  outcome: "returned" | "cancelled" | "saved";
+  outcome: "requested" | "returned" | "cancelled" | "saved";
   image?: string;
   at: number;
 };
@@ -31,7 +31,7 @@ export function readBrowserActivity(raw: string | null): BrowserActivityRow[] {
   return input.slice(0, 12).flatMap((row): BrowserActivityRow[] => {
     if (!row || typeof row.id !== "string" || !/^[a-z0-9-]{1,100}$/i.test(row.id) ||
         typeof row.title !== "string" || typeof row.at !== "number" || !Number.isFinite(new Date(row.at).valueOf())) return [];
-    if (row.kind === "website" && ["returned", "cancelled"].includes(row.outcome)) {
+    if (row.kind === "website" && ["requested", "returned", "cancelled"].includes(row.outcome)) {
       const origin = typeof row.origin === "string" ? browserAddress(row.origin)?.origin : null;
       if (origin && origin === row.origin) return [{
         id: row.id, kind: "website", title: origin, origin, outcome: row.outcome, at: row.at,

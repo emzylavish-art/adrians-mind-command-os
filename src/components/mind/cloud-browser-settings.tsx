@@ -15,7 +15,7 @@ function PermissionSelect({ label, value, onChange }: { label: string; value: Br
   </select>;
 }
 
-export function CloudBrowserSettings({ owner }: { owner: string | null }) {
+export function CloudBrowserSettings({ owner, halted }: { owner: string | null; halted?: boolean }) {
   const [settings, setSettings] = useState<BrowserPreferences | null>(null);
   const [site, setSite] = useState("");
   const [newPermission, setNewPermission] = useState<BrowserPermission>("ask");
@@ -78,7 +78,7 @@ export function CloudBrowserSettings({ owner }: { owner: string | null }) {
         </form>
       </fieldset>
       <div><p className="font-semibold">Browser data</p><p className="text-muted">Website cookies stay in the browser you open. Manage or clear them in that browser’s settings.</p></div>
-      <BrowserActivity owner={owner} scope="browser-settings" />
+      <BrowserActivity owner={owner} halted={halted} scope="browser-settings" />
     </>}
     {key && !settings && notice && <button className={control} type="button" onClick={() => {
       if (!window.confirm("Reset browser permissions for this account on this device?")) return;

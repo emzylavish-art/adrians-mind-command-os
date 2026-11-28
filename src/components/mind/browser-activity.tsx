@@ -10,11 +10,12 @@ type Props = {
   owner?: string | null;
   scope: string;
   persistent?: boolean;
+  halted?: boolean;
   onAttach?: (file: File) => Promise<AttachmentResult>;
 };
 const control = "inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm";
 const labels: Record<BrowserActivityRow["outcome"], string> = {
-  returned: "Returned by you", cancelled: "Handoff ended", saved: "Screenshot saved on this device",
+  requested: "Browser requested", returned: "Returned by you", cancelled: "Handoff ended", saved: "Screenshot saved on this device",
 };
 
 function browserMark(origin?: string) {
@@ -31,7 +32,7 @@ export function BrowserActivity(props: Props) {
   return <ScopedBrowserActivity key={JSON.stringify([props.owner, props.scope, key])} {...props} storageKey={key} />;
 }
 
-function ScopedBrowserActivity({ owner, storageKey, onAttach }: Props & { storageKey: string | null }) {
+function ScopedBrowserActivity({ owner, storageKey, onAttach, halted }: Props & { storageKey: string | null }) {
   const titleId = useId();
   const website = useRef<HTMLDialogElement>(null);
   const viewer = useRef<HTMLDialogElement>(null);
@@ -71,8 +72,13 @@ function ScopedBrowserActivity({ owner, storageKey, onAttach }: Props & { storag
       const changed = (event: StorageEvent) => { if (event.key === storageKey || event.key === null) sync(); };
       sync();
       window.addEventListener("storage", changed);
+      const localChanged = (event: Event) => {
+        if (event instanceof CustomEvent && (event.detail === storageKey || event.detail === null)) sync();
+      };
+      window.addEventListener("adrian:browser-activity-updated", localChanged);
       return () => {
         window.removeEventListener("storage", changed);
+        window.removeEventListener("adrian:browser-activity-updated", localChanged);
         lifecycle.abort();
         frame.current?.abort();
       };
@@ -81,6 +87,14 @@ function ScopedBrowserActivity({ owner, storageKey, onAttach }: Props & { storag
   }, [storageKey]);
 
   useEffect(() => { if (pending) returnButton.current?.focus({ preventScroll: true }); }, [pending]);
+
+  useEffect(() => {
+    if (!halted) return;
+    frame.current?.abort();
+    frame.current = null;
+    setCapturing(false);
+    viewer.current?.close();
+  }, [halted]);
 
   async function update(fn: (previous: BrowserActivityRow[]) => BrowserActivityRow[]) {
     const signal = controller.current.signal;
@@ -92,6 +106,7 @@ function ScopedBrowserActivity({ owner, storageKey, onAttach }: Props & { storag
       if (storageKey) localStorage.setItem(storageKey, JSON.stringify(next));
       active.current = next;
       setRows(next);
+      if (storageKey) window.dispatchEvent(new CustomEvent("adrian:browser-activity-updated", { detail: storageKey }));
     }
     if (storageKey && navigator.locks) await navigator.locks.request(storageKey, { signal }, write);
     else write();
@@ -99,7 +114,7 @@ function ScopedBrowserActivity({ owner, storageKey, onAttach }: Props & { storag
 
   async function saveRow(row: BrowserActivityRow) {
     try {
-      await update(current => [row, ...current]);
+      await update(current => current.some(item => item.id === row.id) ? current : [row, ...current]);
       return true;
     } catch (error) {
       if (!controller.current.signal.aborted) (row.kind === "screenshot" ? setReviewNotice : setNotice)(error instanceof DOMException ? "This device could not save the activity. Existing items were kept." : error instanceof Error ? error.message : "Activity could not be saved.");
@@ -108,7 +123,7 @@ function ScopedBrowserActivity({ owner, storageKey, onAttach }: Props & { storag
   }
 
   async function previewCapture(file?: File, target?: string) {
-    if (frame.current) return;
+    if (frame.current || halted) return;
     if (!file && document.activeElement instanceof HTMLElement) captureOpener.current = document.activeElement;
     const current = new AbortController();
     frame.current = current;
@@ -136,31 +151,61 @@ function ScopedBrowserActivity({ owner, storageKey, onAttach }: Props & { storag
     upload.current?.click();
   }
 
+  function showWebsite(initial = "", resume: typeof pending = null) {
+    setPending(resume);
+    setAddress(initial);
+    setWebsiteNotice("");
+    website.current?.showModal();
+  }
+
+  useEffect(() => {
+    const section = launch.current?.closest<HTMLElement>("[data-browser-scope]");
+    if (!section) return;
+    function openSuggested(event: Event) {
+      if (!(event instanceof CustomEvent) || !event.detail || typeof event.detail.href !== "string") return;
+      if (section?.querySelector("[data-testid=browser-activity]") !== launch.current?.closest("[data-testid=browser-activity]")) return;
+      captureOpener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      showWebsite(event.detail.href);
+    }
+    section.addEventListener("adrian:browser-handoff", openSuggested);
+    return () => section.removeEventListener("adrian:browser-handoff", openSuggested);
+  }, []);
+
   function openWebsite() {
+    if (halted) { setWebsiteNotice("Clear the emergency stop before starting a new browser handoff."); return; }
     const result = websiteOpening(localStorage, owner ?? null, address, true);
     if (!result.url) { setWebsiteNotice(result.error); return; }
-    // Use a user-initiated navigation with no opener or referrer. Browsers may
-    // return null even when this opens, so a launch request is the only receipt.
+    // The tab must open from the user gesture. The receipt records the request;
+    // a null window handle cannot distinguish a blocked popup from noopener.
     window.open(result.url.href, "_blank", "noopener,noreferrer");
+    const item = { id: crypto.randomUUID(), origin: result.url.origin };
     setAddress("");
     setWebsiteNotice("");
-    setPending({ id: crypto.randomUUID(), origin: result.url.origin });
+    setPending(item);
+    void saveRow({ ...item, kind: "website", title: item.origin, outcome: "requested", at: Date.now() });
   }
 
   async function endHandoff(returned: boolean) {
     if (!pending || saving.current) { if (!pending) website.current?.close(); return; }
     const item = pending;
     saving.current = true;
-    setPending(null);
-    website.current?.close();
-    if (await saveRow({ id: item.id, kind: "website", title: item.origin, origin: item.origin, outcome: returned ? "returned" : "cancelled", at: Date.now() })) {
+    try {
+      const receipt = { ...item, kind: "website", title: item.origin, outcome: returned ? "returned" : "cancelled", at: Date.now() } as const;
+      await update(current => current.some(row => row.id === item.id)
+        ? current.map(row => row.id === item.id ? { ...row, ...receipt } : row)
+        : [receipt, ...current]);
+      setPending(null);
+      website.current?.close();
       setNotice(returned ? "Return recorded. Check the website for your sign-in or other changes." : "Handoff ended. Close the website tab in your browser if it opened.");
+    } catch {
+      setWebsiteNotice("This device could not save the handoff result. Try again, or close this panel.");
+    } finally {
+      saving.current = false;
     }
-    saving.current = false;
   }
 
   async function attach(row: BrowserActivityRow) {
-    if (!onAttach || !row.image || attaching) return;
+    if (!onAttach || !row.image || attaching || halted) return;
     const signal = controller.current.signal;
     setAttaching(true);
     try {
@@ -172,14 +217,14 @@ function ScopedBrowserActivity({ owner, storageKey, onAttach }: Props & { storag
 
   return <section className="min-w-0 space-y-2" aria-label="Browser and screenshots" data-testid="browser-activity">
     <div className="flex flex-wrap items-center gap-2">
-      <button ref={launch} type="button" className={control} onClick={() => { setAddress(""); setWebsiteNotice(""); website.current?.showModal(); }}>
+      <button ref={launch} type="button" className={control} onClick={() => { captureOpener.current = launch.current; showWebsite(); }}>
         <Globe2 size={17} aria-hidden="true" /> Browser
       </button>
       <details>
         <summary className={control + " cursor-pointer"}><Camera size={17} aria-hidden="true" /> Screenshot</summary>
         <div className="mt-2 flex flex-wrap gap-2">
-          {canCapture && <button type="button" className={control} disabled={capturing || storageFailed} onClick={() => void previewCapture()}>Capture a browser tab</button>}
-          <button type="button" className={control} disabled={capturing || storageFailed} onClick={event => chooseFile(event.currentTarget)}><ImagePlus size={17} aria-hidden="true" /> Upload screenshot</button>
+          {canCapture && <button type="button" className={control} disabled={capturing || storageFailed || halted} onClick={() => void previewCapture()}>Capture a browser tab</button>}
+          <button type="button" className={control} disabled={capturing || storageFailed || halted} onClick={event => chooseFile(event.currentTarget)}><ImagePlus size={17} aria-hidden="true" /> Upload screenshot</button>
           {capturing && <button type="button" className={control} onClick={() => { frame.current?.abort(); frame.current = null; setCapturing(false); }}>Cancel screenshot</button>}
           <input ref={upload} type="file" hidden accept="image/png,image/jpeg,image/webp" onChange={event => {
             const file = event.currentTarget.files?.[0];
@@ -210,11 +255,15 @@ function ScopedBrowserActivity({ owner, storageKey, onAttach }: Props & { storag
                 anchor.click();
               }} />}
               <div className="flex flex-wrap items-center gap-3">
+                {row.kind === "website" && row.outcome === "requested" && <button type="button" className={control} onClick={event => {
+                  captureOpener.current = event.currentTarget;
+                  showWebsite("", { id: row.id, origin: row.origin! });
+                }}>Resume handoff</button>}
                 {row.kind === "website" && !row.image && <>
-                  <button type="button" className={control} disabled={capturing || storageFailed} onClick={event => chooseFile(event.currentTarget, row.id)}>Add screenshot to this step</button>
-                  {canCapture && <button type="button" className={control} disabled={capturing || storageFailed} onClick={() => void previewCapture(undefined, row.id)}>Capture a tab for this step</button>}
+                  <button type="button" className={control} disabled={capturing || storageFailed || halted} onClick={event => chooseFile(event.currentTarget, row.id)}>Add screenshot to this step</button>
+                  {canCapture && <button type="button" className={control} disabled={capturing || storageFailed || halted} onClick={() => void previewCapture(undefined, row.id)}>Capture a tab for this step</button>}
                 </>}
-                {row.image && onAttach && <button type="button" className={control} disabled={attaching} onClick={() => void attach(row)}>Attach to composer</button>}
+                {row.image && onAttach && <button type="button" className={control} disabled={attaching || halted} onClick={() => void attach(row)}>Attach to composer</button>}
                 <time className="text-xs text-muted" dateTime={new Date(row.at).toISOString()}>{new Date(row.at).toLocaleString()}</time>
                 <button type="button" className="min-h-11 text-sm text-muted underline" onClick={async () => {
                   try { await update(current => current.filter(item => item.id !== row.id)); setNotice("Activity item removed."); }
@@ -227,18 +276,19 @@ function ScopedBrowserActivity({ owner, storageKey, onAttach }: Props & { storag
       })}
     </ol>}
     <dialog ref={website} aria-labelledby={titleId} className="fixed inset-x-3 bottom-4 top-auto m-auto w-[calc(100%-1.5rem)] max-w-lg max-h-[88dvh] overflow-auto rounded-panel border border-line bg-surface p-4 text-fg backdrop:bg-black/65 sm:inset-y-0 sm:bottom-0"
-      onClose={() => launch.current?.focus({ preventScroll: true })}
+      onClose={() => captureOpener.current?.focus({ preventScroll: true })}
       onCancel={event => { event.preventDefault(); void endHandoff(false); }}>
       <div className="flex min-w-0 items-center gap-3"><Globe2 size={23} aria-hidden="true" /><h2 className="text-lg font-semibold" id={titleId}>{pending ? "Continue in your browser" : "Open a website"}</h2></div>
       {pending ? <div className="mt-3 space-y-3">
         <p className="break-all text-sm font-medium">{pending.origin}</p>
         <p className="text-sm text-muted">Check your browser for the new tab. If the website asks you to sign in, enter your details on its own page. Return here when you’re finished.</p>
-        <div className="flex flex-wrap gap-2"><button ref={returnButton} type="button" className={control + " bg-accent text-accent-ink"} onClick={() => void endHandoff(true)}>I’m back</button><button type="button" className={control} onClick={() => void endHandoff(false)}>End handoff</button></div>
+        {websiteNotice && <p role="status" className="text-sm text-danger">{websiteNotice}</p>}
+        <div className="flex flex-wrap gap-2"><button ref={returnButton} type="button" className={control + " bg-accent text-accent-ink"} onClick={() => void endHandoff(true)}>I’m back</button><button type="button" className={control} onClick={() => void endHandoff(false)}>End handoff</button><button type="button" className={control} onClick={() => website.current?.close()}>Close panel</button></div>
       </div> : <form className="mt-3 space-y-3" onSubmit={event => { event.preventDefault(); openWebsite(); }}>
         <label className="block space-y-1 text-sm"><span>Website address</span><input value={address} onChange={event => { setAddress(event.target.value); setWebsiteNotice(""); }} type="text" inputMode="url" spellCheck={false} autoCapitalize="off" autoComplete="off" placeholder="https://example.com" className="min-h-11 w-full rounded-panel border border-line bg-bg px-3" maxLength={4096} /></label>
         {browserAddress(address) && <p className="break-all text-xs text-muted">{browserAddress(address)?.origin}</p>}
         {websiteNotice && <p role="status" className="text-sm text-danger">{websiteNotice}</p>}
-        <div className="flex flex-wrap gap-2"><button type="submit" className={control + " bg-accent text-accent-ink"} disabled={!address.trim()}>Open in browser <ExternalLink size={15} aria-hidden="true" /></button><button type="button" className={control} onClick={() => website.current?.close()}>Cancel</button></div>
+        <div className="flex flex-wrap gap-2"><button type="submit" className={control + " bg-accent text-accent-ink"} disabled={!address.trim() || halted}>Open in browser <ExternalLink size={15} aria-hidden="true" /></button><button type="button" className={control} onClick={() => website.current?.close()}>Cancel</button></div>
       </form>}
     </dialog>
     <dialog ref={viewer} aria-label="Review screenshot" className="fixed inset-0 m-auto max-h-[92dvh] w-[calc(100%-1.5rem)] max-w-3xl rounded-panel border border-line bg-surface p-4 text-fg backdrop:bg-black/70"

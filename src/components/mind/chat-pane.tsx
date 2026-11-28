@@ -426,7 +426,7 @@ export function ChatPane({
         </div>
       </aside>
       : null}
-      <section className="flex min-w-0 flex-1 flex-col">
+      <section className="flex min-w-0 flex-1 flex-col" data-browser-scope>
         {active?.branchFrom ? <p className="px-4 py-2 text-xs text-muted">Edited branch. <button type="button" className="min-h-9 px-2 underline" onClick={() => onPick(active.branchFrom!.chatId)}>Open source conversation</button></p> : null}
         <div className="chat-head px-4 pt-4" hidden={Boolean(active?.messages.length)}>
           <h2 className="font-display text-3xl font-bold">{active?.title || "AI Chat"}</h2>

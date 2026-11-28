@@ -146,7 +146,13 @@ const AnswerTabsContent = memo(function AnswerTabsContent({
       </div>}
       <div id={`${id}-panel`} role={tabs.length > 1 ? "tabpanel" : undefined} aria-labelledby={tabs.length > 1 ? `${id}-${tab}` : undefined} tabIndex={tabs.length > 1 ? 0 : undefined}>
       {tab === "links" ? (
-        links.length ? <ul className="space-y-1">{links.map(([href, label]) => <li key={href}><a className="break-all text-accent underline" href={href} target="_blank" rel="noreferrer">{label}</a></li>)}</ul> : <p className="text-sm text-muted">No links were returned with this answer.</p>
+        links.length ? <ul className="space-y-1">{links.map(([href, label]) => <li key={href}><a className="break-all text-accent underline" href={href} target="_blank" rel="noopener noreferrer" onClick={event => {
+          if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
+          const surface = event.currentTarget.closest<HTMLElement>("[data-browser-scope]");
+          if (!surface?.querySelector("[data-testid=browser-activity]")) return;
+          event.preventDefault();
+          surface.dispatchEvent(new CustomEvent("adrian:browser-handoff", { detail: { href } }));
+        }}>{label}</a></li>)}</ul> : <p className="text-sm text-muted">No links were returned with this answer.</p>
       ) : tab === "images" ? (
         pictures.length ? pictures.map((image, index) => image.dataUrl ? <InlineImage key={index} src={image.dataUrl} alt={image.name || `Image ${index + 1}`} onEditImagine={onEditImagine} onSave={onSaveImage} onDownload={onDownloadImage} /> : <p key={index} className="break-words text-sm text-muted">{image.name || `Image ${index + 1}`} is unavailable on this device.</p>) : <p className="text-sm text-muted">No images were returned with this answer.</p>
       ) : (
