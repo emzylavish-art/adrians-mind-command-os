@@ -9438,6 +9438,7 @@ ${message.content}`;
       />
       <input
         ref={imageInputRef}
+        data-testid="composer-image-input"
         type="file"
         accept="image/png,image/jpeg,image/gif,image/webp"
         className="hidden"

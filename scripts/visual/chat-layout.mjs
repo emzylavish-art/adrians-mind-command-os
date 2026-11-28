@@ -186,7 +186,7 @@ for (const [width, height, rootPercent] of viewports) {
         const editMs = performance.now() - interactionStart;
         assert(editMs < 5000, `Draft editing exceeded the 5s fixture ceiling (${editMs}ms).`);
         if (count >= 50) {
-          await page.locator('input[type=file][accept^="image/png"]').setInputFiles({
+          await page.getByTestId('composer-image-input').setInputFiles({
             name: "release-" + "long-file-name-".repeat(12) + "review.png",
             mimeType: "image/png",
             buffer: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVQI12NgAAIAAAUAAWJVMogAAAAASUVORK5CYII=", "base64"),
