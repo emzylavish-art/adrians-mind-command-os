@@ -9,7 +9,10 @@ const blank: ModeInstructions = { chat: "", build: "", companion: "" };
 
 export function parseModeInstruction(value: unknown): { ok: true; text: string } | { ok: false; error: string } {
   if (value === undefined) return { ok: true, text: "" };
-  if (typeof value !== "string" || value.length > MODE_INSTRUCTIONS_MAX || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(value)) {
+  if (typeof value !== "string" || value.length > MODE_INSTRUCTIONS_MAX || Array.from(value).some(char => {
+    const code = char.charCodeAt(0);
+    return code === 127 || (code < 32 && ![9, 10, 13].includes(code));
+  })) {
     return { ok: false, error: "Custom instructions must be plain text up to 2,000 characters." };
   }
   return { ok: true, text: value.replace(/\r\n?/g, "\n").trim() };

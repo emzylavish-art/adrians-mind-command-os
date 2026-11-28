@@ -228,3 +228,13 @@ export function agentActivityFromTimeline(rows: ToolTimelineRow[]): AgentActivit
 export function workspaceHasDatabaseUrl(detail: string): boolean {
   return /postgres|neon|dedicated/i.test(detail) && !/not set|pglite|memory|no dedicated/i.test(detail);
 }
+
+const serviceLogos: Record<string, string> = {
+  notion: "/brand/logos/notion.svg",
+  github: "/brand/logos/github.svg",
+  vercel: "/brand/logos/vercel.svg",
+};
+
+export function toolTimelineLogo(tool: string) {
+  return Object.hasOwn(serviceLogos, tool) ? serviceLogos[tool] : undefined;
+}

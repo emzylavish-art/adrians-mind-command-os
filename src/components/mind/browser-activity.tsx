@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Camera, ChevronRight, ExternalLink, Globe2, ImagePlus } from "lucide-react";
 import { activityStorageKey, readBrowserActivity, websiteOpening, type BrowserActivityRow } from "@/lib/mind/browser-activity";
 import { browserAddress } from "@/lib/mind/browser-permissions";
@@ -151,12 +151,12 @@ function ScopedBrowserActivity({ owner, storageKey, onAttach, halted }: Props & 
     upload.current?.click();
   }
 
-  function showWebsite(initial = "", resume: typeof pending = null) {
+  const showWebsite = useCallback((initial = "", resume: typeof pending = null) => {
     setPending(resume);
     setAddress(initial);
     setWebsiteNotice("");
     website.current?.showModal();
-  }
+  }, []);
 
   useEffect(() => {
     const section = launch.current?.closest<HTMLElement>("[data-browser-scope]");
@@ -169,7 +169,7 @@ function ScopedBrowserActivity({ owner, storageKey, onAttach, halted }: Props & 
     }
     section.addEventListener("adrian:browser-handoff", openSuggested);
     return () => section.removeEventListener("adrian:browser-handoff", openSuggested);
-  }, []);
+  }, [showWebsite]);
 
   function openWebsite() {
     if (halted) { setWebsiteNotice("Clear the emergency stop before starting a new browser handoff."); return; }

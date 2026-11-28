@@ -13,7 +13,7 @@ import { type ResponseRating, type RoutingMode } from "@/lib/mind/routing-modes"
 import { type LogicRouteId, type LogicRoutePublic } from "@/lib/mind/logic-routes";
 import { type ImageAttachment } from "@/lib/mind/media";
 import { type ModelTier, type ModelTierCatalogRow } from "@/lib/mind/model-tiers";
-import { agentActivityFromTimeline, connectedServicesRail, elapsedMs, formatElapsed, recentTasksFromAudit, systemStatusRail, timelineCounts, type ToolTimelineRow } from "@/lib/mind/tools-timeline";
+import { agentActivityFromTimeline, connectedServicesRail, elapsedMs, formatElapsed, recentTasksFromAudit, systemStatusRail, timelineCounts, toolTimelineLogo, type ToolTimelineRow } from "@/lib/mind/tools-timeline";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ComposerBar, type ComposerModelId, DictationPill as PreviewDictationPill, LiveSpeakControl, LiveVoiceBar as PresentationalLiveVoiceBar, VoiceModeStage } from "@/components/mind/voice-ui";
 import { routeForBotChat } from "@/lib/mind/bot-model";
@@ -24,7 +24,7 @@ import { ConversationSections } from "@/components/mind/conversation-sections";
 import { MemoryChatToggle } from "@/components/mind/memory-chat-toggle";
 import { ChatMediaGallery } from "@/components/mind/media/chat-media-gallery";
 import { ChatEmptyHero } from "@/components/mind/chat-empty-hero";
-import { AnswerTabs, MessageBody, RunActivity, serviceLogo } from "@/components/mind/message-body";
+import { AnswerTabs, MessageBody, RunActivity } from "@/components/mind/message-body";
 import { ContextReceiptDetails } from "@/components/mind/context-receipt";
 import { VoiceStageReceipt } from "@/components/mind/voice-stage-receipt";
 import { replyActions, replyHasSources } from "@/lib/mind/reply-actions";
@@ -685,7 +685,7 @@ export function ChatPane({
               })()}
               <RunActivity label="Tool activity" rows={toolTimeline.map(row => ({
                 id: row.id, label: row.name, detail: row.text, state: row.status, meta: formatElapsed(elapsedMs(row, timelineNowMs)),
-                logo: serviceLogo(row.toolId), receipt: row.auditId ? () => onViewAudit(row.auditId) : undefined,
+                logo: toolTimelineLogo(row.toolId), receipt: row.auditId ? () => onViewAudit(row.auditId) : undefined,
               }))} />
             </div>
           )}

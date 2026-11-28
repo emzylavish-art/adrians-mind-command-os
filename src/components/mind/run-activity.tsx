@@ -10,16 +10,6 @@ export type RunActivityItem = {
   logo?: string;
 };
 
-const serviceLogos: Record<string, string> = {
-  notion: "/brand/logos/notion.svg",
-  github: "/brand/logos/github.svg",
-  vercel: "/brand/logos/vercel.svg",
-};
-
-export function serviceLogo(tool: string) {
-  return Object.hasOwn(serviceLogos, tool) ? serviceLogos[tool] : undefined;
-}
-
 export function RunActivity({ rows, label }: { rows: RunActivityItem[]; label: string }) {
   return <ol className="space-y-1" aria-label={label}>{rows.map(row => {
     const issue = row.state === "failed" || row.state === "timed_out" || row.state === "cancelled";
