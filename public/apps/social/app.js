@@ -19,6 +19,23 @@ let campaignFilter = "";
 let leadPage = 0;
 let reviewIndex = 0;
 const edited = new Map();
+let verified = {base: "", secret: ""};
+function destinationFor(method, inputs, saved) {
+  const typed = {
+    base: String(inputs?.base || "").trim().replace(/\/$/, ""),
+    secret: String(inputs?.secret || "").trim(),
+  };
+  const mutating = String(method || "GET").toUpperCase() !== "GET";
+  if (mutating && (typed.base !== saved.base || typed.secret !== saved.secret)) {
+    return {ok: false, reason: "Save the connection before sending this action."};
+  }
+  const chosen = mutating ? saved : typed;
+  if (!chosen.base) return {ok: false, reason: "Connect your Social service in Connections to see your customers."};
+  return {ok: true, base: chosen.base, secret: chosen.secret};
+}
+function connectionDirty() {
+  return destinationFor("POST", {base: baseInput.value, secret: secretInput.value}, verified).ok === false && Boolean(verified.base);
+}
 baseInput.value = stored(localStorage,"adrian-base") || (["localhost","127.0.0.1"].includes(location.hostname) ? location.origin : "");
 secretInput.value = secretMeta?.content || stored(sessionStorage,"adrian-secret") || "";
 function setNote(text) { $("#action-status").textContent = text; }
@@ -62,11 +79,11 @@ $("#save-connect").onclick = () => {
   viewVersion += 1;
   void refresh(true);
 };
-async function call(path, options={}) {
-  const base = baseInput.value.trim().replace(/\/$/,"");
-  if (!base) throw new Error("Connect your Social service in Connections to see your customers.");
-  const response = await fetch(base+path,{signal:AbortSignal.timeout(20000),...options,
-    headers:{"Content-Type":"application/json","X-Adrian-Secret":secretInput.value.trim(),...options.headers}});
+async function call(path, options={}, destination=null) {
+  const choice = destination || destinationFor(options.method, {base: baseInput.value, secret: secretInput.value}, verified);
+  if (!choice.ok) throw new Error(choice.reason);
+  const response = await fetch(choice.base+path,{signal:AbortSignal.timeout(20000),...options,
+    headers:{"Content-Type":"application/json","X-Adrian-Secret":choice.secret,...options.headers}});
   if (!response.ok) {
     if (response.status === 401) throw new Error("Your connection needs authorization. Update it in Connections.");
     let detail = "Request failed ("+response.status+"). Your work is preserved.";
@@ -93,7 +110,7 @@ async function act(path, body) {
     await refresh();
     return result;
   } catch(error) {setNote(explain(error));}
-  finally {document.body.classList.remove("busy");buttons.forEach(b=>b.disabled=false);document.querySelectorAll("[data-approve],[data-reject],[data-save]").forEach(b=>b.disabled=!fresh || b.dataset.held==="true");}
+  finally {document.body.classList.remove("busy");buttons.forEach(b=>b.disabled=false);document.querySelectorAll("[data-approve],[data-reject],[data-save]").forEach(b=>b.disabled=!fresh || b.dataset.held==="true" || connectionDirty());}
 }
 const statusNames = {first_reply:"First reply",reply_due:"Reply due",waiting:"Waiting for customer",held:"Held",stopped:"Stopped"};
 function leadRow(lead) {
@@ -151,12 +168,14 @@ function renderReview() {
       : unverified ? "Imported without a verified platform message. Approval will not send it."
       : unsupported ? "No reply adapter for this source. Approval will not send it."
       : stale ? "A newer customer message arrived. Review it before approving this reply." : "";
-    const hold = d.action==="draft_held" || unsupported || unverified || stale;
-    return '<article class="review-card">'+(notice?'<p class="badge urgent">'+esc(notice)+'</p>':'')+'<h3>'+esc(lead?.display_name || d.account_id)+'</h3><small>'+esc(lead?.campaign || "Campaign unknown")+' · '+esc(d.timestamp)+'</small><div class="review-columns"><div><small>Latest customer message</small><blockquote>'+esc(lead?.latest_message || "Open the conversation to verify its context.")+'</blockquote><button class="secondary" data-lead="'+esc(d.contact_id)+'">Conversation</button></div><label>Your reply<textarea data-draft="'+esc(id)+'" aria-label="Reply for '+esc(lead?.display_name || d.account_id)+'">'+esc(edited.get(id) ?? d.draft_text)+'</textarea></label></div><div class="actions"><button data-approve="'+esc(id)+'" '+(hold?'disabled data-held="true"':'')+'>Approve reply</button><button class="secondary" data-save="'+esc(id)+'">Save revision</button><button class="secondary" data-reject="'+esc(id)+'">Reject</button></div></article>';
+    const unsaved = connectionDirty();
+    const shown = unsaved ? "Save the connection before sending this action." : notice;
+    const hold = d.action==="draft_held" || unsupported || unverified || stale || unsaved;
+    return '<article class="review-card">'+(shown?'<p class="badge urgent">'+esc(shown)+'</p>':'')+'<h3>'+esc(lead?.display_name || d.account_id)+'</h3><small>'+esc(lead?.campaign || "Campaign unknown")+' · '+esc(d.timestamp)+'</small><div class="review-columns"><div><small>Latest customer message</small><blockquote>'+esc(lead?.latest_message || "Open the conversation to verify its context.")+'</blockquote><button class="secondary" data-lead="'+esc(d.contact_id)+'">Conversation</button></div><label>Your reply<textarea data-draft="'+esc(id)+'" aria-label="Reply for '+esc(lead?.display_name || d.account_id)+'">'+esc(edited.get(id) ?? d.draft_text)+'</textarea></label></div><div class="actions"><button data-approve="'+esc(id)+'" '+(hold?'disabled data-held="true"':'')+'>Approve reply</button><button class="secondary" data-save="'+esc(id)+'">Save revision</button><button class="secondary" data-reject="'+esc(id)+'">Reject</button></div></article>';
   }).join("") || empty("All caught up","Replies appear here when the drafter has prepared them. New leads stay in Today while drafting is unavailable.");
   paintList("#draft-list", reviewMarkup);
   $("#draft-list").querySelectorAll("[data-approve],[data-save],[data-reject]").forEach(button => {
-    button.disabled = !fresh || button.dataset.held === "true";
+    button.disabled = !fresh || button.dataset.held === "true" || connectionDirty();
   });
 }
 function renderCampaigns() {
@@ -382,6 +401,7 @@ bindDetail("#audit", async () => {
 });
 
 async function refresh(replace = false) {
+  const requested = {base: baseInput.value, secret: secretInput.value};
   if (document.querySelector(".busy")) return;
   if (activeRefresh && replace !== true) return;
   activeRefresh?.abort();
@@ -390,11 +410,13 @@ async function refresh(replace = false) {
   $("#refresh").disabled = true;
   try {
     const signal = AbortSignal.any([request.signal, AbortSignal.timeout(20000)]);
+    const destination = destinationFor("GET", requested, verified);
     const [leads, drafts, status] = await Promise.all([
       "/api/leads", "/api/drafts", "/api/status?include_queues=false",
-    ].map(path => call(path, {signal})));
+    ].map(path => call(path, {signal}, destination)));
     if (request.signal.aborted) return;
     fresh = true;
+    verified = {base: destination.base, secret: destination.secret};
     data.leads = leads.items;
     data.drafts = drafts.items;
     const active = document.activeElement;
