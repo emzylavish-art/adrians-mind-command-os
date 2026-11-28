@@ -15,7 +15,7 @@ The queue has a distinct lifecycle from a submitted task. A queued draft has tex
 | Work and Build task composer | Queue sits with Ask Build, Review Build or Run Build. The same queue controls are also reachable from the editor and status navigation. | The task is held in the selected project. A running coding job and its receipt remain separately visible and controlled. | Move a task to the composer. Check the selected workspace, files, branch, mode and any required approval. Use the existing explicit submission action when ready. |
 | General Work | The Work and Build controls stay available when no project is selected. | General Work has its own queue scope. | Switch to a project or review the item in General Work as appropriate. |
 
-A scoped queue holds eight text messages. Each message is limited to 8,000 characters, matching the current Chat and Build text limits. The composer keeps the text if the queue is full or the content exceeds the limit. This makes capacity predictable on a phone and prevents input from disappearing when the user reaches the ceiling.
+A scoped queue holds eight drafts. Text is limited to 8,000 characters, matching the current Chat and Build text limits. A draft may carry a staged text excerpt and up to four prepared images. The composer keeps the source draft when the queue is full, an attachment is invalid, or browser storage refuses the move.
 
 ## Queue management
 
@@ -36,7 +36,7 @@ An automatic Chat continuation requires a successful reply from the same convers
 
 Work and Build are intentionally review-first. The queue operation stores text and makes no coding, terminal, repo, agent or provider request. Restoring a task does not reuse a prior runtime job ID or submit under the last branch. Normal Ask, Review and Run continue to perform the required checks after the user inspects the target. An existing job can finish, fail or wait for cancellation without consuming the next Work or Build queue row.
 
-Plain text is the implemented content type. An attachment, slash command, or source-linked Build handoff stays in its normal composer flow for deliberate review. Queueing preserves the current input on those paths. Attachment snapshots would require explicit acceptance rules for retained bytes, cross-project access, deletion and destination review. An independent server-side background queue would require durable job IDs, expiry, business authorization, recovery and multi-device conflict handling. This browser composer queue has no server worker.
+Attached drafts wait for review, including when a Chat reply is active. The queue keeps prepared image data and the same staged excerpt the composer displays. It shows the attachment names and restores the draft only into an empty composer in its original scope. Slash commands and source-linked Build handoffs remain in their normal composer flow. The browser composer queue has no server worker.
 
 ## Motion, touch and accessibility
 
@@ -57,7 +57,7 @@ Motion stops when the device requests reduced motion or the workspace preference
 
 ## Follow-on capabilities and required decisions
 
-**Attachments in the queue.** An attachment-aware row would show a file or image chip, retained filename and size, and the original source scope. Restoring a missing attachment would preserve the text and let the user review before sending. Temporary Chat could only retain data in memory. Work would still use the current branch and execution review after restore. Acceptance would include replacing a file while the queue is open, deleting an original, a failed image read, a stale project switch, a short offline interval, and reopening from an approved device.
+**Attachment recovery.** Temporary Chat keeps its queue in memory. A corrupt attachment record is held and any recoverable text can be returned to the composer for the user to reattach the file. Queuing a file retains the staged excerpt, through the same review and send flow as an ordinary composer attachment. The original library file and its download remain subject to their own scope and retention behavior.
 
 **Cross-device queue.** Keeping an item after closing a tab or switching devices would require a server-owned queue revision with account and destination identity. A worker needs a stable operation ID, explicit eligibility, persisted cancellation, retention and spending limits, and a compare-and-set claim. Reconnecting a client must reconcile before retry. Device A and device B must never both submit the same item. A temporary conversation must remain outside this storage route. This capability would need an approved isolated authenticated target for end-to-end verification.
 

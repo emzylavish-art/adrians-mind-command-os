@@ -152,6 +152,28 @@ try {
     assert.equal(await page.evaluate(() => window.__syntheticTurn.started), 3);
     return { followUpRequests: 1, focusReturned: true, liveProviderCalls: 0 };
   });
+  await check(page, "chat-queue-holds-attached-follow-up", async () => {
+    const composer = page.locator("form.thread-composer");
+    const draft = composer.getByRole("textbox", { name: "Message", exact: true });
+    await draft.fill("Synthetic request before the attached follow-up");
+    await composer.getByRole("button", { name: "Send", exact: true }).click();
+    await page.waitForFunction(() => window.__syntheticTurn.started === 4);
+    const name = "chat-follow-up.png";
+    await page.getByTestId("composer-image-input").setInputFiles({ name, mimeType: "image/png", buffer: await page.screenshot() });
+    await composer.getByRole("img", { name, exact: true }).waitFor();
+    await draft.fill("Review this attachment before sending");
+    await composer.getByRole("button", { name: "Queue", exact: true }).click();
+    await composer.getByRole("button", { name: "Open chat queue, 1 waiting", exact: true }).click();
+    const sheet = page.getByRole("dialog", { name: "Chat queue" });
+    await sheet.getByText("Held for review", { exact: true }).waitFor();
+    await sheet.getByText(`Attachments: ${name}`, { exact: true }).waitFor();
+    await page.evaluate(() => window.__syntheticTurn.done());
+    await sheet.getByRole("button", { name: "To draft", exact: true }).click();
+    await composer.getByRole("img", { name, exact: true }).waitFor();
+    assert.equal(await draft.inputValue(), "Review this attachment before sending");
+    assert.equal(await page.evaluate(() => window.__syntheticTurn.started), 4);
+    return { attachedFollowUpHeld: true, composerRestored: true, additionalRequests: 0 };
+  });
   await check(page, "build-buffer-symbol-and-dependency", async () => {
     await navigate(page, "/?section=build", "build");
     const sections = page.getByRole("navigation", { name: "Build sections" });
@@ -229,6 +251,76 @@ try {
     assert.equal(await field.inputValue(), "Edited next synthetic task");
     assert.equal(buildSubmissions, 0);
     return { reducedMotion: true, mobileWidth: 390, projectIsolation: true, reload: true, buildSubmissions };
+  });
+  await check(queuePage, "work-queue-attachments-restored-after-reload", async () => {
+    const task = queuePage.getByRole("textbox", { name: "Coding task", exact: true });
+    await task.fill("");
+    const image = { name: "queue-reference.png", mimeType: "image/png", buffer: await queuePage.screenshot() };
+    await queuePage.getByTestId("composer-image-input").setInputFiles(image);
+    const file = { name: "queue-scope.txt", mimeType: "text/plain", buffer: Buffer.from("Retain this exact excerpt.") };
+    await queuePage.locator('input[type="file"][accept$="image/*"]').setInputFiles(file);
+    await queuePage.getByRole("button", { name: "Remove queue-reference.png", exact: true }).waitFor();
+    await queuePage.getByRole("button", { name: "Remove queue-scope.txt", exact: true }).waitFor();
+
+    await queuePage.evaluate(() => {
+      const setItem = Storage.prototype.setItem;
+      Storage.prototype.setItem = function(key, value) {
+        if (this === sessionStorage && key.endsWith(".queue")) throw new DOMException("Fixture limit", "QuotaExceededError");
+        return setItem.call(this, key, value);
+      };
+      window.restoreQueueStorage = () => { Storage.prototype.setItem = setItem; };
+    });
+    const queue = queuePage.getByRole("button", { name: "Queue", exact: true });
+    await queue.click();
+    await queuePage.getByText("Browser storage is full or unavailable. Your task and attachments are still in the composer.", { exact: true }).waitFor();
+    assert.equal(await queuePage.getByRole("button", { name: "Remove queue-reference.png", exact: true }).isVisible(), true);
+    await queuePage.evaluate(() => window.restoreQueueStorage());
+    await queue.click();
+    await queuePage.getByRole("button", { name: "Remove queue-reference.png", exact: true }).waitFor({ state: "detached" });
+    await queuePage.reload({ waitUntil: "domcontentloaded" });
+    await queuePage.getByRole("button", { name: "Open work and build queue, 1 waiting", exact: true }).click();
+    const sheet = queuePage.getByRole("dialog", { name: "Work and Build queue" });
+    await sheet.getByText("Attachments: queue-scope.txt, queue-reference.png", { exact: true }).waitFor();
+    await sheet.getByText("Held for review", { exact: true }).waitFor();
+    await sheet.getByRole("button", { name: "To draft", exact: true }).click();
+    await queuePage.getByRole("img", { name: "queue-reference.png", exact: true }).waitFor();
+    await queuePage.getByRole("button", { name: "Remove queue-scope.txt", exact: true }).waitFor();
+    assert.equal(await task.inputValue(), "");
+    assert.equal(buildSubmissions, 0);
+    return { sameTabReload: true, quotaFailureKeptInput: true, restoredTextFileAndImage: true, buildSubmissions };
+  });
+  await check(queuePage, "work-browser-handoff-and-scoped-screenshot", async () => {
+    const activity = queuePage.getByTestId("browser-activity");
+    await queuePage.evaluate(() => {
+      window.browserOpenRequests = [];
+      window.open = (...args) => { window.browserOpenRequests.push(args); return null; };
+    });
+    await activity.getByRole("button", { name: "Browser", exact: true }).click();
+    const website = queuePage.getByRole("dialog", { name: "Open a website" });
+    const address = website.getByRole("textbox", { name: "Website address" });
+    await address.fill("https://example.com/review");
+    await website.getByRole("button", { name: "Open in browser", exact: true }).click();
+    await queuePage.getByRole("dialog", { name: "Continue in your browser" }).getByRole("button", { name: "I’m back", exact: true }).click();
+    await activity.getByText("Returned by you", { exact: true }).waitFor();
+    assert.deepEqual(await queuePage.evaluate(() => window.browserOpenRequests), [["https://example.com/review", "_blank", "noopener,noreferrer"]]);
+    await activity.getByText("Returned by you", { exact: true }).click();
+    const file = { name: "work-browser-fixture.png", mimeType: "image/png", buffer: await queuePage.screenshot() };
+    const chooser = queuePage.waitForEvent("filechooser");
+    await activity.getByRole("button", { name: "Add screenshot to this step", exact: true }).click();
+    await (await chooser).setFiles(file);
+    const review = queuePage.getByRole("dialog", { name: "Review screenshot" });
+    await review.getByRole("img", { name: file.name, exact: true }).waitFor();
+    await review.getByRole("button", { name: "Save screenshot", exact: true }).click();
+    const image = activity.getByRole("img", { name: "Screenshot of https://example.com", exact: true });
+    await image.waitFor();
+    const projects = queuePage.getByRole("combobox", { name: "Work project", exact: true });
+    await projects.selectOption("queue-other");
+    await queuePage.waitForFunction(() => new URL(location.href).searchParams.get("workProject") === "queue-other");
+    assert.equal(await image.count(), 0);
+    await projects.selectOption("queue-project");
+    await image.waitFor();
+    assert.equal(buildSubmissions, 0);
+    return { personalBrowserHandoff: true, returnedReceipt: true, screenshotReviewed: true, projectIsolation: true, actualExternalRequests: 0 };
   });
   report.queueTransport = queueTransport.summary(); await queueContext.close();
 

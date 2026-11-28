@@ -1,6 +1,6 @@
 import { useId, useState } from "react";
 import { ArrowDown, ArrowUp, ListEnd, ListOrdered, X } from "lucide-react";
-import { CUE_LIMIT, CUE_TEXT_LIMIT, type CuedMessage } from "@/lib/mind/message-cue";
+import { CUE_LIMIT, CUE_TEXT_LIMIT, hasCueAttachments, type CuedMessage } from "@/lib/mind/message-cue";
 import { ModalOverlay } from "./modal-overlay";
 import "./composer-queue.css";
 
@@ -46,19 +46,23 @@ export function ComposerQueue({ title, items, description, canQueue, canRestore,
         {items.length === 0 ? <p className="queue-empty">The queue is empty.</p> : <ol className="queue-list">
           {items.map((item, index) => <li key={item.id} className="queue-row" data-testid="cued-message">
             <div className="queue-row-header"><span>{index + 1}</span><span>{item.claimed ? "Dispatch started" : item.paused === false ? "Waiting" : "Held for review"}</span></div>
+            {hasCueAttachments(item.attachments) && <p className="queue-message">
+              Attachments: {[item.attachments?.file?.name, ...(item.attachments?.images.map(image => image.name || "Image") ?? [])].filter(Boolean).join(", ")}
+            </p>}
+            {item.attachmentsUnavailable && <p className="queue-description">Saved attachments are unavailable. Restore any text to reattach them.</p>}
             {edit?.id === item.id && !item.claimed ? <>
               <textarea autoFocus aria-label={`Edit queued message ${index + 1}`} value={edit.text} maxLength={CUE_TEXT_LIMIT}
                 onChange={event => setEdit({ id: item.id, text: event.target.value })} />
               <div className="queue-actions">
-                <button type="button" className="queue-action" disabled={!edit.text.trim()} onClick={() => { onEdit(item.id, edit.text); setEdit(null); }}>Save edit</button>
+                <button type="button" className="queue-action" disabled={!edit.text.trim() && !hasCueAttachments(item.attachments)} onClick={() => { onEdit(item.id, edit.text); setEdit(null); }}>Save edit</button>
                 <button type="button" className="queue-action" onClick={() => setEdit(null)}>Cancel edit</button>
               </div>
             </> : <>
-              <p className="queue-message">{item.text}</p>
+              {item.text && <p className="queue-message">{item.text}</p>}
               <div className="queue-actions">
                 {item.claimed ? <p className="queue-description">Check the conversation for this message before sending it again.</p> : <>
                   <button type="button" className="queue-action" onClick={() => { onPause?.(); setEdit({ id: item.id, text: item.text }); }}>Edit</button>
-                  <button type="button" className="queue-action" disabled={!canRestore} onClick={() => { onRestore(item.id); close(); }}>To draft</button>
+                  <button type="button" className="queue-action" disabled={!canRestore || (!item.text.trim() && !hasCueAttachments(item.attachments))} onClick={() => { onRestore(item.id); close(); }}>To draft</button>
                   <button type="button" className="queue-icon" aria-label={`Move queued message ${index + 1} up`} disabled={index === 0} onClick={() => onMove(item.id, -1)}><ArrowUp size={16} aria-hidden="true" /></button>
                   <button type="button" className="queue-icon" aria-label={`Move queued message ${index + 1} down`} disabled={index === items.length - 1} onClick={() => onMove(item.id, 1)}><ArrowDown size={16} aria-hidden="true" /></button>
                 </>}

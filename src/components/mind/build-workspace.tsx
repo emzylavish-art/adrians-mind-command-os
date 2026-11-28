@@ -20,7 +20,7 @@ import type { ModelTier, ModelTierCatalogRow } from "@/lib/mind/model-tiers";
 import type { ImageAttachment } from "@/lib/mind/media";
 import { ComposerMore, MenuCluster, menuChip } from "@/components/mind/menu-material";
 import { ComposerQueue } from "@/components/mind/composer-queue";
-import { cueMessage, dropCued, EMPTY_CUE, moveCued, readCue } from "@/lib/mind/message-cue";
+import { cueMessage, dropCued, EMPTY_CUE, hasCueAttachments, moveCued, readCue, type CueAttachments, type CuedFile } from "@/lib/mind/message-cue";
 import { useComposerDraft } from "@/lib/mind/use-composer-draft";
 import { chatTurnBody, loadModeInstructions } from "@/lib/mind/logic-routes";
 import { checkTurnReceipt, consumeMindTurn, prepareTurnId } from "@/lib/mind/live-turn";
@@ -94,13 +94,14 @@ type BuildWorkspaceProps = {
   sharedTier?: ModelTier;
   composer?: {
     browserActivity?: ReactNode;
-    staged: { name: string; text: string } | null;
+    staged: CuedFile | null;
     images: ImageAttachment[];
     message: string | null;
     onFile: () => void;
     onPhoto: () => void;
     onCamera: () => void;
     onPlugins: () => void;
+    replaceAttachments: (attachments?: CueAttachments) => void;
     removeFile: () => void;
     removeImage: (index: number) => void;
   };
@@ -173,8 +174,9 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
   const [band, setBand] = useState<"actions" | "files" | "message" | "editor">("message");
   const [prompt, setPrompt] = useState("");
   const [queuedTasks, setQueuedTasks] = useComposerDraft(
-    JSON.stringify([props.ownerId ?? null, ["work-tasks", projectId]]), "queue", EMPTY_CUE, Boolean(props.ownerId),
+    JSON.stringify([props.ownerId ?? null, ["work-tasks", projectId]]), "queue", EMPTY_CUE, Boolean(props.ownerId), true,
   );
+  const queuedTaskRows = useMemo(() => readCue(queuedTasks), [queuedTasks]);
   const [incomingTask, setIncomingTask] = useState<{ text: string; threadId: string | null; mode: string | null; chat?: ChatBuildHandoff } | null>(null);
   const [sourceChatId, setSourceChatId] = useState<string>();
   const [workMedia, setWorkMedia] = useState<WorkMedia>();
@@ -713,22 +715,28 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
   }
 
   function queueTask() {
-    if (!props.ownerId || haltedRef.current) return;
-    if (props.composer?.staged || props.composer?.images.length || sourceChatId || /^\//.test(prompt.trim())) {
-      setNotice("Queue accepts plain text. Review attachments, handoffs and slash commands in the task composer.");
+    if (!props.ownerId || !draftHydrated || haltedRef.current) return;
+    if (sourceChatId || /^\//.test(prompt.trim())) {
+      setNotice("Review source handoffs and slash commands in the task composer before submitting.");
       return;
     }
-    const result = cueMessage(readCue(queuedTasks), { id: crypto.randomUUID(), text: prompt, paused: true });
+    const attachments = { file: props.composer?.staged ?? undefined, images: props.composer?.images ?? [] };
+    const hasAttachments = hasCueAttachments(attachments);
+    const result = cueMessage(readCue(queuedTasks), { id: crypto.randomUUID(), text: prompt, paused: true, ...(hasAttachments ? { attachments } : {}) });
     if (result.error) { setNotice(result.error); return; }
-    setQueuedTasks(result.queue);
+    if (!setQueuedTasks(result.queue)) {
+      setNotice("Browser storage is full or unavailable. Your task and attachments are still in the composer.");
+      return;
+    }
     setPrompt("");
+    if (hasAttachments) props.composer?.replaceAttachments();
     setNotice(null);
   }
 
   const canRestoreTask = !prompt.trim() && !sourceChatId && !props.composer?.staged && !props.composer?.images.length;
-  const taskQueue = <ComposerQueue title="Work and Build queue" items={readCue(queuedTasks)}
+  const taskQueue = <ComposerQueue title="Work and Build queue" items={queuedTaskRows}
     description="Tasks wait in this project. Move one to the composer to review its branch, workspace and action before submitting."
-    canQueue={Boolean(props.ownerId && draftHydrated && !props.halted && prompt.trim())}
+    canQueue={Boolean(props.ownerId && draftHydrated && !props.halted && (prompt.trim() || props.composer?.staged || props.composer?.images.length))}
     canRestore={canRestoreTask && draftHydrated && Boolean(props.ownerId)}
     onQueue={queueTask}
     onRemove={id => setQueuedTasks(previous => dropCued(readCue(previous), id))}
@@ -736,9 +744,12 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
     onEdit={(id, text) => setQueuedTasks(previous => readCue(previous).map(row => row.id === id ? { ...row, text: text.trim() } : row))}
     onRestore={id => {
       const row = readCue(queuedTasks).find(item => item.id === id && !item.claimed);
-      if (!row || !canRestoreTask) return;
+      if (!row || !canRestoreTask || (!row.text.trim() && !hasCueAttachments(row.attachments))) return;
+      if (hasCueAttachments(row.attachments) && !props.composer) return;
+      if (!setQueuedTasks(previous => dropCued(readCue(previous), id))) return;
       setPrompt(row.text);
-      setQueuedTasks(previous => dropCued(readCue(previous), id));
+      props.composer?.replaceAttachments(row.attachments);
+      if (row.attachmentsUnavailable) setNotice("Some saved attachments are unavailable. Review the recovered text and attach the files again before submitting.");
       setBand("message");
       requestAnimationFrame(() => taskField.current?.focus());
     }} />;

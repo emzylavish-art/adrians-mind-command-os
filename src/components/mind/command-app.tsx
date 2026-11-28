@@ -323,7 +323,7 @@ import { COMPOSER_MODES, effortForModelTier, effortModelTier, loadComposerEffort
 import { ADRIAN_MIND_IDENTITY, builtinModules, customModules, loadConsultModel, planModelConsult, saveConsultModel, type ConsultModule } from "@/lib/mind/model-consult";
 import { planRouting, readRatings, readRoutingMode, readRoutingPanel, ROUTING_MODE_LABEL, saveRating, writeRoutingMode, writeRoutingPanel, type ResponseRating, type RoutingMode } from "@/lib/mind/routing-modes";
 import { canSend } from "@/lib/mind/send-gate";
-import { cueMessage, dropCued, EMPTY_CUE, moveCued, readCue, type CuedMessage } from "@/lib/mind/message-cue";
+import { cueMessage, dropCued, EMPTY_CUE, hasCueAttachments, moveCued, readCue, type CuedFile, type CuedMessage } from "@/lib/mind/message-cue";
 import { saveFailureMessage } from "@/lib/mind/save-error";
 import { resetVoice } from "@/lib/mind/settings-reset";
 import { FirstSteps } from "@/components/mind/first-steps";
@@ -429,7 +429,7 @@ type Pending = {
 
 const EMPTY_DRAFT_IMAGES: ImageAttachment[] = [];
 
-type Staged = { name: string; text: string; source?: { fileId: string; revision: string; name: string } };
+type Staged = CuedFile;
 
 function pinRailScroll(node: HTMLElement | null) {
   node?.style.setProperty("overflow-x", "hidden", "important");
@@ -1145,7 +1145,8 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
   const draftScope = JSON.stringify([draftOwner, view === "build" ? workTarget.projectId ? ["build", workTarget.projectId] : "build" : draftChat?.id ?? "home", draftPrivate]);
   const persistDraft = Boolean(draftOwner) && !draftPrivate;
   const [draft, setDraft, setDraftInScope] = useComposerDraft(draftScope, "text", "", persistDraft);
-  const [queuedDrafts, setQueuedDrafts, setQueueInScope] = useComposerDraft(draftScope, "queue", EMPTY_CUE, persistDraft);
+  const [queuedDrafts, setQueuedDrafts, setQueueInScope] = useComposerDraft(draftScope, "queue", EMPTY_CUE, persistDraft, true);
+  const queuedRows = useMemo(() => readCue(queuedDrafts), [queuedDrafts]);
   const [busy, setBusy] = useState(false);
   const [liveText, setLiveText] = useState("");
   const [generationStatus, setGenerationStatus] = useState("");
@@ -1317,8 +1318,13 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
   const [notice, setNotice] = useState<string | null>(null);
   useEffect(() => {
     const warn = () => setNotice("This draft is available in this tab only. Browser storage could not save the latest change for reload.");
+    const warnQueue = () => setNotice("Browser storage could not save the queue change. The saved queue has been kept.");
     window.addEventListener("adrian-draft-storage-full", warn);
-    return () => window.removeEventListener("adrian-draft-storage-full", warn);
+    window.addEventListener("adrian-queue-storage-full", warnQueue);
+    return () => {
+      window.removeEventListener("adrian-draft-storage-full", warn);
+      window.removeEventListener("adrian-queue-storage-full", warnQueue);
+    };
   }, []);
   const [pendingFailures, setPendingFailures] = useState<RecoveryEntry[]>([]);
   const [selectedFailureId, setSelectedFailureId] = useState<string | null>(null);
@@ -4087,14 +4093,20 @@ ${message.content}`;
     }
   }
 
+  function holdQueueRows(previous: CuedMessage[]) {
+    return readCue(previous).map(row => {
+      cueRef.current.delete(row.id);
+      return { ...row, paused: true };
+    });
+  }
+
   function holdChatQueue() {
-    setQueuedDrafts(previous => readCue(previous).map(row => ({ ...row, paused: true })));
+    setQueuedDrafts(holdQueueRows);
   }
 
   function holdConversationQueue(chat: Chat) {
     if (!draftOwner || turnOwner.current !== draftOwner) return;
-    setQueueInScope(JSON.stringify([draftOwner, chat.id, chat.temporary]), !chat.temporary,
-      previous => readCue(previous).map(row => ({ ...row, paused: true })));
+    setQueueInScope(JSON.stringify([draftOwner, chat.id, chat.temporary]), !chat.temporary, holdQueueRows);
   }
 
   async function releaseNextCue(chatId: string) {
@@ -4107,7 +4119,7 @@ ${message.content}`;
     }
     const scope = JSON.stringify([draftOwner, chat.id, chat.temporary]);
     const claimed: { row?: CuedMessage; runtime?: QueueDispatch } = {};
-    setQueueInScope(scope, !chat.temporary, previous => {
+    const claimSaved = setQueueInScope(scope, !chat.temporary, previous => {
       const rows = readCue(previous);
       const row = rows.find(item => item.paused === false);
       if (!row) return previous;
@@ -4120,7 +4132,7 @@ ${message.content}`;
       return rows.map(item => item.id === row.id ? { ...item, claimed: true, paused: true } : item);
     });
     const { row, runtime } = claimed;
-    if (!row || !runtime) return;
+    if (!claimSaved || !row || !runtime) return;
     cueRef.current.delete(row.id);
     const finished = await runtime.dispatch(chat, wsRef.current, row.text);
     if (turnOwner.current !== draftOwner) return;
@@ -4136,30 +4148,46 @@ ${message.content}`;
   function addChatQueue(waitForReply: boolean) {
     if ((view === "chat" && active?.archived) || !draftOwner || accountPending || wsRef.current.halted) return;
     const text = draft.trim();
-    if (!text) return;
-    if (staged || pendingImages.length || parseImagineCommand(text) !== null || /^\//.test(text)) {
-      setError("Queue accepts plain text. Review attachments and slash commands in the composer.");
+    if (parseImagineCommand(text) !== null || /^\//.test(text)) {
+      setError("Review slash commands in the composer before sending.");
       return;
     }
+    const attachments = { file: staged ?? undefined, images: pendingImages };
+    const hasAttachments = hasCueAttachments(attachments);
+    if (!text && !hasAttachments) return;
+    const autoDispatch = waitForReply && !hasAttachments && Boolean(active);
     const id = crypto.randomUUID();
-    setQueuedDrafts(previous => {
-      const result = cueMessage(readCue(previous), { id, text, paused: !waitForReply });
-      if (result.error) { setError(result.error); return previous; }
-      if (waitForReply && active) cueRef.current.set(id, { projectId: active.projectId, dispatch: (chat, source, words) => deliverPlanned(chat, words, source, []) });
-      setDraft("");
-      setError(null);
-      setNotice(null);
-      return result.queue;
+    let issue: string | undefined;
+    const saved = setQueuedDrafts(previous => {
+      const result = cueMessage(readCue(previous), { id, text, paused: !autoDispatch, ...(hasAttachments ? { attachments } : {}) });
+      issue = result.error;
+      return issue ? previous : result.queue;
     });
+    if (issue) { setError(issue); return; }
+    if (!saved) {
+      setError("Browser storage is full or unavailable. Your draft and attachments are still in the composer.");
+      return;
+    }
+    if (autoDispatch && active) cueRef.current.set(id, { projectId: active.projectId, dispatch: (chat, source, words) => deliverPlanned(chat, words, source, []) });
+    setDraft("");
+    if (hasAttachments) {
+      setStaged(null);
+      setPendingImages([]);
+    }
+    setError(null);
+    setNotice(null);
   }
 
   function restoreChatQueue(id: string) {
     if (draft.trim() || staged || pendingImages.length) return;
     const row = readCue(queuedDrafts).find(item => item.id === id && !item.claimed);
-    if (!row) return;
+    if (!row || (!row.text.trim() && !hasCueAttachments(row.attachments))) return;
     cueRef.current.delete(id);
+    if (!setQueuedDrafts(previous => dropCued(readCue(previous), id))) return;
     setDraft(row.text);
-    setQueuedDrafts(previous => dropCued(readCue(previous), id));
+    setStaged(row.attachments?.file ?? null);
+    setPendingImages(row.attachments?.images ?? []);
+    if (row.attachmentsUnavailable) setNotice("Some saved attachments are unavailable. Review the recovered text and attach the files again before sending.");
   }
 
   async function sendInChat(hold = false) {
@@ -7652,9 +7680,9 @@ ${message.content}`;
                       {voiceListening ? <Square className="size-4" /> : <Mic className="size-4" />}
                     </button></div>
 
-                    <ComposerQueue title="New chat queue" items={readCue(queuedDrafts)}
+                    <ComposerQueue title="New chat queue" items={queuedRows}
                       description="Keep drafts for future conversations. Move one to the composer when you want to review and send it."
-                      canQueue={Boolean(draftOwner && !accountPending && !ws.halted && draft.trim())}
+                      canQueue={Boolean(draftOwner && !accountPending && !ws.halted && (draft.trim() || staged || pendingImages.length))}
                       canRestore={!draft.trim() && !staged && !pendingImages.length}
                       onQueue={() => addChatQueue(false)}
                       onRemove={id => setQueuedDrafts(previous => dropCued(readCue(previous), id))}
@@ -7897,8 +7925,8 @@ ${message.content}`;
               onPickModule={pickModule}
               onPick={(id) => setActiveId(id)}
               onSend={() => void sendInChat()}
-              cue={readCue(queuedDrafts).map(row => ({ ...row, paused: ws.halted || row.paused || !cueRef.current.has(row.id) }))}
-              canQueue={Boolean(!active?.archived && draftOwner && selectionLoaded && !accountPending && !ws.halted && draft.trim())}
+              cue={queuedRows.map(row => ({ ...row, paused: ws.halted || row.paused || !cueRef.current.has(row.id) }))}
+              canQueue={Boolean(!active?.archived && draftOwner && selectionLoaded && !accountPending && !ws.halted && (draft.trim() || staged || pendingImages.length))}
               onQueue={() => addChatQueue(turnChat?.chatId === active?.id && turnChat?.ownerId === draftOwner && turnInFlight.current)}
               onDropCue={id => { cueRef.current.delete(id); setQueuedDrafts(previous => dropCued(readCue(previous), id)); }}
               onMoveCue={(id, offset) => setQueuedDrafts(previous => moveCued(readCue(previous), id, offset))}
@@ -8597,6 +8625,7 @@ ${message.content}`;
                 onSelectProject={openWorkProject} onReturnResult={returnBuildResult} resolveWorkImages={resolveWorkImages} downloadWorkOriginal={downloadWorkOriginal} composer={{
                 staged, images: pendingImages, message: error || notice, browserActivity,
                 onFile: () => fileRef.current?.click(), onPhoto: () => imageInputRef.current?.click(), onCamera: () => setCameraOpen(true), onPlugins: browseComposerPlugins,
+                replaceAttachments: (attachments) => { setStaged(attachments?.file ?? null); setPendingImages(attachments?.images ?? []); },
                 removeFile: () => setStaged(null), removeImage: index => setPendingImages(current => current.filter((_, i) => i !== index)),
               }} plannerRef={buildPlanner} enabledSkills={enabledSkills} freeOnly={researchFreeOnly} key={draftOwner ?? "signed-out"} ownerId={draftOwner ?? undefined} onDiscuss={(text) => handToHumanCode(text, "From Build")} onOpenSourceChat={(id) => {
                 const source = wsRef.current.chats.find(chat => chat.id === id && !chat.temporary);

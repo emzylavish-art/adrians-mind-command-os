@@ -66,3 +66,23 @@ test("keeps the queued chat and selected provider when releasing from a differen
   assert.deepEqual(held.next, second);
   assert.deepEqual(held.queue, [first]);
 });
+
+test("preserves an attachment-only draft and always holds it for review", () => {
+  const dataUrl = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+  const file = { name: "scope.txt", text: "review this file", source: { fileId: "file-1", revision: "rev-1", name: "scope.txt" } };
+  const queued = cueMessage([], { id: "media", text: "", paused: false, attachments: { file, images: [{ name: "screen.png", dataUrl }] } });
+
+  assert.equal(queued.error, undefined);
+  const [restored] = readCue(JSON.parse(JSON.stringify(queued.queue)));
+  assert.deepEqual(restored.attachments?.file, file);
+  assert.equal(restored.attachments?.images[0]?.dataUrl, dataUrl);
+  assert.equal(restored.attachments?.images[0]?.name, "screen.png");
+  assert.equal(restored.paused, true);
+  assert.equal(takeNextCue([restored], item => item.paused === false).next, null);
+});
+
+test("keeps text for review when a saved attachment is damaged", () => {
+  const item = { id: "broken", text: "Preserve these words", paused: false, attachments: { images: [{ dataUrl: "https://example.test/remote.png" }] } };
+  assert.match(cueMessage([], item).error ?? "", /Review the attachments/);
+  assert.deepEqual(readCue([item]), [{ id: "broken", text: item.text, paused: true, claimed: false, attachmentsUnavailable: true }]);
+});
