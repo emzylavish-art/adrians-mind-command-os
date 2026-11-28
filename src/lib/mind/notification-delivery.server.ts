@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Sql } from "../db.ts";
-import { deliveryAllowed, deliveryPreferences, notificationDeviceId, type DeliveryChannel, type DeliveryPreferences } from "./notification-delivery.ts";
+import { deliveryAllowed, deliveryPreferences, notificationDeviceId, type DeliveryChannel, type DeliveryPreferences, type NotificationStatus } from "./notification-delivery.ts";
 import { parseDeviceSubscription, type NotificationTransports } from "./notification-transports.server.ts";
 import { workspaceNotices } from "./notifications.ts";
 import { readSnapshot } from "./store.ts";
@@ -22,12 +22,25 @@ async function verifiedAddress(sql: Sql, owner: string) {
   return account?.email ?? null;
 }
 
-export async function notificationStatus(sql: Sql, owner: string, device: string | null, transports: NotificationTransports, workerConfigured: boolean) {
-  const rows = await sql.query<Target>("select channel,destination from mind_notification_target where user_id=$1 and (channel='email' or device_id=$2)", [owner, device]);
+export async function notificationStatus(sql: Sql, owner: string, device: string | null, transports: NotificationTransports, workerConfigured: boolean): Promise<NotificationStatus> {
+  type StatusRow = Pick<Target, "channel" | "destination"> & {
+    last_checked: string | null; attempted_at: string | null;
+    state: NonNullable<NotificationStatus["push"]["lastAttempt"]>["state"] | null;
+  };
+  const rows = await sql.query<StatusRow>(`select t.channel,t.destination,t.last_checked::text,d.state,d.attempted_at::text
+    from mind_notification_target t
+    left join lateral (
+      select state,attempted_at from mind_notification_delivery where target_id=t.id order by attempted_at desc limit 1
+    ) d on true
+    where t.user_id=$1 and (t.channel='email' or t.device_id=$2)`, [owner, device]);
   const email = await verifiedAddress(sql, owner);
+  const describe = (row?: StatusRow) => ({
+    subscribed: Boolean(row), lastChecked: row?.last_checked ?? undefined,
+    lastAttempt: row?.state && row.attempted_at ? { state: row.state, at: row.attempted_at } : undefined,
+  });
   return {
-    push: { available: Boolean(transports.push), subscribed: rows.some(row => row.channel === "push"), publicKey: transports.push?.publicKey },
-    email: { available: Boolean(transports.email && email), subscribed: rows.some(row => row.channel === "email" && (row.destination === email || !email)), address: email ?? undefined },
+    push: { available: Boolean(transports.push), ...describe(rows.find(row => row.channel === "push")), publicKey: transports.push?.publicKey },
+    email: { available: Boolean(transports.email && email), ...describe(rows.find(row => row.channel === "email" && (row.destination === email || !email))), address: email ?? undefined },
     workerConfigured,
   };
 }

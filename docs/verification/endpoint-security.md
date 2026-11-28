@@ -2,7 +2,7 @@
 
 This checked-in inventory covers every direct route handler and exported TanStack server function discovered from TypeScript AST. A new route, HTTP method, RPC export, removed guard marker or undocumented public exception fails the normal test runner. Guard-source checks establish code reachability contracts; they do not substitute for live penetration testing or prove that a browser/provider/device was exercised.
 
-83 routes · 121 HTTP method contracts · 65 RPC exports.
+85 routes · 124 HTTP method contracts · 65 RPC exports.
 
 ## Shared policies
 
@@ -18,6 +18,7 @@ This checked-in inventory covers every direct route handler and exported TanStac
 | credential_establishment | Origin-protected pre-login action; supplied credentials/provider flow establishes identity, no preexisting owner required. |
 | session_probe | Verify current session or return signed-out state; no mutation or provider dispatch. |
 | schedule_worker | A separately provisioned worker bearer authorizes a bounded scheduler pass with owner-scoped claims and emergency-stop checks. |
+| notification_worker | A dedicated worker bearer authorizes bounded delivery for current account opt-ins. Each outbound attempt requires a durable claim. |
 | paired_device | Verify device token/code, revocation and job ownership. Cookie presence alone never authorizes device execution. |
 | mixed_owner_device | Dispatch-specific owner or device credentials; browser owner mutations require origin guard; device actions keep job binding. |
 | public_status | Explicit sanitized readiness/manifest result; never return credentials, private account records or execute an action. |
@@ -69,6 +70,8 @@ This checked-in inventory covers every direct route handler and exported TanStac
 | `/api/mind/media/storage/status` | GET | owner_fetch_metadata | Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation. Sources: `src/lib/mind/media/storage/http.ts` |
 | `/api/mind/media/storage/upload` | POST | owner_fetch_metadata | Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation. Sources: `src/lib/mind/media/storage/http.ts` |
 | `/api/mind/memory-policy` | GET, POST | owner_origin | Reads and updates the verified owner’s dispatch-time memory permissions. Sources: `src/routes/api/mind/memory-policy.ts` |
+| `/api/mind/notifications` | GET, POST | owner_origin | The current owner manages consent and may confirm only their own current push receipt. Email is derived from the verified account. Sources: `src/routes/api/mind/notifications.ts`, `src/lib/mind/notification-delivery.server.ts` |
+| `/api/mind/notifications/tick` | POST | notification_worker | A dedicated token authorizes delivery only after account consent, current destination, halt state and event deduplication are checked. Sources: `src/routes/api/mind/notifications/tick.ts`, `src/lib/mind/notification-delivery.server.ts` |
 | `/api/mind/nuance/key` | POST | owner_origin | Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation. Sources: `src/routes/api/mind/nuance/key.ts` |
 | `/api/mind/nuance/session` | GET, POST | owner_origin | Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation. Sources: `src/routes/api/mind/nuance/session.ts` |
 | `/api/mind/oauth/$connector/callback` | GET | oauth_callback | Provider redirect requires code/state and current expected owner; durable exchange consumes owner-bound expiring state. Sources: `src/routes/api/mind/oauth/$connector/callback.ts`, `src/lib/mind/connectors/durable-oauth.server.ts` |

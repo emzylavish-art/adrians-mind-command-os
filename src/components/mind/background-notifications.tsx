@@ -46,6 +46,16 @@ function applicationKey(key: string) {
   return Uint8Array.from(atob(encoded), char => char.charCodeAt(0)).buffer;
 }
 
+function DeliveryReceipt({ label, channel }: { label: string; channel: NotificationStatus[DeliveryChannel] }) {
+  const phrases = { attempted: "Attempt recorded", accepted: "Accepted by the provider", rejected: "Rejected by the provider", unknown: "Delivery outcome unknown" };
+  if (!channel.subscribed) return null;
+  return <p className="pt-2"><strong>{label}</strong>{" · "}{channel.lastAttempt
+    ? <>{phrases[channel.lastAttempt.state]} <time dateTime={channel.lastAttempt.at}>{new Date(channel.lastAttempt.at).toLocaleString()}</time></>
+    : channel.lastChecked
+      ? <>Worker checked <time dateTime={channel.lastChecked}>{new Date(channel.lastChecked).toLocaleString()}</time></>
+      : "Awaiting the first worker check"}</p>;
+}
+
 export function BackgroundNotifications({ owner, storage, preferences }: {
   owner: string | null;
   storage: PreferenceStorage;
@@ -142,6 +152,7 @@ export function BackgroundNotifications({ owner, storage, preferences }: {
           onClick={() => void update("preferences")}>Apply inbox preferences to delivery</button>
       </div>}
       {status?.email.address && <p className="break-all pt-2">Verified account email: {status.email.address}</p>}
+      {status && <><DeliveryReceipt label="Browser push" channel={status.push} /><DeliveryReceipt label="Account email" channel={status.email} /></>}
       {message && <p className="py-2" role="status">{message}</p>}
     </>}
   </details>;

@@ -107,6 +107,10 @@ test("durable delivery binds consent and current recipient, deduplicates competi
     assert.equal(await mayDisplayScheduledPush(sql, "b", device, attemptedPush[0], now), false);
     const states = await sql.query<{ state: string }>("select state from mind_notification_delivery order by state");
     assert.deepEqual(states.map(row => row.state), ["accepted", "unknown"]);
+    const receipts = await notificationStatus(sql, "a", device, transports, true);
+    assert.equal(receipts.push.lastAttempt?.state, "unknown");
+    assert.equal(receipts.email.lastAttempt?.state, "accepted");
+    assert.equal((await notificationStatus(sql, "b", device, transports, true)).push.lastAttempt, undefined);
     assert.equal((await runNotificationPass(sql, transports, now)).accepted, 0);
     assert.equal(attemptedPush.length, 1);
 

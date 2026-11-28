@@ -2,9 +2,13 @@ import { isQuietHour, type NotificationPreferences, type WorkspaceNotice } from 
 
 export type DeliveryPreferences = NotificationPreferences & { zone: string };
 export type DeliveryChannel = "push" | "email";
+type DeliveryStatus = {
+  available: boolean; subscribed: boolean; lastChecked?: string;
+  lastAttempt?: { state: "attempted" | "accepted" | "rejected" | "unknown"; at: string };
+};
 export type NotificationStatus = {
-  push: { available: boolean; subscribed: boolean; publicKey?: string };
-  email: { available: boolean; subscribed: boolean; address?: string };
+  push: DeliveryStatus & { publicKey?: string };
+  email: DeliveryStatus & { address?: string };
   workerConfigured: boolean;
 };
 export type DeviceSubscription = { endpoint: string; keys: { auth: string; p256dh: string } };

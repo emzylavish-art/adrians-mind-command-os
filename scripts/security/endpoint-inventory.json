@@ -786,6 +786,63 @@
       ]
     },
     {
+      "file": "src/routes/api/mind/notifications.ts",
+      "path": "/api/mind/notifications",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "policy": "owner_origin",
+      "notes": "The current owner manages consent and may confirm only their own current push receipt. Email is derived from the verified account.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/notifications.ts",
+          "requires": [
+            "assertSameOrigin(request)",
+            "requireUserId",
+            "payload.body.owner !== owner",
+            "mayDisplayScheduledPush(sql, owner"
+          ]
+        },
+        {
+          "file": "src/lib/mind/notification-delivery.server.ts",
+          "requires": [
+            "t.user_id=$1",
+            "account.emailVerified",
+            "parseDeviceSubscription(body.subscription)"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/notifications/tick.ts",
+      "path": "/api/mind/notifications/tick",
+      "methods": [
+        "POST"
+      ],
+      "policy": "notification_worker",
+      "notes": "A dedicated token authorizes delivery only after account consent, current destination, halt state and event deduplication are checked.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/notifications/tick.ts",
+          "requires": [
+            "MIND_NOTIFICATION_WORKER_TOKEN",
+            "timingSafeEqual",
+            "runNotificationPass"
+          ]
+        },
+        {
+          "file": "src/lib/mind/notification-delivery.server.ts",
+          "requires": [
+            "for update",
+            "mind_control",
+            "on conflict do nothing returning target_id",
+            "account.email !== target.destination"
+          ]
+        }
+      ]
+    },
+    {
       "file": "src/routes/api/mind/nuance/key.ts",
       "path": "/api/mind/nuance/key",
       "methods": [
