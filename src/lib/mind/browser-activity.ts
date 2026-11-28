@@ -33,7 +33,10 @@ export function readBrowserActivity(raw: string | null): BrowserActivityRow[] {
         typeof row.title !== "string" || typeof row.at !== "number" || !Number.isFinite(new Date(row.at).valueOf())) return [];
     if (row.kind === "website" && ["returned", "cancelled"].includes(row.outcome)) {
       const origin = typeof row.origin === "string" ? browserAddress(row.origin)?.origin : null;
-      if (origin && origin === row.origin) return [{ id: row.id, kind: "website", title: origin, origin, outcome: row.outcome, at: row.at }];
+      if (origin && origin === row.origin) return [{
+        id: row.id, kind: "website", title: origin, origin, outcome: row.outcome, at: row.at,
+        ...(safeBrowserScreenshot(row.image) ? { image: row.image } : {}),
+      }];
     }
     if (row.kind === "screenshot" && row.outcome === "saved" && safeBrowserScreenshot(row.image)) {
       return [{ id: row.id, kind: "screenshot", title: row.title.slice(0, 150), outcome: "saved", image: row.image, at: row.at }];

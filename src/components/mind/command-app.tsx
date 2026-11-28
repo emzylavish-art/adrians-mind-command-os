@@ -8585,7 +8585,7 @@ ${message.content}`;
               }
             }} />}
           {view === "scheduled" && <FleetPanel key="scheduled" mode="scheduled" ws={ws} setWs={setWs} initialAgentId={botDestinationId} />}
-          {view === "tools" && <FleetPanel mode="tools" ws={ws} setWs={setWs} onFailure={(message, retry, surface) => reportFailure(message, surface === "mcp" ? "mcp_tool_failed" : "open_page_failed", surface === "mcp" ? "mcp:tools" : "browser", retry)} />}
+          {view === "tools" && <FleetPanel browserActivity={<BrowserActivity owner={draftOwner} scope="tools" />} mode="tools" ws={ws} setWs={setWs} onFailure={(message, retry, surface) => reportFailure(message, surface === "mcp" ? "mcp_tool_failed" : "open_page_failed", surface === "mcp" ? "mcp:tools" : "browser", retry)} />}
           {view === "build" && (
             <section className="page-shell">
               {workTarget.projectId && !ws.projects.some(project => project.id === workTarget.projectId && !project.archived && project.lifecycle !== "archived") ? (

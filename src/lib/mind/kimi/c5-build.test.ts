@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import ts from "typescript";
 import { readBuildSourceReceipt } from "./source-receipt.ts";
+import { loadModeInstructions } from "../mode-instructions.ts";
 import { applyBuildSave, matchesBuildSave } from "./build-review.ts";
 
 const source = readFileSync(new URL("../../../components/mind/code-ide.tsx", import.meta.url), "utf8");
@@ -137,7 +138,7 @@ test("C5 actual Build handler distinguishes saved execution, verified save and f
     const prompt = "Inspect fixture file"; const cwd = "/fixture"; const mode = "plan"; const sessionId = "";
     const branch = ""; const sourceChatId = undefined; const workMedia = undefined; const projectId = null;
     const ownerKey = props.ownerId; const pendingSource = { current: undefined }; const pendingSourceKey = "pending"; const lastJobKey = "last";
-    const mounted = {current:true}; const selectedFile = "f"; const preferenceStorage = {}; const collectAccountSkillApplications = () => [];
+    const mounted = {current:true}; const selectedFile = "f"; const preferenceStorage = { getItem: () => null }; const collectAccountSkillApplications = () => [];
     const companion = { onlineAgentIds: ["fixture-pc"] }; const active = false;
     const submittingBuild = { current: false }, pollSequence = { current: 0 };
     const buffersRef = { current: { f: { workspace: "fixture-pc", cwd: "/fixture", path: "a.ts", saved: "revision A", draft: "revision B" } } };
@@ -152,7 +153,7 @@ test("C5 actual Build handler distinguishes saved execution, verified save and f
   `, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } }).outputText;
   for (const policy of ["saved", "save", "failure"] as const) {
     let writes = 0, dispatches = 0;
-    const h = new Function("fetch", "runFileOperation", "matchesBuildSave", "applyBuildSave", body)(async (_url: string, init: RequestInit) => { dispatches++; const request = JSON.parse(String(init.body)); assert.match(request.prompt, /Attached file brief\.txt:\nreview brief contents/); return Response.json({ ok: true, jobId: request.jobKey }); }, async (_operation: string, _path: string, text: string, extra: { expectedContent: string }) => { writes++; assert.equal(extra.expectedContent, "revision A"); return policy === "failure" ? null : { workspace: "fixture-pc", cwd: "/fixture", path: "a.ts", before: "revision A", after: text }; }, matchesBuildSave, applyBuildSave);
+    const h = new Function("fetch", "runFileOperation", "matchesBuildSave", "applyBuildSave", "loadModeInstructions", body)(async (_url: string, init: RequestInit) => { dispatches++; const request = JSON.parse(String(init.body)); assert.match(request.prompt, /Attached file brief\.txt:\nreview brief contents/); return Response.json({ ok: true, jobId: request.jobKey }); }, async (_operation: string, _path: string, text: string, extra: { expectedContent: string }) => { writes++; assert.equal(extra.expectedContent, "revision A"); return policy === "failure" ? null : { workspace: "fixture-pc", cwd: "/fixture", path: "a.ts", before: "revision A", after: text }; }, matchesBuildSave, applyBuildSave, loadModeInstructions);
     await h.runBuild(policy === "saved" ? "saved" : "save");
     assert.equal(writes, policy === "saved" ? 0 : 1);
     assert.equal(dispatches, policy === "failure" ? 0 : 1);

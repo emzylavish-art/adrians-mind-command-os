@@ -1,4 +1,4 @@
-export { RunActivity, serviceLogo } from "./run-activity";
+export { RunActivity, serviceLogo } from "@/components/mind/run-activity";
 import { memo, useId, useMemo, useState, type ReactNode } from "react";
 import { splitBlocks } from "@/lib/mind/blocks";
 import { InlineImage } from "@/components/mind/media/inline-image";

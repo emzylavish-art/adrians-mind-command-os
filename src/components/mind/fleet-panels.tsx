@@ -145,6 +145,7 @@ function readLocalTool(id: string, ws: Workspace): string {
 
 export function FleetPanel({
   mode,
+  browserActivity,
   ws,
   setWs,
   onFailure,
@@ -160,6 +161,7 @@ export function FleetPanel({
   focusBotId,
   catalogModels = [],
 }: {
+  browserActivity?: import("react").ReactNode;
   mode: "agents" | "runs" | "connected" | "scheduled" | "tools";
   ws: Workspace;
   setWs: (updater: (prev: Workspace) => Workspace) => void;
@@ -971,6 +973,7 @@ export function FleetPanel({
           </div>
         </div>
       </div>
+      {browserActivity}
       <div id="owner-tools" className="mt-4 flex flex-wrap gap-2">
         <input value={pageUrl} onChange={(event) => setPageUrl(event.target.value)} placeholder="https://example.com" className="min-h-11 min-w-0 flex-1 rounded-panel border border-line bg-surface px-3 text-sm" />
         <button

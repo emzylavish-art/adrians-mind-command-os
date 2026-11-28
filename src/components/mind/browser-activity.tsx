@@ -38,6 +38,7 @@ function ScopedBrowserActivity({ owner, storageKey, onAttach }: Props & { storag
   const launch = useRef<HTMLButtonElement>(null);
   const returnButton = useRef<HTMLButtonElement>(null);
   const captureOpener = useRef<HTMLElement | null>(null);
+  const fileDestination = useRef<string | undefined>(undefined);
   const upload = useRef<HTMLInputElement>(null);
   const controller = useRef(new AbortController());
   const frame = useRef<AbortController | null>(null);
@@ -47,11 +48,12 @@ function ScopedBrowserActivity({ owner, storageKey, onAttach }: Props & { storag
   const [notice, setNotice] = useState("");
   const [websiteNotice, setWebsiteNotice] = useState("");
   const [pending, setPending] = useState<{ id: string; origin: string } | null>(null);
-  const [draft, setDraft] = useState<{ title: string; image: string } | null>(null);
+  const [draft, setDraft] = useState<{ title: string; image: string; target?: string } | null>(null);
   const [capturing, setCapturing] = useState(false);
   const [attaching, setAttaching] = useState(false);
   const [canCapture, setCanCapture] = useState(false);
   const saving = useRef(false);
+  const [reviewNotice, setReviewNotice] = useState("");
   const [storageFailed, setStorageFailed] = useState(false);
 
   useEffect(() => {
@@ -100,12 +102,12 @@ function ScopedBrowserActivity({ owner, storageKey, onAttach }: Props & { storag
       await update(current => [row, ...current]);
       return true;
     } catch (error) {
-      if (!controller.current.signal.aborted) setNotice(error instanceof DOMException ? "This device could not save the activity. Existing items were kept." : error instanceof Error ? error.message : "Activity could not be saved.");
+      if (!controller.current.signal.aborted) (row.kind === "screenshot" ? setReviewNotice : setNotice)(error instanceof DOMException ? "This device could not save the activity. Existing items were kept." : error instanceof Error ? error.message : "Activity could not be saved.");
       return false;
     }
   }
 
-  async function previewCapture(file?: File) {
+  async function previewCapture(file?: File, target?: string) {
     if (frame.current) return;
     if (!file && document.activeElement instanceof HTMLElement) captureOpener.current = document.activeElement;
     const current = new AbortController();
@@ -115,7 +117,8 @@ function ScopedBrowserActivity({ owner, storageKey, onAttach }: Props & { storag
     try {
       const image = file ? await readScreenshotFile(file) : await captureBrowserTab(current.signal);
       current.signal.throwIfAborted();
-      setDraft({ title: file?.name.slice(0, 150) || "Browser tab screenshot", image });
+      setReviewNotice("");
+      setDraft({ title: file?.name.slice(0, 150) || "Browser tab screenshot", image, target });
       viewer.current?.showModal();
     } catch (error) {
       if (!current.signal.aborted) setNotice(error instanceof Error && (error.name === "Error" || error.name === "NotSupportedError") ? error.message : "Screenshot selection ended. No image was saved.");
@@ -125,6 +128,12 @@ function ScopedBrowserActivity({ owner, storageKey, onAttach }: Props & { storag
         if (!controller.current.signal.aborted) setCapturing(false);
       }
     }
+  }
+
+  function chooseFile(button: HTMLButtonElement, target?: string) {
+    captureOpener.current = button;
+    fileDestination.current = target;
+    upload.current?.click();
   }
 
   function openWebsite() {
@@ -155,7 +164,7 @@ function ScopedBrowserActivity({ owner, storageKey, onAttach }: Props & { storag
     const signal = controller.current.signal;
     setAttaching(true);
     try {
-      const result = await onAttach(screenshotFile(row.image, row.title));
+      const result = await onAttach(screenshotFile(row.image, row.kind === "website" ? new URL(row.origin!).hostname + "-screenshot" : row.title));
       if (!signal.aborted) setNotice(result.ok ? "Screenshot attached. Review it before sending." : result.error);
     } catch { if (!signal.aborted) setNotice("The screenshot could not be attached."); }
     finally { if (!signal.aborted) setAttaching(false); }
@@ -170,12 +179,12 @@ function ScopedBrowserActivity({ owner, storageKey, onAttach }: Props & { storag
         <summary className={control + " cursor-pointer"}><Camera size={17} aria-hidden="true" /> Screenshot</summary>
         <div className="mt-2 flex flex-wrap gap-2">
           {canCapture && <button type="button" className={control} disabled={capturing || storageFailed} onClick={() => void previewCapture()}>Capture a browser tab</button>}
-          <button type="button" className={control} disabled={capturing || storageFailed} onClick={event => { captureOpener.current = event.currentTarget; upload.current?.click(); }}><ImagePlus size={17} aria-hidden="true" /> Upload screenshot</button>
+          <button type="button" className={control} disabled={capturing || storageFailed} onClick={event => chooseFile(event.currentTarget)}><ImagePlus size={17} aria-hidden="true" /> Upload screenshot</button>
           {capturing && <button type="button" className={control} onClick={() => { frame.current?.abort(); frame.current = null; setCapturing(false); }}>Cancel screenshot</button>}
           <input ref={upload} type="file" hidden accept="image/png,image/jpeg,image/webp" onChange={event => {
             const file = event.currentTarget.files?.[0];
             event.currentTarget.value = "";
-            if (file) void previewCapture(file);
+            if (file) void previewCapture(file, fileDestination.current);
           }} />
         </div>
       </details>
@@ -187,20 +196,24 @@ function ScopedBrowserActivity({ owner, storageKey, onAttach }: Props & { storag
         const Mark = row.kind === "website" ? Globe2 : Camera;
         const mark = browserMark(row.origin);
         return <li key={row.id} className="min-w-0">
-          <details className="group min-w-0 rounded-panel border border-line bg-surface" open={row.kind === "screenshot" ? true : undefined}>
+          <details className="group min-w-0 rounded-panel border border-line bg-surface" open={row.kind === "screenshot" || row.image ? true : undefined}>
             <summary className="flex min-w-0 cursor-pointer list-none items-center gap-3 px-3 py-2 [&::-webkit-details-marker]:hidden">
               {mark ? <img src={mark} alt="" className="size-5 shrink-0" /> : <Mark size={19} className="shrink-0 text-accent" aria-hidden="true" />}
               <span className="min-w-0 flex-1 break-words text-sm font-medium">{row.title}<span className="block text-xs font-normal text-muted">{labels[row.outcome]}</span></span>
               <ChevronRight size={16} aria-hidden="true" className="shrink-0 text-muted group-open:rotate-90" />
             </summary>
             <div className="space-y-2 px-3 pb-3">
-              {row.image && <InlineImage wide src={row.image} alt={row.title} onDownload={(data, name) => {
+              {row.image && <InlineImage wide src={row.image} alt={row.kind === "website" ? `Screenshot of ${row.title}` : row.title} onDownload={(data, name) => {
                 const anchor = document.createElement("a");
                 anchor.href = data;
                 anchor.download = screenshotFile(data, name).name;
                 anchor.click();
               }} />}
               <div className="flex flex-wrap items-center gap-3">
+                {row.kind === "website" && !row.image && <>
+                  <button type="button" className={control} disabled={capturing || storageFailed} onClick={event => chooseFile(event.currentTarget, row.id)}>Add screenshot to this step</button>
+                  {canCapture && <button type="button" className={control} disabled={capturing || storageFailed} onClick={() => void previewCapture(undefined, row.id)}>Capture a tab for this step</button>}
+                </>}
                 {row.image && onAttach && <button type="button" className={control} disabled={attaching} onClick={() => void attach(row)}>Attach to composer</button>}
                 <time className="text-xs text-muted" dateTime={new Date(row.at).toISOString()}>{new Date(row.at).toLocaleString()}</time>
                 <button type="button" className="min-h-11 text-sm text-muted underline" onClick={async () => {
@@ -233,11 +246,23 @@ function ScopedBrowserActivity({ owner, storageKey, onAttach }: Props & { storag
       {draft && <div className="space-y-3">
         <h2 className="font-semibold">Review screenshot</h2>
         <p className="text-sm text-muted">{storageKey ? "Saved screenshots stay on this device until you remove them." : "This screenshot stays in this session."} Check for private details before saving or attaching.</p>
+        {reviewNotice && <p className="text-sm text-danger" role="status">{reviewNotice}</p>}
         <img src={draft.image} alt={draft.title} className="max-h-[55dvh] w-full rounded-panel object-contain" />
         <div className="flex flex-wrap gap-2"><button type="button" className={control + " bg-accent text-accent-ink"} onClick={async () => {
           if (saving.current) return;
           saving.current = true;
-          const saved = await saveRow({ id: crypto.randomUUID(), kind: "screenshot", outcome: "saved", ...draft, at: Date.now() });
+          let saved = false;
+          if (draft.target) {
+            try {
+              await update(current => {
+                if (!current.some(row => row.id === draft.target && row.kind === "website" && !row.image)) throw new Error("That browser step changed. Save a separate screenshot.");
+                return current.map(row => row.id === draft.target ? { ...row, image: draft.image } : row);
+              });
+              saved = true;
+            } catch { setReviewNotice("That browser step could not save the screenshot. Discard and try again."); }
+          } else {
+            saved = await saveRow({ id: crypto.randomUUID(), kind: "screenshot", outcome: "saved", title: draft.title, image: draft.image, at: Date.now() });
+          }
           saving.current = false;
           if (saved) {
             viewer.current?.close();

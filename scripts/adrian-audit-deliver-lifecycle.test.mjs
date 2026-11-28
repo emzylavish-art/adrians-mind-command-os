@@ -15,7 +15,7 @@ import ts from "typescript";
 import { memoriesForChat, emptyWorkspace, workspaceForChat, pushAudit, pushUsage, sha256 } from "../src/lib/mind/workspace.ts";
 import { currentMemoryContext } from "../src/lib/mind/context-permission.ts";
 import { completedHistory, checkpointReply } from "../src/lib/mind/partial-reply.ts";
-import { chatTurnBody, isLogicRouteId, respondedRouteLabel } from "../src/lib/mind/logic-routes.ts";
+import { chatTurnBody, loadModeInstructions, isLogicRouteId, respondedRouteLabel } from "../src/lib/mind/logic-routes.ts";
 import { relevantMemories } from "../src/lib/mind/memory/relevant.ts";
 import { eveAccessNotes } from "../src/lib/mind/eve-access.ts";
 import { routeForBotChat } from "../src/lib/mind/bot-model.ts";
@@ -75,7 +75,7 @@ function fixture(overrides = {}) {
     ensureChatMedia: async (chat) => chat,
     snapshotImages, shouldBlockForEmergencyStop, routeForBotChat, isLogicRouteId, chosenProvider, failover, parseCustomProviderChoice,
     resolveSendPath: () => ({ path: "direct" }), completedHistory, resolveChatMessages, historyForDeliver,
-    currentMemoryContext, workspaceForChat, relevantMemories, eveAccessNotes, chatTurnBody, contextReceiptNotice,
+    currentMemoryContext, workspaceForChat, relevantMemories, eveAccessNotes, chatTurnBody, loadModeInstructions, contextReceiptNotice,
     historyTextForImages: (text) => text, // This fixture has no image inputs.
     checkpointReply, shouldStoreReply, STOPPED_REPLY, applyExecutionUsage, pushUsage, pushAudit, respondedRouteLabel,
     classifyHonestFailure, honestFailureAuditAction, normalizeClientFailureMessage, sha256, boundAbortSignal,

@@ -49,6 +49,7 @@ import path from "node:path";
 import { relayModelStream } from "./relay";
 import { chatTurnTimeoutMs } from "./turn-timeouts";
 import { decideFetchSite } from "./request-guard";
+import { parseModeInstruction } from "./mode-instructions.ts";
 import { parseModelTierField, readJsonObjectBody } from "./request-body";
 import { readModelPayload, reportedModel } from "./stream";
 import { resolveDatabaseUrl } from "../env.server.ts";
@@ -481,6 +482,8 @@ async function dispatchMindTurn(request: Request, userId: string, data: Record<s
   if (!privacy.ok) return json(privacy, 503);
   body = privacy.body;
   // Validate the final request before any consultation can spend provider calls.
+  const modeInstruction = parseModeInstruction(body.modeInstruction);
+  if (!modeInstruction.ok) return json(modeInstruction, 400);
   const inputTier = parseModelTierField(body.modelTier);
   if (!inputTier.ok) return json({ ok: false, error: inputTier.error }, 400);
   if (body.memory !== "on" && body.memory !== "off") return json({ ok: false, error: "Memory setting is invalid." }, 400);
