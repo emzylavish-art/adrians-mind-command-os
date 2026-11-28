@@ -25,6 +25,7 @@ import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiMindAgentRouteImport } from './routes/api/mind/agent'
 import { Route as ApiMindDesktopUpdateRouteImport } from './routes/api/mind/desktop-update'
 import { Route as ApiMindDispatchPolicyRouteImport } from './routes/api/mind/dispatch-policy'
+import { Route as ApiMindManagedBrowserRouteImport } from './routes/api/mind/managed-browser'
 import { Route as ApiMindMemoryPolicyRouteImport } from './routes/api/mind/memory-policy'
 import { Route as ApiMindNotificationsRouteImport } from './routes/api/mind/notifications'
 import { Route as ApiMindProvidersRouteImport } from './routes/api/mind/providers'
@@ -184,6 +185,11 @@ const ApiMindDesktopUpdateRoute = ApiMindDesktopUpdateRouteImport.update({
 const ApiMindDispatchPolicyRoute = ApiMindDispatchPolicyRouteImport.update({
   id: '/api/mind/dispatch-policy',
   path: '/api/mind/dispatch-policy',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMindManagedBrowserRoute = ApiMindManagedBrowserRouteImport.update({
+  id: '/api/mind/managed-browser',
+  path: '/api/mind/managed-browser',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiMindMemoryPolicyRoute = ApiMindMemoryPolicyRouteImport.update({
@@ -615,6 +621,7 @@ export interface FileRoutesByFullPath {
   '/api/mind/agent': typeof ApiMindAgentRoute
   '/api/mind/desktop-update': typeof ApiMindDesktopUpdateRoute
   '/api/mind/dispatch-policy': typeof ApiMindDispatchPolicyRoute
+  '/api/mind/managed-browser': typeof ApiMindManagedBrowserRoute
   '/api/mind/memory-policy': typeof ApiMindMemoryPolicyRoute
   '/api/mind/notifications': typeof ApiMindNotificationsRouteWithChildren
   '/api/mind/providers': typeof ApiMindProvidersRoute
@@ -713,6 +720,7 @@ export interface FileRoutesByTo {
   '/api/mind/agent': typeof ApiMindAgentRoute
   '/api/mind/desktop-update': typeof ApiMindDesktopUpdateRoute
   '/api/mind/dispatch-policy': typeof ApiMindDispatchPolicyRoute
+  '/api/mind/managed-browser': typeof ApiMindManagedBrowserRoute
   '/api/mind/memory-policy': typeof ApiMindMemoryPolicyRoute
   '/api/mind/notifications': typeof ApiMindNotificationsRouteWithChildren
   '/api/mind/providers': typeof ApiMindProvidersRoute
@@ -812,6 +820,7 @@ export interface FileRoutesById {
   '/api/mind/agent': typeof ApiMindAgentRoute
   '/api/mind/desktop-update': typeof ApiMindDesktopUpdateRoute
   '/api/mind/dispatch-policy': typeof ApiMindDispatchPolicyRoute
+  '/api/mind/managed-browser': typeof ApiMindManagedBrowserRoute
   '/api/mind/memory-policy': typeof ApiMindMemoryPolicyRoute
   '/api/mind/notifications': typeof ApiMindNotificationsRouteWithChildren
   '/api/mind/providers': typeof ApiMindProvidersRoute
@@ -912,6 +921,7 @@ export interface FileRouteTypes {
     | '/api/mind/agent'
     | '/api/mind/desktop-update'
     | '/api/mind/dispatch-policy'
+    | '/api/mind/managed-browser'
     | '/api/mind/memory-policy'
     | '/api/mind/notifications'
     | '/api/mind/providers'
@@ -1010,6 +1020,7 @@ export interface FileRouteTypes {
     | '/api/mind/agent'
     | '/api/mind/desktop-update'
     | '/api/mind/dispatch-policy'
+    | '/api/mind/managed-browser'
     | '/api/mind/memory-policy'
     | '/api/mind/notifications'
     | '/api/mind/providers'
@@ -1108,6 +1119,7 @@ export interface FileRouteTypes {
     | '/api/mind/agent'
     | '/api/mind/desktop-update'
     | '/api/mind/dispatch-policy'
+    | '/api/mind/managed-browser'
     | '/api/mind/memory-policy'
     | '/api/mind/notifications'
     | '/api/mind/providers'
@@ -1207,6 +1219,7 @@ export interface RootRouteChildren {
   ApiMindAgentRoute: typeof ApiMindAgentRoute
   ApiMindDesktopUpdateRoute: typeof ApiMindDesktopUpdateRoute
   ApiMindDispatchPolicyRoute: typeof ApiMindDispatchPolicyRoute
+  ApiMindManagedBrowserRoute: typeof ApiMindManagedBrowserRoute
   ApiMindMemoryPolicyRoute: typeof ApiMindMemoryPolicyRoute
   ApiMindNotificationsRoute: typeof ApiMindNotificationsRouteWithChildren
   ApiMindProvidersRoute: typeof ApiMindProvidersRoute
@@ -1400,6 +1413,13 @@ declare module '@tanstack/react-router' {
       path: '/api/mind/dispatch-policy'
       fullPath: '/api/mind/dispatch-policy'
       preLoaderRoute: typeof ApiMindDispatchPolicyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/managed-browser': {
+      id: '/api/mind/managed-browser'
+      path: '/api/mind/managed-browser'
+      fullPath: '/api/mind/managed-browser'
+      preLoaderRoute: typeof ApiMindManagedBrowserRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/mind/memory-policy': {
@@ -1993,6 +2013,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiMindAgentRoute: ApiMindAgentRoute,
   ApiMindDesktopUpdateRoute: ApiMindDesktopUpdateRoute,
   ApiMindDispatchPolicyRoute: ApiMindDispatchPolicyRoute,
+  ApiMindManagedBrowserRoute: ApiMindManagedBrowserRoute,
   ApiMindMemoryPolicyRoute: ApiMindMemoryPolicyRoute,
   ApiMindNotificationsRoute: ApiMindNotificationsRouteWithChildren,
   ApiMindProvidersRoute: ApiMindProvidersRoute,

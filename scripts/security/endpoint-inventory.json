@@ -582,6 +582,36 @@
       ]
     },
     {
+      "file": "src/routes/api/mind/managed-browser.ts",
+      "path": "/api/mind/managed-browser",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "policy": "owner_origin",
+      "notes": "Verified owner and same origin scope sessions and receipts. Durable claims and emergency stop guard control of an approved browser origin.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/managed-browser.ts",
+          "requires": [
+            "requireUserId",
+            "assertSameOrigin",
+            "payload.body.owner !== owner",
+            "worker.origins.includes"
+          ]
+        },
+        {
+          "file": "src/lib/mind/managed-browser.server.ts",
+          "requires": [
+            "user_id=$2",
+            "mind_control",
+            "and pending=$3",
+            "mind_managed_browser_receipt"
+          ]
+        }
+      ]
+    },
+    {
       "file": "src/routes/api/mind/mcp/builtin.ts",
       "path": "/api/mind/mcp/builtin",
       "methods": [
@@ -1499,7 +1529,7 @@
         "POST"
       ],
       "policy": "owner_origin",
-      "notes": "Lists the verified owner’s Better Auth devices and revokes only a reviewed session after the same-origin check.",
+      "notes": "Lists the verified owner’s Better Auth devices and supports reviewed revocation of a specific device or all other sessions.",
       "evidence": [
         {
           "file": "src/routes/api/mind/sessions.ts",
@@ -1507,6 +1537,8 @@
             "requireUserId",
             "assertSameOrigin",
             "session.user.id !== owner",
+            "auth.api.revokeOtherSessions",
+            "body.currentId !== currentId",
             "sessionToRevoke"
           ]
         }

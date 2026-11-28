@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth/server";
 import { sessionErrorStatus } from "@/lib/auth/session-resolution";
 import { publicSessionRows, sessionToRevoke } from "@/lib/auth/session-center";
 import { assertSameOrigin } from "@/lib/mind/connectors/oauth-csrf";
+import { readJsonObjectBody } from "@/lib/mind/request-body";
 const reply = (body: unknown, status = 200) => Response.json(body, { status, headers: { "cache-control": "no-store" } });
 async function current(request: Request) {
   const bearer = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
@@ -17,9 +18,25 @@ export const Route = createFileRoute("/api/mind/sessions")({ server: { handlers:
   POST: async ({ request }) => {
     const origin = assertSameOrigin(request); if (!origin.ok) return reply({ ok: false, error: origin.error }, 403);
     try {
-      const raw = await request.text(); if (raw.length > 1000) return reply({ ok: false, error: "Invalid session action." }, 413);
-      const body = JSON.parse(raw); if (body.action !== "revoke" || typeof body.id !== "string") return reply({ ok: false, error: "Select a session to revoke." }, 400);
+      const parsed = await readJsonObjectBody(request, 1000);
+      if (!parsed.ok) return reply({ ok: false, error: parsed.error }, parsed.status);
+      const body = parsed.body;
+      if ((body.action !== "revoke" || typeof body.id !== "string") &&
+          (body.action !== "lockdown" || typeof body.currentId !== "string")) return reply({ ok: false, error: "Choose a session action." }, 400);
       const result = await current(request); if (!result) return reply({ ok: false, error: "Session ownership could not be verified." }, 409);
+      if (body.action === "lockdown") {
+        const currentId = result.session.session.id;
+        if (body.currentId !== currentId) return reply({ ok: false, error: "The current session changed. Refresh sessions and review the action again." }, 409);
+        const acknowledgement = await auth.api.revokeOtherSessions({ headers: request.headers });
+        if (acknowledgement.status !== true) return reply({ ok: false, error: "The provider did not confirm session revocation. Refresh sessions before trying again." }, 503);
+        const refreshed = await current(request);
+        if (!refreshed || refreshed.owner !== result.owner || refreshed.session.session.id !== currentId) {
+          return reply({ ok: false, error: "The provider acknowledged revocation. The current session could not be reverified." }, 409);
+        }
+        const sessions = publicSessionRows(refreshed.rows, result.owner, currentId);
+        return reply({ ok: true, sessions, remainingOther: sessions.filter(row => !row.current).length });
+      }
+      if (typeof body.id !== "string") return reply({ ok: false, error: "Choose a session to revoke." }, 400);
       const selected = sessionToRevoke(result.rows, result.owner, body.id, result.session.session.id); if (!selected.ok) return reply(selected, 409);
       await auth.api.revokeSession({ headers: request.headers, body: { token: selected.token } });
       return reply({ ok: true, revokedId: body.id });

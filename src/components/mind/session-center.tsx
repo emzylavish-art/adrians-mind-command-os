@@ -9,9 +9,10 @@ export function SessionCenter() {
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
 
-  async function load(revokeId?: string) {
+  async function load(revokeId?: string, lockdownId?: string) {
     if (busy) return;
     if (revokeId && !window.confirm("Revoke this other session? It will need to sign in again. Saved workspace data is kept.")) return;
+    if (lockdownId && !window.confirm("Revoke every other Better Auth session? Keep this session open to verify the result.")) return;
     setBusy(true);
     setError("");
     setNotice("");
@@ -19,6 +20,18 @@ export function SessionCenter() {
     try {
       const token = getBearerToken();
       const headers: Record<string, string> = token ? { authorization: `Bearer ${token}` } : {};
+      if (lockdownId) {
+        const response = await fetch("/api/mind/sessions", {
+          credentials: "same-origin", method: "POST", headers: { ...headers, "content-type": "application/json" },
+          body: JSON.stringify({ action: "lockdown", currentId: lockdownId }),
+        });
+        const body = await response.json();
+        if (!response.ok || !body.ok || !Array.isArray(body.sessions)) throw new Error(body.error || "Session lockdown could not be confirmed.");
+        setDevices(body.sessions);
+        setNotice(body.remainingOther === 0 ? "Session lockdown verified. This is the only active Better Auth session." :
+          "The provider acknowledged revocation. Refresh to review the other sessions still listed.");
+        return;
+      }
       if (revokeId) {
         const response = await fetch("/api/mind/sessions", {
           credentials: "same-origin", method: "POST", headers: { ...headers, "content-type": "application/json" },
@@ -41,6 +54,7 @@ export function SessionCenter() {
       setDevices(null);
       if (revokeConfirmed) setNotice("The provider acknowledged revocation. Refresh to verify the current list.");
       else if (revokeId) setNotice("Refresh the list before retrying revocation.");
+      else if (lockdownId) setNotice("Refresh the list before retrying session lockdown.");
       setError(caught instanceof Error ? caught.message : "Session details are unavailable.");
     } finally {
       setBusy(false);
@@ -51,6 +65,13 @@ export function SessionCenter() {
     <h3 className="font-semibold">Sessions and recovery</h3>
     <p className="text-muted">After signing in again, use the original send ID to check an unfinished request.</p>
     <button type="button" disabled={busy} className="min-h-11 rounded-panel border border-line px-3" onClick={() => void load()}>{busy ? "Checking…" : "Refresh verified sessions"}</button>
+    {devices?.some(device => device.current) && <div className="space-y-1">
+      <p className="text-muted">Session lockdown signs other Better Auth devices out. Future sign-ins still follow your sign-in provider’s rules.</p>
+      {devices.filter(device => device.current).map(device => <button key={device.id} type="button" disabled={busy}
+        className="min-h-11 rounded-panel border border-line px-3 text-warning" onClick={() => void load(undefined, device.id)}>
+        Revoke all other sessions
+      </button>)}
+    </div>}
     {error && <p role="alert">{error}</p>}
     {notice && <p role="status">{notice}</p>}
     {devices?.length === 0 && <p>The provider returned an empty session list.</p>}

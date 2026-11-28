@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { BrowserActivity } from "./browser-activity";
+import { ManagedBrowser } from "./managed-browser";
 import { BrowserEnvironments } from "@/components/mind/browser-environments";
 import {
   browserAddress, browserPermissions, browserPreferencesKey, defaultBrowserPreferences,
@@ -51,7 +52,7 @@ export function CloudBrowserSettings({ owner, halted }: { owner: string | null; 
 
   return <section className="settings-card space-y-5 rounded-panel p-4 text-sm" aria-labelledby="cloud-browser-title">
     <h3 id="cloud-browser-title" className="font-display text-xl font-bold">Cloud browser</h3>
-    <p className="text-muted">Mind OS can hand a website over to your browser. You control that tab. Autonomous cloud browsing is unavailable.</p>
+    <p className="text-muted">Open a site in your own browser or use a configured isolated managed browser for approved sites.</p>
     <BrowserEnvironments />
     {!key ? <p>Sign in to manage your website permissions.</p> : settings && <>
       <div className="settings-row flex-wrap"><div><p className="font-semibold">Default permissions</p><p className="text-muted">Applies to website handoffs opened through Adrian.</p></div>
@@ -79,6 +80,7 @@ export function CloudBrowserSettings({ owner, halted }: { owner: string | null; 
       </fieldset>
       <div><p className="font-semibold">Browser data</p><p className="text-muted">Website cookies stay in the browser you open. Manage or clear them in that browser’s settings.</p></div>
       <BrowserActivity owner={owner} halted={halted} scope="browser-settings" />
+      {owner && owner !== "dev-user" && <ManagedBrowser key={owner} owner={owner} halted={halted} />}
     </>}
     {key && !settings && notice && <button className={control} type="button" onClick={() => {
       if (!window.confirm("Reset browser permissions for this account on this device?")) return;

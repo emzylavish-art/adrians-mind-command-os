@@ -60,5 +60,5 @@ export function authorizeBrowserAction(settings: BrowserPreferences, target: URL
 export const browserEnvironments = [
   { id: "personal", label: "Personal browser", availability: "Manual handoff", location: "Your browser", scope: "Open a website under your control. Website-opening rules apply; no agent session or account permission is shared." },
   { id: "coding", label: "Coding browser", availability: "Runtime dependent", location: "Local coding runtime", scope: "Manage development work in Build. It is a coding interface, not an autonomous website session; its local session is isolated." },
-  { id: "cloud", label: "Autonomous browser", availability: "Not configured", location: "No execution runtime", scope: "Website inspection, takeover, downloads and account actions are unavailable until a supported isolated runtime is configured." },
+  { id: "cloud", label: "Managed browser", availability: "Worker dependent", location: "Isolated Chromium worker", scope: "Open an approved site, view the session, take manual control, hand it back or stop it." },
 ] as const;

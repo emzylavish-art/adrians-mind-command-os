@@ -2,7 +2,7 @@
 
 This checked-in inventory covers every direct route handler and exported TanStack server function discovered from TypeScript AST. A new route, HTTP method, RPC export, removed guard marker or undocumented public exception fails the normal test runner. Guard-source checks establish code reachability contracts; they do not substitute for live penetration testing or prove that a browser/provider/device was exercised.
 
-85 routes · 124 HTTP method contracts · 65 RPC exports.
+86 routes · 126 HTTP method contracts · 65 RPC exports.
 
 ## Shared policies
 
@@ -59,6 +59,7 @@ This checked-in inventory covers every direct route handler and exported TanStac
 | `/api/mind/kimi/session` | GET, POST | owner_origin | Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation. Build and legacy Kimi aliases share the named runtime-specific handler; target selection is explicit. Sources: `src/lib/mind/kimi/acp.server.ts` |
 | `/api/mind/kimi/terminal` | POST | owner_origin | Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation. Build and legacy Kimi aliases share the named runtime-specific handler; target selection is explicit. Sources: `src/routes/api/mind/kimi/terminal.ts` |
 | `/api/mind/kimi/voice` | POST | owner_origin | Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation. Build and legacy Kimi aliases share the named runtime-specific handler; target selection is explicit. Sources: `src/lib/mind/kimi/phase4.server.ts` |
+| `/api/mind/managed-browser` | GET, POST | owner_origin | Verified owner and same origin scope sessions and receipts. Durable claims and emergency stop guard control of an approved browser origin. Sources: `src/routes/api/mind/managed-browser.ts`, `src/lib/mind/managed-browser.server.ts` |
 | `/api/mind/mcp/builtin` | DELETE, GET, POST | owner_origin | Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation. Sources: `src/routes/api/mind/mcp/builtin.ts` |
 | `/api/mind/mcp/call` | POST | owner_origin | Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation. Sources: `src/routes/api/mind/mcp/call.ts` |
 | `/api/mind/mcp/servers` | GET, POST | owner_origin | Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation. Sources: `src/routes/api/mind/mcp/servers.ts` |
@@ -104,7 +105,7 @@ This checked-in inventory covers every direct route handler and exported TanStac
 | `/api/mind/resources` | GET, PUT | owner_fetch_metadata | Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation. Sources: `src/lib/mind/resource-http.server.ts` |
 | `/api/mind/schedules/tick` | POST | schedule_worker | Rejects missing or mismatched worker authorization and checks stop state before a bounded pass. Sources: `src/lib/mind/schedule-tick.server.ts` |
 | `/api/mind/session` | GET | session_probe | Returns the canonical signed-in owner, a signed-out response, an identity conflict or an unavailable status. Sources: `src/routes/api/mind/session.ts` |
-| `/api/mind/sessions` | GET, POST | owner_origin | Lists the verified owner’s Better Auth devices and revokes only a reviewed session after the same-origin check. Sources: `src/routes/api/mind/sessions.ts` |
+| `/api/mind/sessions` | GET, POST | owner_origin | Lists the verified owner’s Better Auth devices and supports reviewed revocation of a specific device or all other sessions. Sources: `src/routes/api/mind/sessions.ts` |
 | `/api/mind/shared-chats` | GET, POST | owner_origin | Owners list, issue and revoke their own grants. Signed-in readers must present a live link for the exact reviewed text. Sources: `src/routes/api/mind/shared-chats.ts` |
 | `/api/mind/skills` | GET, POST, PUT | owner_origin | Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation. Sources: `src/routes/api/mind/skills.ts` |
 | `/api/mind/turn` | GET, POST | owner_fetch_metadata | Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation. Sources: `src/lib/mind/turn.server.ts` |
