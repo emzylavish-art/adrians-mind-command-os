@@ -9,7 +9,7 @@ import { normalizeWorkspace } from "./workspace.ts";
 
 type Target = {
   id: string; user_id: string; channel: DeliveryChannel; device_id: string | null;
-  destination: unknown; preferences: unknown; enabled_at: string;
+  destination: unknown; preferences: unknown; preference_revision: string; enabled_at: string;
 };
 type VerifiedAddress = { email: string };
 const DAY_MS = 86_400_000;
@@ -31,11 +31,11 @@ function storedBrowserSubscription(value: unknown, push: NonNullable<Notificatio
 }
 
 export async function notificationStatus(sql: Sql, owner: string, device: string | null, transports: NotificationTransports, workerConfigured: boolean): Promise<NotificationStatus> {
-  type StatusRow = Pick<Target, "channel" | "destination"> & {
+  type StatusRow = Pick<Target, "channel" | "destination" | "preferences" | "preference_revision"> & {
     last_checked: string | null; attempted_at: string | null;
     state: NonNullable<NotificationStatus["push"]["lastAttempt"]>["state"] | null;
   };
-  const rows = await sql.query<StatusRow>(`select t.channel,t.destination,t.last_checked::text,d.state,d.attempted_at::text
+  const rows = await sql.query<StatusRow>(`select t.channel,t.destination,t.preferences,t.preference_revision::text,t.last_checked::text,d.state,d.attempted_at::text
     from mind_notification_target t
     left join lateral (
       select state,attempted_at from mind_notification_delivery where target_id=t.id order by attempted_at desc limit 1
@@ -44,6 +44,7 @@ export async function notificationStatus(sql: Sql, owner: string, device: string
   const email = await verifiedAddress(sql, owner);
   const describe = (row?: StatusRow) => ({
     subscribed: Boolean(row), lastChecked: row?.last_checked ?? undefined,
+    preferences: deliveryPreferences(row?.preferences) ?? undefined, preferenceRevision: row?.preference_revision,
     lastAttempt: row?.state && row.attempted_at ? { state: row.state, at: row.attempted_at } : undefined,
   });
   return {
@@ -56,14 +57,21 @@ export async function notificationStatus(sql: Sql, owner: string, device: string
 export async function updateNotificationDelivery(sql: Sql, owner: string, body: Record<string, unknown>, transports: NotificationTransports) {
   const { action, channel, device } = body;
   if (device != null && !notificationDeviceId(device)) return problem(400, "Invalid browser registration.");
+  if (channel !== "push" && channel !== "email") return problem(400, "Choose a delivery method.");
+  if (channel === "push" && !device) return problem(400, "This browser is missing a registration.");
   if (action === "preferences") {
     const prefs = deliveryPreferences(body.preferences);
     if (!prefs) return problem(400, "Choose valid event types and quiet hours.");
-    await sql.query("update mind_notification_target set preferences=$3::jsonb where user_id=$1 and (channel='email' or device_id=$2)", [owner, device ?? null, JSON.stringify(prefs)]);
-    return result(200, { saved: true });
+    const revision = body.preferenceRevision;
+    if (!notificationDeviceId(revision)) {
+      return problem(409, "Reload this delivery method before saving its preferences.");
+    }
+    const [updated] = await sql.query<{ preference_revision: string }>(`update mind_notification_target
+      set preferences=$4::jsonb
+      where user_id=$1 and channel=$2 and device_id is not distinct from $3::uuid and preference_revision=$5::uuid
+      returning preference_revision::text`, [owner, channel, deviceFor(channel, device), JSON.stringify(prefs), revision]);
+    return updated ? result(200, { saved: true }) : problem(409, "Delivery settings changed elsewhere. Reopen this panel before saving.");
   }
-  if (channel !== "push" && channel !== "email") return problem(400, "Choose a delivery method.");
-  if (channel === "push" && !device) return problem(400, "This browser is missing a registration.");
   if (action === "disable") {
     await sql.query("delete from mind_notification_target where user_id=$1 and channel=$2 and device_id is not distinct from $3::uuid", [owner, channel, deviceFor(channel, device)]);
     return result(200, { saved: true });
@@ -121,6 +129,7 @@ export async function mayDisplayScheduledPush(sql: Sql, owner: string, device: s
     from mind_notification_target t join mind_notification_delivery d on d.target_id=t.id
     where t.user_id=$1 and t.channel='push' and t.device_id=$2 and d.event_hash=$3
       and not exists (select 1 from mind_control where user_id=t.user_id and halted)
+      and d.preference_revision=t.preference_revision
       and d.state in ('attempted','accepted','unknown') and d.attempted_at >= $4`, [owner, device, hash, new Date(now.getTime() - 310_000).toISOString()]);
   const prefs = deliveryPreferences(row?.preferences);
   return Boolean(row && prefs && deliveryAllowed(row, prefs, now));
@@ -144,8 +153,8 @@ async function finishNotificationClaim(sql: Sql, target: Target, event: Workspac
     const [account] = await tx.query<{ email: string; emailVerified: boolean }>('select email,"emailVerified" from "user" where id=$1 for share', [target.user_id]);
     const [control] = await tx.query<{ halted: boolean }>("select halted from mind_control where user_id=$1 for share", [target.user_id]);
     const [current] = await tx.query<Pick<Target, "destination" | "device_id">>(
-      "select destination,device_id from mind_notification_target where id=$1 and user_id=$2 and channel=$3 and preferences=$4::jsonb for update",
-      [target.id, target.user_id, target.channel, JSON.stringify(prefs)],
+      "select destination,device_id from mind_notification_target where id=$1 and user_id=$2 and channel=$3 and preference_revision=$4::uuid for update",
+      [target.id, target.user_id, target.channel, target.preference_revision],
     );
     let outcome: DeliveryOutcome = "rejected";
     if (account && control?.halted === false && current && deliveryAllowed(event, prefs, at)) {
@@ -176,7 +185,7 @@ export async function runNotificationPass(sql: Sql, transports: NotificationTran
     select id from mind_notification_target where (channel='push' and $1) or (channel='email' and $2)
     order by last_checked nulls first,id limit 4 for update skip locked
   ) update mind_notification_target t set last_checked=$3 from selected where t.id=selected.id
-    returning t.id,t.user_id,t.channel,t.device_id,t.destination,t.preferences,t.enabled_at::text`,
+    returning t.id,t.user_id,t.channel,t.device_id,t.destination,t.preferences,t.preference_revision::text,t.enabled_at::text`,
     [Boolean(transports.push), Boolean(transports.email), now.toISOString()]);
   for (const target of targets) {
     counts.checked++;
@@ -203,10 +212,10 @@ export async function runNotificationPass(sql: Sql, transports: NotificationTran
         await tx.query("insert into mind_control(user_id,halted) values($1,false) on conflict do nothing", [target.user_id]);
         const [control] = await tx.query<{ halted: boolean }>("select halted from mind_control where user_id=$1 for update", [target.user_id]);
         if (control?.halted !== false) return [];
-        const [current] = await tx.query<{ id: string }>(`select id from mind_notification_target where id=$1 and preferences=$2::jsonb for update`,
-          [target.id, JSON.stringify(target.preferences)]);
-        return current ? tx.query<{ target_id: string }>(`insert into mind_notification_delivery(target_id,event_hash,urgent,state,attempted_at)
-          values($1,$2,$3,'attempted',$4) on conflict do nothing returning target_id`, [target.id, hash, notice.urgent, now.toISOString()]) : [];
+        const [current] = await tx.query<{ id: string }>(`select id from mind_notification_target where id=$1 and preference_revision=$2::uuid for update`,
+          [target.id, target.preference_revision]);
+        return current ? tx.query<{ target_id: string }>(`insert into mind_notification_delivery(target_id,event_hash,urgent,state,attempted_at,preference_revision)
+          values($1,$2,$3,'attempted',$4,$5) on conflict do nothing returning target_id`, [target.id, hash, notice.urgent, now.toISOString(), target.preference_revision]) : [];
       });
       if (!claim) continue;
       try {

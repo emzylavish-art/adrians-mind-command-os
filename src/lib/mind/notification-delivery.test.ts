@@ -34,6 +34,7 @@ test("validates background zones, quiet hours and approved browser endpoints", (
   const duringQuiet = new Date("2026-11-28T05:00:00Z");
   assert.equal(deliveryAllowed({ urgent: false }, quiet, duringQuiet), false);
   assert.equal(deliveryAllowed({ urgent: true }, quiet, duringQuiet), true);
+  assert.equal(deliveryAllowed({ urgent: true }, { ...quiet, urgent: false }, duringQuiet), false);
   assert.equal(deliveryAllowed({ urgent: false }, quiet, new Date("2026-11-28T12:00:00Z")), true);
   assert.equal(deliveryPreferences({ ...settings, zone: "fake" }), null);
   const subscription = deviceSubscription();
@@ -158,7 +159,7 @@ test("account inbox visibility synchronizes by hash without letting a stale devi
 test("durable delivery binds consent and current recipient, deduplicates competing passes and refuses stale display", async () => {
   const db = await PGlite.create();
   try {
-    for (const name of ["0001_auth.sql", "0002_mind.sql", "0021_c1_research_skills.sql", "0026_notification_delivery.sql"]) {
+    for (const name of ["0001_auth.sql", "0002_mind.sql", "0021_c1_research_skills.sql", "0026_notification_delivery.sql", "0032_notification_preference_revisions.sql"]) {
       await db.exec(await readFile(new URL("../../../migrations/" + name, import.meta.url), "utf8"));
     }
     const sql = sqlAdapter(db);
@@ -218,10 +219,29 @@ test("durable delivery binds consent and current recipient, deduplicates competi
     assert.deepEqual(mail, [recipient]);
 
     await sql.query("update mind_control set halted=false where user_id=$1", ["a"]);
-    await sql.query('update "user" set email=$2 where id=$1', ["a", "changed@example.invalid"]);
     await updateNotificationDelivery(sql, "b", { action: "disable", channel: "push", device }, transports);
     assert.equal(await mayDisplayScheduledPush(sql, "a", device, attemptedPush[0], now), true);
+    const prior = await notificationStatus(sql, "a", device, transports, true);
+    const editPush = { action: "preferences", channel: "push", device,
+      preferenceRevision: prior.push.preferenceRevision, preferences: { ...settings, activity: false } };
+    assert.equal((await updateNotificationDelivery(sql, "b", editPush, transports)).status, 409);
+    assert.equal((await updateNotificationDelivery(sql, "a", { ...editPush, device: randomUUID() }, transports)).status, 409);
+    assert.equal((await updateNotificationDelivery(sql, "a", editPush, transports)).status, 200);
+    assert.equal((await updateNotificationDelivery(sql, "a", editPush, transports)).status, 409);
+    const edited = await notificationStatus(sql, "a", device, transports, true);
+    assert.equal(edited.push.preferences?.activity, false);
+    assert.equal(edited.email.preferences?.activity, true);
+    assert.equal(edited.email.preferenceRevision, prior.email.preferenceRevision);
+    assert.equal(await mayDisplayScheduledPush(sql, "a", device, attemptedPush[0], now), false);
+    assert.equal((await updateNotificationDelivery(sql, "a", {
+      ...editPush, preferences: settings, preferenceRevision: edited.push.preferenceRevision,
+    }, transports)).status, 200);
+    assert.equal(await mayDisplayScheduledPush(sql, "a", device, attemptedPush[0], now), false, "Returning to the prior values cannot revive an old push");
     await updateNotificationDelivery(sql, "a", { action: "disable", channel: "push", device }, transports);
+    assert.equal((await updateNotificationDelivery(sql, "a", push, transports)).status, 200);
+    assert.equal((await updateNotificationDelivery(sql, "a", editPush, transports)).status, 409, "A previous subscription cannot edit a re-enabled target");
+    await updateNotificationDelivery(sql, "a", { action: "disable", channel: "push", device }, transports);
+    await sql.query('update "user" set email=$2 where id=$1', ["a", "changed@example.invalid"]);
     await runNotificationPass(sql, transports, new Date(enrolled + 70_000));
     assert.equal(await mayDisplayScheduledPush(sql, "a", device, attemptedPush[0], now), false);
     assert.equal(attemptedPush.length, 1);

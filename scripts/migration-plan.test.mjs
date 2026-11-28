@@ -100,6 +100,7 @@ test("owner schemas are globbed and the auth source stays in migrations/auth", (
       "0029_managed_browser_controls.sql",
       "0030_better_auth_passkeys.sql",
       "0031_better_auth_authenticator.sql",
+      "0032_notification_preference_revisions.sql",
     ],
   );
   assert.ok(readdirSync(join(migrationsDir, "auth")).includes("0001_auth.sql"));

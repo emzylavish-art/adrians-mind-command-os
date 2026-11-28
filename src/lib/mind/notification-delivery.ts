@@ -1,9 +1,10 @@
 import { isQuietHour, type NotificationPreferences, type WorkspaceNotice } from "./notifications.ts";
 
-export type DeliveryPreferences = NotificationPreferences & { zone: string };
+export type DeliveryPreferences = NotificationPreferences & { zone: string; urgent: boolean };
 export type DeliveryChannel = "push" | "email";
 type DeliveryStatus = {
   available: boolean; subscribed: boolean; lastChecked?: string;
+  preferences?: DeliveryPreferences; preferenceRevision?: string;
   lastAttempt?: { state: "attempted" | "accepted" | "rejected" | "unknown"; at: string };
 };
 export type NotificationStatus = {
@@ -21,19 +22,20 @@ export function notificationDeviceId(value: unknown): value is string {
 
 export function deliveryPreferences(value: unknown): DeliveryPreferences | null {
   if (!value || typeof value !== "object") return null;
-  const { completedRuns, activity, research, media, quietStart, quietEnd, zone } = value as Record<string, unknown>;
+  const { completedRuns, activity, research, media, quietStart, quietEnd, zone, urgent = true } = value as Record<string, unknown>;
   const hour = (input: unknown): input is number | null =>
     input === null || (typeof input === "number" && Number.isInteger(input) && input >= 0 && input < 24);
   if (typeof completedRuns !== "boolean" || typeof activity !== "boolean" || typeof research !== "boolean" || typeof media !== "boolean"
-    || !hour(quietStart) || !hour(quietEnd) || typeof zone !== "string" || zone.length > 80) return null;
+    || !hour(quietStart) || !hour(quietEnd) || typeof zone !== "string" || zone.length > 80 || typeof urgent !== "boolean") return null;
   try {
     const canonical = new Intl.DateTimeFormat("en", { timeZone: zone }).resolvedOptions().timeZone;
-    return { completedRuns, activity, research, media, quietStart, quietEnd, zone: canonical };
+    return { completedRuns, activity, research, media, quietStart, quietEnd, zone: canonical, urgent };
   } catch { return null; }
 }
 
 export function deliveryAllowed(event: Pick<WorkspaceNotice, "urgent">, prefs: DeliveryPreferences, now: Date) {
+  if (event.urgent) return prefs.urgent;
   const hour = new Intl.DateTimeFormat("en", { timeZone: prefs.zone, hour: "numeric", hourCycle: "h23" })
     .formatToParts(now).find(part => part.type === "hour");
-  return event.urgent || !isQuietHour(prefs, Number(hour?.value));
+  return !isQuietHour(prefs, Number(hour?.value));
 }

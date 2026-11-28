@@ -1,12 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { getBearerToken } from "@/lib/auth/client";
 import type { PreferenceStorage } from "@/lib/mind/account-preferences";
-import { BACKGROUND_PUSH_CHANGED, BACKGROUND_PUSH_KEY, notificationDeviceId, type DeliveryChannel, type NotificationStatus } from "@/lib/mind/notification-delivery";
+import { BACKGROUND_PUSH_CHANGED, BACKGROUND_PUSH_KEY, notificationDeviceId, type DeliveryChannel, type DeliveryPreferences, type NotificationStatus } from "@/lib/mind/notification-delivery";
 import type { NotificationPreferences } from "@/lib/mind/notifications";
 import { previewPathPrefix } from "@/lib/preview-path-prefix";
+import { NotificationPreferenceFields } from "./notification-preference-fields";
 
 const deviceStorageKey = "notifications.browser-device.v1";
 const endpoint = "/api/mind/notifications";
+const channels = [["push", "Browser push"], ["email", "Account email"]] as const;
+type PreferenceDraft = { preferences: DeliveryPreferences; revision: string };
 
 function registeredDevice(storage: PreferenceStorage) {
   try {
@@ -68,6 +71,7 @@ export function BackgroundNotifications({ owner, storage, preferences }: {
   const [worker, setWorker] = useState<ServiceWorkerRegistration | null>(null);
   const [working, setWorking] = useState(false);
   const [message, setMessage] = useState("");
+  const [drafts, setDrafts] = useState<Partial<Record<DeliveryChannel, PreferenceDraft>>>({});
   const mutation = useRef<AbortController | null>(null);
   const browserSupported = typeof window !== "undefined" && window.isSecureContext && "Notification" in window
     && "PushManager" in window && "serviceWorker" in navigator;
@@ -99,8 +103,10 @@ export function BackgroundNotifications({ owner, storage, preferences }: {
     return () => { current = false; };
   }, [open, device, browserSupported, status?.push.available, status?.workerConfigured]);
 
-  async function update(action: "enable" | "disable" | "preferences", channel?: DeliveryChannel) {
+  async function update(action: "enable" | "disable" | "preferences", channel: DeliveryChannel) {
     if (!owner || mutation.current) return;
+    const draft = drafts[channel];
+    if (action === "preferences" && !draft) return;
     const controller = new AbortController();
     mutation.current = controller;
     const { signal } = controller;
@@ -109,6 +115,7 @@ export function BackgroundNotifications({ owner, storage, preferences }: {
     const query = new URLSearchParams({ owner, ...(device ? { device } : {}) });
     const scopedPreferences = {
       ...preferences, research: preferences.research !== false, media: preferences.media !== false,
+      urgent: true,
       zone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     };
     let subscription: PushSubscription | null = null;
@@ -125,18 +132,27 @@ export function BackgroundNotifications({ owner, storage, preferences }: {
         }
       }
       signal.throwIfAborted();
-      await notificationRequest(query, { owner, device, channel, action, preferences: scopedPreferences, subscription: subscription?.toJSON() }, signal);
+      await notificationRequest(query, {
+        owner, device, channel, action,
+        preferences: action === "preferences" ? draft?.preferences : scopedPreferences,
+        preferenceRevision: action === "preferences" ? draft?.revision : undefined,
+        subscription: subscription?.toJSON(),
+      }, signal);
       signal.throwIfAborted();
-      if (channel === "push") {
+      if (channel === "push" && action !== "preferences") {
         syncBrowserDelivery(storage, action === "enable");
         if (action === "disable") {
           // The server grant has already been withdrawn even if browser cleanup fails.
           try { await (await worker?.pushManager.getSubscription())?.unsubscribe(); } catch { /* The server receipt still refuses display. */ }
         }
       }
-      setMessage(action === "enable" ? "Registered for delivery." : action === "disable" ? "Delivery turned off." : "Event choices saved for this email and browser.");
       const confirmed: NotificationStatus = await notificationRequest(query, undefined, signal);
-      if (!signal.aborted) setStatus(confirmed);
+      if (!signal.aborted) {
+        setStatus(confirmed);
+        setDrafts(previous => ({ ...previous, [channel]: undefined }));
+        setMessage(action === "enable" ? "Registered for delivery." : action === "disable" ? "Delivery turned off."
+          : channel === "push" ? "Browser push preferences saved." : "Account email preferences saved.");
+      }
     } catch (error) {
       if (!signal.aborted) setMessage(error instanceof Error ? error.message : "Notification settings could not be confirmed.");
     } finally {
@@ -148,7 +164,7 @@ export function BackgroundNotifications({ owner, storage, preferences }: {
   return <details className="p-3 text-xs" onToggle={event => setOpen(event.currentTarget.open)}>
     <summary>Background push and email</summary>
     {!owner ? <p>Sign in to manage background delivery.</p> : <>
-      <p className="py-2">Delivery uses the inbox events and quiet hours you choose above. Push works on supported browsers. On iPhone or iPad, open Adrian from its Home Screen icon.</p>
+      <p className="py-2">New subscriptions start with your current inbox choices. You can then set events and quiet hours separately for this browser and your account email. On iPhone or iPad, open Adrian from its Home Screen icon to use push.</p>
       {status && !status.workerConfigured && <p>Background delivery is unavailable until the notification worker is configured.</p>}
       {status && <div className="flex flex-wrap gap-2">
         <button type="button" className="min-h-11 rounded-panel border border-line px-3" aria-pressed={status.push.subscribed}
@@ -157,10 +173,37 @@ export function BackgroundNotifications({ owner, storage, preferences }: {
         <button type="button" className="min-h-11 rounded-panel border border-line px-3" aria-pressed={status.email.subscribed}
           disabled={working || (!status.email.subscribed && (!status.email.available || !status.workerConfigured))}
           onClick={() => void update(status.email.subscribed ? "disable" : "enable", "email")}>{status.email.subscribed ? "Turn off account email" : "Enable account email"}</button>
-        <button type="button" className="min-h-11 rounded-panel border border-line px-3"
-          disabled={working || (!status.email.subscribed && !status.push.subscribed)}
-          onClick={() => void update("preferences")}>Apply inbox preferences to delivery</button>
       </div>}
+      {status && channels.map(([channel, label]) => {
+        const saved = status[channel].preferences;
+        const revision = status[channel].preferenceRevision;
+        if (!saved || !revision) return null;
+        const draft = drafts[channel];
+        const stale = !!draft && draft.revision !== revision;
+        const prefs = draft?.preferences ?? saved;
+        const edit = (changes: Partial<DeliveryPreferences>) => setDrafts(previous => ({
+          ...previous, [channel]: {
+            preferences: { ...(previous[channel]?.preferences ?? saved), ...changes },
+            revision: previous[channel]?.revision ?? revision,
+          },
+        }));
+        return <fieldset key={channel} disabled={working} className="mt-3 rounded-panel border border-line p-3">
+          <legend className="px-1 font-medium">{label} preferences</legend>
+          <NotificationPreferenceFields preferences={prefs} change={edit} />
+          <label className="flex min-h-11 items-center gap-2">
+            <input type="checkbox" checked={prefs.urgent} onChange={event => edit({ urgent: event.target.checked })} />Urgent approvals and errors
+          </label>
+          <p className="text-muted">Quiet hours use {prefs.zone}.</p>
+          <p className="text-muted">Enabled urgent alerts can arrive during quiet hours.</p>
+          {stale && <p role="status">These saved preferences changed elsewhere. Start again from the current settings.</p>}
+          <div className="flex flex-wrap gap-2 pt-2">
+            <button type="button" className="min-h-11 rounded-panel border border-line px-3"
+              disabled={!draft || stale} onClick={() => void update("preferences", channel)}>Save {label.toLowerCase()} preferences</button>
+            {draft && <button type="button" className="min-h-11 px-3"
+              onClick={() => setDrafts(previous => ({ ...previous, [channel]: undefined }))}>Discard {label.toLowerCase()} changes</button>}
+          </div>
+        </fieldset>;
+      })}
       {status?.email.address && <p className="break-all pt-2">Verified account email: {status.email.address}</p>}
       {status && <><DeliveryReceipt label="Browser push" channel={status.push} /><DeliveryReceipt label="Account email" channel={status.email} /></>}
       {message && <p className="py-2" role="status">{message}</p>}

@@ -848,7 +848,9 @@
           "requires": [
             "t.user_id=$1",
             "account.emailVerified",
-            "parseDeviceSubscription(body.subscription)"
+            "parseDeviceSubscription(body.subscription)",
+            "device_id is not distinct from $3::uuid and preference_revision=$5::uuid",
+            "d.preference_revision=t.preference_revision"
           ]
         }
       ]

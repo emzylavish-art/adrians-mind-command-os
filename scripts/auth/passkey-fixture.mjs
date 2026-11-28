@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { randomBytes } from "node:crypto";
+import { createECDH, randomBytes } from "node:crypto";
 import { once } from "node:events";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -18,6 +18,8 @@ const origin = "http://localhost:" + port;
 const auth = origin + "/api/auth";
 const settings = "/?section=settings&pane=sessions";
 let browser;
+const pushKeys = createECDH("prime256v1");
+const publicKey = pushKeys.generateKeys().toString("base64url");
 const mailLog = resolve(directory, "mail.jsonl");
 const mailFixture = resolve(directory, "mail.mjs");
 await writeFile(mailFixture, `import { appendFile } from "node:fs/promises";
@@ -41,6 +43,13 @@ const child = spawn(process.execPath, ["scripts/with-app-env.mjs", "vite", "dev"
     ADRIAN_ACCOUNT_EMAIL_FROM: "Adrian <account@example.test>",
     ADRIAN_ACCOUNT_EMAIL_KEY: "fixture-only",
     NODE_OPTIONS: "--import=" + mailFixture,
+    MIND_NOTIFICATION_EMAIL_FROM: "Adrian <notifications@example.test>",
+    MIND_NOTIFICATION_EMAIL_KEY: "fixture-only",
+    MIND_NOTIFICATION_WORKER_TOKEN: randomBytes(32).toString("hex"),
+    MIND_NOTIFICATION_STORAGE_SECRET: randomBytes(32).toString("hex"),
+    MIND_PUSH_SUBJECT: "mailto:notifications@example.test",
+    MIND_PUSH_PUBLIC_KEY: publicKey,
+    MIND_PUSH_PRIVATE_KEY: pushKeys.getPrivateKey().toString("base64url"),
   },
 });
 
@@ -177,6 +186,39 @@ try {
   assert.equal(new URL(verificationUrl).origin, origin);
   assert.equal((await context.request.get(verificationUrl, { maxRedirects: 0 })).status(), 302);
   assert.equal((await (await context.request.get(origin + "/api/mind/sessions")).json()).recoveryEmail.verified, true);
+  await page.addInitScript(subscription => {
+    Object.defineProperty(Notification, "requestPermission", { value: async () => "granted" });
+    Object.defineProperty(PushManager.prototype, "getSubscription", { value: async () => null });
+    Object.defineProperty(PushManager.prototype, "subscribe", { value: async () => ({ toJSON: () => subscription }) });
+  }, {
+    endpoint: "https://fcm.googleapis.com/fcm/send/fixture",
+    keys: { auth: randomBytes(16).toString("base64url"), p256dh: createECDH("prime256v1").generateKeys().toString("base64url") },
+  });
+  await page.goto(origin + "/?section=settings&pane=notifications", { waitUntil: "domcontentloaded" });
+  await page.getByText("Background push and email", { exact: true }).click();
+  await page.getByRole("button", { name: "Enable account email" }).click();
+  await page.getByRole("button", { name: "Enable push on this browser" }).click();
+  const pushPreferences = page.getByRole("group", { name: "Browser push preferences" });
+  const emailPreferences = page.getByRole("group", { name: "Account email preferences" });
+  await pushPreferences.getByLabel("Activity updates").uncheck();
+  await pushPreferences.getByLabel("Urgent approvals and errors").uncheck();
+  await pushPreferences.getByLabel("Quiet hours start").selectOption("22");
+  await pushPreferences.getByLabel("Quiet hours end").selectOption("7");
+  await pushPreferences.getByRole("button", { name: "Save browser push preferences" }).click();
+  await page.getByText("Browser push preferences saved.", { exact: true }).waitFor();
+  assert.equal(await emailPreferences.getByLabel("Activity updates").isChecked(), true);
+  assert.equal(await emailPreferences.getByLabel("Urgent approvals and errors").isChecked(), true);
+  assert.equal(await emailPreferences.getByLabel("Quiet hours start").inputValue(), "");
+  await emailPreferences.getByLabel("Research reports").uncheck();
+  await emailPreferences.getByRole("button", { name: "Save account email preferences" }).click();
+  await page.getByText("Account email preferences saved.", { exact: true }).waitFor();
+  assert.equal(await pushPreferences.getByLabel("Research reports").isChecked(), true);
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.getByText("Background push and email", { exact: true }).click();
+  assert.equal(await pushPreferences.getByLabel("Activity updates").isChecked(), false);
+  assert.equal(await pushPreferences.getByLabel("Urgent approvals and errors").isChecked(), false);
+  assert.equal(await pushPreferences.getByLabel("Quiet hours end").inputValue(), "7");
+  assert.equal(await emailPreferences.getByLabel("Research reports").isChecked(), false);
 
   await recoveryPage.goto(origin + "/login", { waitUntil: "domcontentloaded" });
   await recoveryPage.getByRole("button", { name: "Forgot password?" }).click();
@@ -227,6 +269,7 @@ try {
     passwordRequiresAuthenticator: true, wrongCodeDenied: true, singleUseRecovery: true, disableReadback: true,
     verifiedRecoveryEmail: true, passwordResetTokenSingleUse: true, resetRevokedOldSession: true, resetPreservedAuthenticator: true,
     resetInvalidatedOtherLinksAndPendingChallenges: true,
+    independentNotificationPreferences: true,
   };
   console.log(JSON.stringify(receipt));
   if (process.env.VISUAL_ARTIFACT_DIR) {
