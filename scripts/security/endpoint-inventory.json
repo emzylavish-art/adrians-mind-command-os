@@ -585,28 +585,27 @@
       "file": "src/routes/api/mind/managed-browser.ts",
       "path": "/api/mind/managed-browser",
       "methods": [
-        "GET",
         "POST"
       ],
       "policy": "owner_origin",
-      "notes": "Verified owner and same origin scope sessions and receipts. Durable claims and emergency stop guard control of an approved browser origin.",
+      "notes": "Verified same-origin browser operations scoped to the signed-in owner, a saved session revision and an operator-approved destination.",
       "evidence": [
         {
           "file": "src/routes/api/mind/managed-browser.ts",
           "requires": [
+            "assertSameOrigin(request)",
             "requireUserId",
-            "assertSameOrigin",
-            "payload.body.owner !== owner",
-            "worker.origins.includes"
+            "parsed.body.owner !== owner",
+            "managedBrowserRequest(await getSql(), owner"
           ]
         },
         {
           "file": "src/lib/mind/managed-browser.server.ts",
           "requires": [
-            "user_id=$2",
-            "mind_control",
-            "and pending=$3",
-            "mind_managed_browser_receipt"
+            "workerId(owner, id)",
+            "where user_id=$1 and session_id=$2",
+            "options.origins.has(target.origin)",
+            "pending=$3"
           ]
         }
       ]

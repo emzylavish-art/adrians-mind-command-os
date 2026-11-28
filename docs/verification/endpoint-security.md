@@ -2,7 +2,7 @@
 
 This checked-in inventory covers every direct route handler and exported TanStack server function discovered from TypeScript AST. A new route, HTTP method, RPC export, removed guard marker or undocumented public exception fails the normal test runner. Guard-source checks establish code reachability contracts; they do not substitute for live penetration testing or prove that a browser/provider/device was exercised.
 
-86 routes · 126 HTTP method contracts · 65 RPC exports.
+86 routes · 125 HTTP method contracts · 65 RPC exports.
 
 ## Shared policies
 
@@ -59,7 +59,7 @@ This checked-in inventory covers every direct route handler and exported TanStac
 | `/api/mind/kimi/session` | GET, POST | owner_origin | Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation. Build and legacy Kimi aliases share the named runtime-specific handler; target selection is explicit. Sources: `src/lib/mind/kimi/acp.server.ts` |
 | `/api/mind/kimi/terminal` | POST | owner_origin | Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation. Build and legacy Kimi aliases share the named runtime-specific handler; target selection is explicit. Sources: `src/routes/api/mind/kimi/terminal.ts` |
 | `/api/mind/kimi/voice` | POST | owner_origin | Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation. Build and legacy Kimi aliases share the named runtime-specific handler; target selection is explicit. Sources: `src/lib/mind/kimi/phase4.server.ts` |
-| `/api/mind/managed-browser` | GET, POST | owner_origin | Verified owner and same origin scope sessions and receipts. Durable claims and emergency stop guard control of an approved browser origin. Sources: `src/routes/api/mind/managed-browser.ts`, `src/lib/mind/managed-browser.server.ts` |
+| `/api/mind/managed-browser` | POST | owner_origin | Verified same-origin browser operations scoped to the signed-in owner, a saved session revision and an operator-approved destination. Sources: `src/routes/api/mind/managed-browser.ts`, `src/lib/mind/managed-browser.server.ts` |
 | `/api/mind/mcp/builtin` | DELETE, GET, POST | owner_origin | Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation. Sources: `src/routes/api/mind/mcp/builtin.ts` |
 | `/api/mind/mcp/call` | POST | owner_origin | Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation. Sources: `src/routes/api/mind/mcp/call.ts` |
 | `/api/mind/mcp/servers` | GET, POST | owner_origin | Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation. Sources: `src/routes/api/mind/mcp/servers.ts` |

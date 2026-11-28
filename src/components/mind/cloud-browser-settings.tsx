@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
+import { ManagedBrowserSettings } from "./managed-browser-settings";
 import { BrowserActivity } from "./browser-activity";
-import { ManagedBrowser } from "./managed-browser";
 import { BrowserEnvironments } from "@/components/mind/browser-environments";
 import {
   browserAddress, browserPermissions, browserPreferencesKey, defaultBrowserPreferences,
-  parseBrowserPreferences, type BrowserPermission, type BrowserPreferences,
+  parseBrowserPreferences, websitePermission, type BrowserPermission, type BrowserPreferences,
 } from "@/lib/mind/browser-permissions";
 
 const labels: Record<BrowserPermission, string> = { ask: "Always ask", allow: "Allow opening", block: "Block" };
@@ -52,7 +52,7 @@ export function CloudBrowserSettings({ owner, halted }: { owner: string | null; 
 
   return <section className="settings-card space-y-5 rounded-panel p-4 text-sm" aria-labelledby="cloud-browser-title">
     <h3 id="cloud-browser-title" className="font-display text-xl font-bold">Cloud browser</h3>
-    <p className="text-muted">Open a site in your own browser or use a configured isolated managed browser for approved sites.</p>
+    <p className="text-muted">Use a personal tab for account actions or request an isolated managed view of a public website.</p>
     <BrowserEnvironments />
     {!key ? <p>Sign in to manage your website permissions.</p> : settings && <>
       <div className="settings-row flex-wrap"><div><p className="font-semibold">Default permissions</p><p className="text-muted">Applies to website handoffs opened through Adrian.</p></div>
@@ -79,8 +79,8 @@ export function CloudBrowserSettings({ owner, halted }: { owner: string | null; 
         </form>
       </fieldset>
       <div><p className="font-semibold">Browser data</p><p className="text-muted">Website cookies stay in the browser you open. Manage or clear them in that browser’s settings.</p></div>
+      {owner && <ManagedBrowserSettings key={owner} owner={owner} halted={halted} canOpen={(url) => websitePermission(settings, url) !== "block"} />}
       <BrowserActivity owner={owner} halted={halted} scope="browser-settings" />
-      {owner && owner !== "dev-user" && <ManagedBrowser key={owner} owner={owner} halted={halted} />}
     </>}
     {key && !settings && notice && <button className={control} type="button" onClick={() => {
       if (!window.confirm("Reset browser permissions for this account on this device?")) return;

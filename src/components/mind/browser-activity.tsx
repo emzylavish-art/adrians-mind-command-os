@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Camera, ChevronRight, ExternalLink, Globe2, ImagePlus } from "lucide-react";
 import { activityStorageKey, readBrowserActivity, websiteOpening, type BrowserActivityRow } from "@/lib/mind/browser-activity";
-import { browserAddress } from "@/lib/mind/browser-permissions";
+import { browserAddress, browserPreferencesKey, parseBrowserPreferences, websitePermission } from "@/lib/mind/browser-permissions";
 import { captureBrowserTab, readScreenshotFile, screenshotFile } from "./media/browser-screenshot";
+import { ManagedBrowserSettings } from "./managed-browser-settings";
 import { InlineImage } from "./media/inline-image";
 
 type AttachmentResult = { ok: true; name: string } | { ok: false; error: string };
@@ -45,6 +46,7 @@ function ScopedBrowserActivity({ owner, storageKey, onAttach, halted }: Props & 
   const frame = useRef<AbortController | null>(null);
   const active = useRef<BrowserActivityRow[]>([]);
   const [rows, setRows] = useState<BrowserActivityRow[]>([]);
+  const [managed, setManaged] = useState(false);
   const [address, setAddress] = useState("");
   const [notice, setNotice] = useState("");
   const [websiteNotice, setWebsiteNotice] = useState("");
@@ -152,6 +154,7 @@ function ScopedBrowserActivity({ owner, storageKey, onAttach, halted }: Props & 
   }
 
   const showWebsite = useCallback((initial = "", resume: typeof pending = null) => {
+    setManaged(false);
     setPending(resume);
     setAddress(initial);
     setWebsiteNotice("");
@@ -276,19 +279,32 @@ function ScopedBrowserActivity({ owner, storageKey, onAttach, halted }: Props & 
       })}
     </ol>}
     <dialog ref={website} aria-labelledby={titleId} className="fixed inset-x-3 bottom-4 top-auto m-auto w-[calc(100%-1.5rem)] max-w-lg max-h-[88dvh] overflow-auto rounded-panel border border-line bg-surface p-4 text-fg backdrop:bg-black/65 sm:inset-y-0 sm:bottom-0"
-      onClose={() => captureOpener.current?.focus({ preventScroll: true })}
+      onClose={() => { setManaged(false); captureOpener.current?.focus({ preventScroll: true }); }}
       onCancel={event => { event.preventDefault(); void endHandoff(false); }}>
-      <div className="flex min-w-0 items-center gap-3"><Globe2 size={23} aria-hidden="true" /><h2 className="text-lg font-semibold" id={titleId}>{pending ? "Continue in your browser" : "Open a website"}</h2></div>
+      <div className="flex min-w-0 items-center gap-3"><Globe2 size={23} aria-hidden="true" /><h2 className="text-lg font-semibold" id={titleId}>{pending ? "Continue in your browser" : managed ? "Managed browser" : "Open a website"}</h2></div>
       {pending ? <div className="mt-3 space-y-3">
         <p className="break-all text-sm font-medium">{pending.origin}</p>
         <p className="text-sm text-muted">Check your browser for the new tab. If the website asks you to sign in, enter your details on its own page. Return here when you’re finished.</p>
         {websiteNotice && <p role="status" className="text-sm text-danger">{websiteNotice}</p>}
         <div className="flex flex-wrap gap-2"><button ref={returnButton} type="button" className={control + " bg-accent text-accent-ink"} onClick={() => void endHandoff(true)}>I’m back</button><button type="button" className={control} onClick={() => void endHandoff(false)}>End handoff</button><button type="button" className={control} onClick={() => website.current?.close()}>Close panel</button></div>
+      </div> : managed && owner ? <div className="mt-3 space-y-3">
+        <ManagedBrowserSettings owner={owner} halted={halted} initialAddress={address} canOpen={url => {
+          try { return websitePermission(parseBrowserPreferences(localStorage.getItem(browserPreferencesKey(owner))), url) !== "block"; }
+          catch { return false; }
+        }} onScreenshot={(image, title) => {
+          setReviewNotice("");
+          setDraft({ title, image });
+          viewer.current?.showModal();
+        }} />
+        <button type="button" className={control} onClick={() => setManaged(false)}>Personal browser</button>
+        <button type="button" className={control} onClick={() => website.current?.close()}>Close panel</button>
       </div> : <form className="mt-3 space-y-3" onSubmit={event => { event.preventDefault(); openWebsite(); }}>
         <label className="block space-y-1 text-sm"><span>Website address</span><input value={address} onChange={event => { setAddress(event.target.value); setWebsiteNotice(""); }} type="text" inputMode="url" spellCheck={false} autoCapitalize="off" autoComplete="off" placeholder="https://example.com" className="min-h-11 w-full rounded-panel border border-line bg-bg px-3" maxLength={4096} /></label>
         {browserAddress(address) && <p className="break-all text-xs text-muted">{browserAddress(address)?.origin}</p>}
         {websiteNotice && <p role="status" className="text-sm text-danger">{websiteNotice}</p>}
-        <div className="flex flex-wrap gap-2"><button type="submit" className={control + " bg-accent text-accent-ink"} disabled={!address.trim() || halted}>Open in browser <ExternalLink size={15} aria-hidden="true" /></button><button type="button" className={control} onClick={() => website.current?.close()}>Cancel</button></div>
+        <div className="flex flex-wrap gap-2"><button type="submit" className={control + " bg-accent text-accent-ink"} disabled={!address.trim() || halted}>Open in browser <ExternalLink size={15} aria-hidden="true" /></button>
+          {owner && <button type="button" className={control} onClick={() => setManaged(true)}>Managed browser</button>}
+          <button type="button" className={control} onClick={() => website.current?.close()}>Cancel</button></div>
       </form>}
     </dialog>
     <dialog ref={viewer} aria-label="Review screenshot" className="fixed inset-0 m-auto max-h-[92dvh] w-[calc(100%-1.5rem)] max-w-3xl rounded-panel border border-line bg-surface p-4 text-fg backdrop:bg-black/70"
