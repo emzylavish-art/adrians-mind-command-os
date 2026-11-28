@@ -52,6 +52,11 @@ function readDraftEdits(storage, scope) {
 function writeDraftEdits(storage, scope, edits) {
   storage.setItem(draftStoreKey(scope), JSON.stringify(edits || {}));
 }
+function forgetDraftEdits(storage, scope) {
+  if (!storage || !scope) return false;
+  storage.removeItem(draftStoreKey(scope));
+  return true;
+}
 function shouldApplyRead(requested, current) {
   return String(current?.base || "").trim() === String(requested?.base || "").trim()
     && String(current?.secret || "").trim() === String(requested?.secret || "").trim();
@@ -134,6 +139,23 @@ $("#save-connect").onclick = () => {
   forget(localStorage,"adrian-secret");
   viewVersion += 1;
   void refresh(true);
+};
+$("#sign-out").onclick = () => {
+  const scopes = [];
+  const verifiedScope = currentEditScope();
+  if (verifiedScope) scopes.push(verifiedScope);
+  const typedBase = String(baseInput.value || "").trim().replace(/\/$/, "");
+  if (typedBase) scopes.push(editScope(typedBase, secretInput.value));
+  for (const scope of new Set(scopes)) forgetDraftEdits(localStorage, scope);
+  edited.clear();
+  editScopeSeen = "";
+  verified = {base: "", secret: ""};
+  secretInput.value = "";
+  forget(sessionStorage, "adrian-secret");
+  fresh = false;
+  activeRefresh?.abort();
+  data = {leads:[], drafts:[], campaigns:[], pipeline:[]};
+  forgetDisplayedCustomers("Signed out. Unsaved replies for this connection were discarded.");
 };
 async function call(path, options={}, destination=null) {
   const choice = destination || destinationFor(options.method, {base: baseInput.value, secret: secretInput.value}, verified);
