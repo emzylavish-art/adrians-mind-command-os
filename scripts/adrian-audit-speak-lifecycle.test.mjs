@@ -1,7 +1,7 @@
 import { loadVoiceStages, VOICE_STAGES_KEY } from "../src/lib/mind/voice/provider-selection.ts";
-import { snapshotImages } from "../src/lib/mind/retry-fidelity.ts";
+import { onceRetry, snapshotImages } from "../src/lib/mind/retry-fidelity.ts";
 import { resolveSendPath } from "../src/lib/mind/composer-modes.ts";
-import { snapshotSpeakRetryParams } from "../src/lib/mind/voice/speak-action.ts";
+import { snapshotSpeakRetryParams, speakRetryLabel } from "../src/lib/mind/voice/speak-action.ts";
 import { createVoiceStagesReceipt, recordVoiceStage, recordVoicePlayback, storeVoiceReceipt } from "../src/lib/mind/voice/stage-receipts.ts";
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -41,6 +41,7 @@ function fixture(overrides = {}) {
   const state = { speaking: false, call: { heard: "", reply: "", error: "" }, activeId: null };
   const context = {
     createVoiceStagesReceipt, recordVoiceStage, recordVoicePlayback, storeVoiceReceipt, loadVoiceStages, snapshotSpeakRetryParams,
+    onceRetry, speakRetryLabel, currentVoiceScope: { current: 'owner-a/chat' },
     activeId: null, effectiveProvider: "gemini", setSpeakingMessageId: () => {}, serverDictationRef: { current: null },
     preferenceStorage: { setItem: () => {}, getItem: key => key === VOICE_STAGES_KEY ? JSON.stringify({ inputProvider: "openai", outputProvider: "browser" }) : (overrides.localStorage ?? storage).getItem(key) },
     currentFreeOnly: { current: false }, voicePipeline: { answerMode: "selected", transcription: "openai", speechOutput: "browser" },
@@ -215,4 +216,75 @@ test("AA003: browser read-aloud outside Speak preserves the saved volume", async
   assert.equal(utterance.volume, 0.25);
   utterance.onend();
   assert.deepEqual(await pending, { ok: true, speech: "played" });
+});
+
+test("Speak retries cached browser playback with the same answer and no second transcript or chat turn", async () => {
+  const statements = [];
+  const host = fixture({ speakWithBrowser: async ({ text }) => {
+    statements.push(text);
+    if (statements.length === 1) throw new Error("Browser blocked playback. Try again.");
+  } });
+  const first = await host.speak("");
+  assert.equal(first.ok, false);
+  assert.equal(host.state.call.reply, "fixture Gemini answer");
+  const recovery = host.state.call.recovery;
+  assert.equal(recovery?.retryLabel, "Retry playback");
+  host.context.currentVoiceScope.current = "owner-a/another-chat";
+  recovery.retry();
+  assert.equal(statements.length, 1);
+  host.context.currentVoiceScope.current = "owner-a/chat";
+  recovery.retry();
+  recovery.retry();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(statements, ["fixture Gemini answer", "fixture Gemini answer"]);
+  assert.equal(host.calls.transcriptions.length, 1);
+  assert.equal(host.calls.answer, 1);
+  assert.equal(host.calls.cloudSpeech, 0);
+  assert.equal(host.state.call.recovery, undefined);
+});
+
+test("Speak retires a submitted prompt when its answer is saved and preserves newly typed text", async () => {
+  for (const nextDraft of ["first question", "new draft typed before the reply"]) {
+    const result = deferred();
+    let draft = "first question";
+    let answer = "";
+    let commit;
+    const ask = callback(stageSource, "ask", {
+      props: { signedIn: true, onAsk: (_text, playback) => { commit = playback.showAnswer; return result.promise; } }, line: draft, asking: false,
+      speakerMutedRef: { current: false }, speechCutRef: { current: false }, outputGeneration: { current: 0 },
+      callGeneration: { current: 0 }, openRef: { current: true },
+      setAsking: () => {}, setShowTranscript: () => {}, setNotice: () => {},
+      setReply: (text) => { answer = text; }, setLine: (update) => { draft = update(draft); },
+    });
+    const pending = ask();
+    draft = nextDraft;
+    commit("Saved written reply");
+    assert.equal(answer, "Saved written reply");
+    result.resolve({ reply: "Saved written reply", error: "Speaker could not play the reply." });
+    await pending;
+    assert.equal(answer, "Saved written reply");
+    assert.equal(draft, nextDraft === "first question" ? "" : nextDraft);
+  }
+});
+
+test("a typed Speak answer with speaker output muted skips synthesis and reports the saved text", async () => {
+  const property = find(commandSource, (node) => ts.isJsxAttribute(node) && node.name.getText(commandSource) === "onAsk" && node.getText(commandSource).includes("context.canSpeak"));
+  const ask = bind(property.initializer.expression, commandSource, {
+    speakChatTurn: async () => ({ ok: true, text: "Saved written reply" }),
+    speakStageOpenRef: { current: true }, wsRef: { current: { halted: false } }, voiceOutput: { current: { muted: true, volume: 1 } },
+    speak: () => assert.fail("Typed reply should not dispatch speech while muted"),
+  });
+  const visible = [];
+  assert.deepEqual(await ask("fixture question", { canSpeak: () => false, showAnswer: (text) => visible.push(text) }), { reply: "Saved written reply", speech: "muted" });
+  assert.deepEqual(visible, ["Saved written reply"]);
+});
+
+test("turn controls allow recording and stopping while the speaker is muted", () => {
+  const control = find(stageSource, (node) => ts.isJsxElement(node) && node.getText(stageSource).startsWith("<button") && node.getText(stageSource).includes('"Stop selected voice turn"'));
+  const disabled = control.openingElement.attributes.properties.find((prop) => prop.name?.getText(stageSource) === "disabled");
+  for (const selectedBusy of [true, false]) {
+    assert.equal(bind(disabled.initializer.expression, stageSource, {
+      props: { selectedBusy }, connecting: false, recordingPending: false, asking: false, speakerMuted: true,
+    }), false);
+  }
 });

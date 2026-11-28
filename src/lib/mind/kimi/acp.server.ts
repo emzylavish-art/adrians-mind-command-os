@@ -12,7 +12,7 @@ import { readBuildSourceReceipt } from "./source-receipt.ts";
 import { createHash } from "node:crypto";
 import { buildRuntimeUsage, observeBuildRuntime, recordUsageObservation, type UsageRecorder } from "../usage-observation.server.ts";
 import { prepareBuildTask } from "./build-guidance.ts";
-import { pairedBuildPayload, pairedBuildReceipt } from "./paired-build-receipt.ts";
+import { pairedBuildPayload, pairedBuildReceipt, pairedBuildReviewScope, pairedBuildRunResult } from "./paired-build-receipt.ts";
 import { dispatchContext, reserveDispatchAttempt, runSettledDispatch } from "../dispatch-attempt.ts";
 import { resolveXaiInferenceApiKey } from "../media/xai-key.ts";
 import { buildBranchName } from "./build-scope.ts";
@@ -51,7 +51,7 @@ export async function handleKimiSession(request: Request, deps: { recordUsage?: 
     if (!origin.ok) return json({ ok: false, error: origin.error }, 403);
     try {
       const ownerId = await ownerIdFromRequest(request);
-      const body = (await request.json().catch(() => ({}))) as { prompt?: unknown; modeInstruction?: unknown; skillApplications?: unknown; cwd?: unknown; mode?: unknown; resumeSessionId?: unknown; fork?: unknown; action?: unknown; agentId?: unknown; jobKey?: unknown; operationId?: unknown; taskId?: unknown; projectId?: unknown; sourceReceipt?: unknown; expectedBranch?: unknown };
+      const body = (await request.json().catch(() => ({}))) as { prompt?: unknown; modeInstruction?: unknown; skillApplications?: unknown; cwd?: unknown; mode?: unknown; resumeSessionId?: unknown; fork?: unknown; action?: unknown; agentId?: unknown; jobKey?: unknown; operationId?: unknown; taskId?: unknown; projectId?: unknown; sourceChatId?: unknown; sourceReceipt?: unknown; expectedBranch?: unknown };
       if ((body as { action?: unknown }).action === "close") {
         if (ownerId !== "dev-user") return json({ ok: false, error: machineRequired }, 409);
         const sessionId = typeof body.resumeSessionId === "string" ? body.resumeSessionId.trim().slice(0, 80) : "";
@@ -160,6 +160,8 @@ export async function handleKimiSession(request: Request, deps: { recordUsage?: 
           package: packageLabel(hosted.command),
         }, accepted ? 200 : hosted.status === "not_configured" ? 503 : 409);
       }
+      const reviewScope = body.sourceChatId === undefined ? null : pairedBuildReviewScope(body.projectId, body.sourceChatId, body.jobKey);
+      if (body.sourceChatId !== undefined && !reviewScope) return json({ ok: false, error: "The Build result link has an invalid chat, project or run. Nothing was started." }, 400);
       const job = await enqueueJob({
         jobKey: typeof body.jobKey === "string" ? body.jobKey : undefined,
         ownerId,
@@ -167,7 +169,7 @@ export async function handleKimiSession(request: Request, deps: { recordUsage?: 
         kind: "kimi-acp",
         command: "kimi acp",
         confirm: false,
-        payload: { ...pairedBuildPayload(prompt, prepared.skillReceipts, requestedCwd), sourceReceipt, ...(expectedBranch ? { expectedBranch } : {}) },
+        payload: { ...pairedBuildPayload(prompt, prepared.skillReceipts, requestedCwd), sourceReceipt, ...(expectedBranch ? { expectedBranch } : {}), ...(reviewScope ? { reviewScope } : {}) },
       });
       await observePairedJob(ownerId, job, record);
       return json({
@@ -189,16 +191,24 @@ export async function handleKimiSession(request: Request, deps: { recordUsage?: 
   if (request.method === "GET") {
     try {
       const ownerId = await ownerIdFromRequest(request);
-      const jobId = new URL(request.url).searchParams.get("jobId") || "";
+      const params = new URL(request.url).searchParams;
+      const jobId = params.get("jobId") || "";
       const job = await readJob(jobId);
       if (!job || job.ownerId !== ownerId || job.kind !== "kimi-acp") return json({ ok: false, error: "Kimi job not found." }, 404);
-      await observePairedJob(ownerId, job, record);
+      const reviewProject = params.get("reviewProject");
+      const review = reviewProject === null ? null : pairedBuildRunResult(job, ownerId, reviewProject || null);
+      if (reviewProject !== null && !review) return json({ ok: false, error: "Build run receipt not found for this project." }, 404);
+      if (!review) await observePairedJob(ownerId, job, record);
       const sourceReceipt = readBuildSourceReceipt(job.payload?.sourceReceipt);
       const events = await listJobEvents(ownerId, job.id);
       const sourceDigest = sourceReceipt?.files.length ? createHash("sha256").update(JSON.stringify(sourceReceipt)).digest("hex") : null;
       const revisionVerified = sourceDigest !== null && events.some(event => event.type === "source_verified"
         && event.payload.sourceDigest === sourceDigest && event.payload.fileCount === sourceReceipt?.files.length
         && (job.payload?.expectedBranch === undefined || event.payload.branch === job.payload.expectedBranch));
+      if (review) {
+        if (review.receipt && revisionVerified && buildBranchName(job.payload?.expectedBranch)) review.receipt.verifiedBranch = job.payload.expectedBranch;
+        return json({ ok: true, result: review });
+      }
       return json({
         ok: true,
         job: {

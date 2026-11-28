@@ -174,7 +174,7 @@ import {
 } from "@/lib/mind/voice/mode-store";
 import { sanitizeAudioFilename } from "@/lib/mind/voice/voice-input";
 import { captureSpeakUtterance } from "@/lib/mind/voice/capture-utterance";
-import { snapshotSpeakRetryParams, type SpeakRetryParams } from "@/lib/mind/voice/speak-action";
+import { snapshotSpeakRetryParams, speakRetryLabel, type SpeakRetryParams } from "@/lib/mind/voice/speak-action";
 import { createVoiceStagesReceipt, recordVoiceStage, recordVoicePlayback, storeVoiceReceipt, type VoiceStagesReceipt } from "@/lib/mind/voice/stage-receipts";
 import { runMountedSpeak } from "@/lib/mind/voice/speak-click";
 import { speakCanRetry } from "@/lib/mind/voice/speak-failures";
@@ -1196,7 +1196,10 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
   const [taskSeconds, setTaskSeconds] = useState(0);
   const voiceOutput = useRef({ muted: false, volume: 1 });
   const browserPlaybackAbort = useRef<AbortController | null>(null);
-  const [speakCall, setSpeakCall] = useState<{ heard: string; reply: string; error: string; answerReceipt?: string }>({ heard: "", reply: "", error: "" });
+  const [speakCall, setSpeakCall] = useState<{
+    heard: string; reply: string; error: string; answerReceipt?: string;
+    recovery?: { scope: string; message: string; retryLabel: string; needsSpeaker: boolean; retry: (() => void) | null };
+  }>({ heard: "", reply: "", error: "" });
   const speakStageOpenRef = useRef(false);
   useEffect(() => {
     if (speakStageOpenRef.current && !speakStageOpen) interruptSpeakPlayback();
@@ -5370,13 +5373,16 @@ ${message.content}`;
     const generation = ++speakGenRef.current;
     const abort = new AbortController();
     speakAbortRef.current = abort;
+    const inSpeakStage = speakStageOpenRef.current;
+    if (inSpeakStage) setSpeakCall((call) => ({ ...call, recovery: undefined }));
     setSpeaking(true);
     setSpeakingMessageId(messageId || null);
     setAvatarPresence("processing");
     let speechFailed = false;
     let speechError = "";
+    const stageRecovery: { retry: (() => void) | null } = { retry: null };
     let spokeProvider = "";
-    let browserReply = "";
+    let browserReply = outputProvider === "browser" ? replay?.reply ?? "" : "";
     let muted = false;
     const current = () => generation === speakGenRef.current && !abort.signal.aborted && turnOwner.current === draftOwner && !wsRef.current.halted;
     if (!speakStageOpenRef.current) {
@@ -5406,7 +5412,7 @@ ${message.content}`;
       try { const result = await action(); voiceReceipt = recordVoiceStage(voiceReceipt, stage, { ...result, ok: result.ok === true }); persistVoiceEvidence(); return result; }
       catch (cause) { voiceReceipt = recordVoiceStage(voiceReceipt, stage, { ok: false }); persistVoiceEvidence(); throw cause; }
     };
-    await runMountedSpeak({
+    const mounted = await runMountedSpeak({
       inputProvider, outputProvider, answerProvider,
       text,
       messageId,
@@ -5521,8 +5527,9 @@ ${message.content}`;
       reportFailure: (message, action, target, retry) => {
         speechFailed = true;
         speechError = message;
+        stageRecovery.retry = onceRetry(retry);
         setAvatarPresence("error");
-        reportFailure(message, action, target, retry);
+        reportFailure(message, action, target, stageRecovery.retry);
         setFailure((current) => (current ? { ...current, kind: (classifyHonestFailure(message) ?? (action as HonestFailureKind)) } : current));
       },
       clearFailure,
@@ -5531,6 +5538,16 @@ ${message.content}`;
       },
     });
     if (!current()) return { ok: false as const, error: "The voice request was interrupted." };
+    if (inSpeakStage && speakStageOpenRef.current && speechFailed) {
+      const scope = currentVoiceScope.current;
+      const retry = stageRecovery.retry;
+      setSpeakCall((call) => ({ ...call, recovery: {
+        scope, message: speechError, retryLabel: speakRetryLabel(mounted.params), needsSpeaker: mounted.params.chatCommitted,
+        retry: retry && (() => {
+          if (current() && speakStageOpenRef.current && currentVoiceScope.current === scope) retry();
+        }),
+      } }));
+    }
     if (muted && voiceReceipt.playback === "pending") voiceReceipt = recordVoicePlayback(voiceReceipt, "not_requested");
     if (muted && voiceReceipt.output.state === "pending") voiceReceipt = { ...voiceReceipt, playback: "not_requested", output: { ...voiceReceipt.output, state: "not_requested" } };
     for (const stage of ["input", "answer", "output"] as const) if (voiceReceipt[stage].state === "pending") voiceReceipt = { ...voiceReceipt, [stage]: { ...voiceReceipt[stage], state: "not_requested" } };
@@ -9679,12 +9696,15 @@ ${message.content}`;
         spoken={speakCall.reply}
         answerReceipt={speakCall.answerReceipt}
         callError={speakCall.error}
+        recovery={speakCall.recovery?.scope === voiceScope ? speakCall.recovery : undefined}
         halted={ws.halted}
         onEmergencyStop={() => { void pressEmergencyStop(); }}
         onClearStop={() => { void clearEmergencyStop(); }}
         onAsk={async (text, context) => {
           const turn = await speakChatTurn(text, { stay: true });
           if (!turn.ok) return { error: turn.error };
+          context.showAnswer(turn.text);
+          if (speakStageOpenRef.current && !wsRef.current.halted && (voiceOutput.current.muted || voiceOutput.current.volume === 0)) return { reply: turn.text, speech: "muted" as const };
           if (!speakStageOpenRef.current || wsRef.current.halted || !context.canSpeak()) return { reply: turn.text, error: "The answer was saved. Playback was canceled before speech synthesis." };
           const spoken = await speak(turn.text, "replyReceipt" in turn ? turn.replyReceipt?.messageId : undefined);
           if (!spoken?.ok) return { reply: turn.text, error: spoken?.error || "The reply was written, but it was not spoken." };

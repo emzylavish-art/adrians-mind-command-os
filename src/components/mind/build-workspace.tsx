@@ -140,10 +140,25 @@ export function BuildWorkspace(props: BuildWorkspaceProps = {}) {
 function BuildRunReview({ owner, projectId, runId, onBack }: { owner?: string; projectId: string | null; runId: string; onBack: () => void }) {
   const [result, setResult] = useState<BuildStoredResult | null>();
   useEffect(() => {
+    const accountId = owner;
+    if (!accountId) { setResult(null); return; }
+    const controller = new AbortController();
+    const matchesRun = (saved: BuildStoredResult | null) => saved?.source?.runId === runId && canReturnBuildResult(saved.job, saved.source);
     try {
-      const saved = owner ? parseBuildResult(localStorage.getItem(workRunStorageKey(owner, projectId, runId)), owner, projectId) : null;
-      setResult(saved?.source?.runId === runId && canReturnBuildResult(saved.job, saved.source) ? saved : null);
-    } catch { setResult(null); }
+      const saved = parseBuildResult(localStorage.getItem(workRunStorageKey(accountId, projectId, runId)), accountId, projectId);
+      if (matchesRun(saved)) { setResult(saved); return; }
+    } catch { /* A paired run can be reopened without this browser's local copy. */ }
+    async function load(accountId: string) {
+      const query = new URLSearchParams({ jobId: runId, reviewProject: projectId ?? "" });
+      try {
+        const response = await fetch(`/api/mind/build/session?${query}`, { credentials: "include", cache: "no-store", signal: AbortSignal.any([controller.signal, AbortSignal.timeout(12_000)]) });
+        const body = response.ok ? await response.json() as { result?: BuildStoredResult } : null;
+        const saved = body?.result ? parseBuildResult(JSON.stringify(body.result), accountId, projectId) : null;
+        if (!controller.signal.aborted) setResult(matchesRun(saved) ? saved : null);
+      } catch { if (!controller.signal.aborted) setResult(null); }
+    }
+    void load(accountId);
+    return () => controller.abort();
   }, [owner, projectId, runId]);
   return <section className="dense-card min-w-0 space-y-3" aria-label="Saved Build run">
     <button type="button" className="min-h-11 underline" onClick={onBack}>Back to Work draft</button>
@@ -292,10 +307,14 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
   }
 
   const pollSequence = useRef(0);
+  const inFlightPoll = useRef<{ jobId: string; sequence: number } | null>(null);
   async function refreshJob(jobId: string) {
+    if (inFlightPoll.current?.jobId === jobId && inFlightPoll.current.sequence === pollSequence.current) return;
     const sequence = ++pollSequence.current;
+    const flight = { jobId, sequence };
+    inFlightPoll.current = flight;
     try {
-      const response = await fetch(`/api/mind/build/session?jobId=${encodeURIComponent(jobId)}`, { credentials: "include", cache: "no-store" });
+      const response = await fetch(`/api/mind/build/session?jobId=${encodeURIComponent(jobId)}`, { credentials: "include", cache: "no-store", signal: AbortSignal.timeout(12_000) });
       const data = (await response.json()) as { ok?: boolean; job?: BuildJob; receipt?: BuildStoredReceipt | null; sourceReceipt?: BuildSourceReceipt | null; revisionVerified?: boolean; events?: BuildEvent[]; error?: string };
       if (!mounted.current || sequence !== pollSequence.current) return;
       if (!response.ok || !data.ok || data.job?.id !== jobId) {
@@ -304,12 +323,14 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
       }
       setJob(data.job);
       setBuildReceipt(data.receipt ?? null);
-      if (data.sourceReceipt) setExecutionReceipt({ ...data.sourceReceipt, checked: data.revisionVerified === true });
+      setExecutionReceipt(data.sourceReceipt ? { ...data.sourceReceipt, checked: data.revisionVerified === true } : null);
       setResultSource(pendingSource.current?.runtime === "paired" && pendingSource.current.runId === jobId ? pendingSource.current : undefined);
       setEvents(Array.isArray(data.events) ? data.events : []);
     } catch {
       if (!mounted.current || sequence !== pollSequence.current) return;
       setNotice("Build session status is temporarily unavailable. No completion was assumed.");
+    } finally {
+      if (inFlightPoll.current === flight) inFlightPoll.current = null;
     }
   }
 
@@ -922,7 +943,7 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
         method: "POST",
         credentials: "include",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ prompt: text, modeInstruction: loadModeInstructions(preferenceStorage).build || undefined, skillApplications: collectAccountSkillApplications(preferenceStorage, text, props.enabledSkills, "build"), sourceReceipt: receipt, agentId: workspace, jobKey, operationId: runId, projectId, expectedBranch: expectedBranch || undefined, cwd: targetCwd || undefined, mode, resumeSessionId: expectedBranch ? undefined : sessionId || undefined }),
+        body: JSON.stringify({ prompt: text, modeInstruction: loadModeInstructions(preferenceStorage).build || undefined, skillApplications: collectAccountSkillApplications(preferenceStorage, text, props.enabledSkills, "build"), sourceReceipt: receipt, agentId: workspace, jobKey, operationId: runId, projectId, sourceChatId: runSource?.runtime === "paired" ? runSource.chatId : undefined, expectedBranch: expectedBranch || undefined, cwd: targetCwd || undefined, mode, resumeSessionId: expectedBranch ? undefined : sessionId || undefined }),
       });
       const data = (await response.json()) as BuildStoredReceipt & { ok?: boolean; jobId?: string; receipt?: BuildStoredReceipt | null; executed?: boolean; error?: string; output?: string; package?: string; sessionId?: string; mode?: string; resumed?: boolean; forkedSessionId?: string; processAlive?: boolean; reused?: boolean };
       if (!mounted.current) return;

@@ -61,6 +61,13 @@ export type SpeakActionDeps = {
   play?: (audio: string) => Promise<void>;
 };
 
+export function speakRetryLabel(params: SpeakRetryParams) {
+  if (params.chatCommitted) return params.audio ? "Retry playback" : "Retry speech output";
+  if (params.answerRequest) return "Retry answer";
+  if (params.inputAudio) return "Retry transcription";
+  return "Retry microphone";
+}
+
 export type SpeakActionResult =
   | { ok: true; replayed: boolean; params: SpeakRetryParams }
   | { ok: false; noop: boolean; kind: HonestFailureKind; message: string; params: SpeakRetryParams };

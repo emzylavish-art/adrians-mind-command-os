@@ -65,7 +65,7 @@ export function SpeakStage(props: {
   micMuted: boolean;
   onMicMute: (muted: boolean) => void;
   recording: boolean;
-  onAsk?: (text: string, playback: { canSpeak: () => boolean }) => Promise<string | null | { reply?: string; error?: string; speech?: "played" | "muted" }>;
+  onAsk?: (text: string, playback: { canSpeak: () => boolean; showAnswer: (text: string) => void }) => Promise<string | null | { reply?: string; error?: string; speech?: "played" | "muted" }>;
   attachments?: { name: string }[];
   onAttachImage?: (file: File) => Promise<{ ok: true; name: string } | { ok: false; error: string }>;
   onRemoveAttachment?: (index: number) => void;
@@ -79,6 +79,7 @@ export function SpeakStage(props: {
   spoken?: string;
   answerReceipt?: string;
   callError?: string;
+  recovery?: { message: string; retryLabel: string; needsSpeaker: boolean; retry: (() => void) | null };
 }) {
   const preferenceStorage = useAccountPreferences();
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -265,7 +266,7 @@ export function SpeakStage(props: {
   async function startLive() {
     if (props.freeOnly) { setNotice("Free-only mode keeps xAI realtime voice off."); return; }
     if (!props.signedIn) { props.onSignIn(); return; }
-    if (props.halted || connecting || props.live) return;
+    if (props.halted || connecting || props.live || props.selectedBusy || asking) return;
     const generation = callGeneration.current;
     setNotice(null);
     setConnecting(true);
@@ -350,32 +351,39 @@ export function SpeakStage(props: {
   }
 
   async function ask() {
-    const text = line.trim() || (props.attachments?.length ? "Describe the attached image." : "");
-    if (!text || !props.onAsk || asking || props.halted) return;
+    const submitted = line;
+    const text = submitted.trim() || (props.attachments?.length ? "Describe the attached image." : "");
+    if (!text || !props.onAsk || asking || props.selectedBusy || props.halted) return;
     if (!props.signedIn) { props.onSignIn(); return; }
     const generation = callGeneration.current, output = outputGeneration.current;
     const isCurrent = () => openRef.current && generation === callGeneration.current && !speechCutRef.current;
     const canSpeak = () => isCurrent() && output === outputGeneration.current && !speakerMutedRef.current;
+    let written = false;
+    const clearSentLine = () => setLine((current) => current === submitted ? "" : current);
+    const showAnswer = (answer: string) => {
+      if (!isCurrent()) return;
+      written = true;
+      setReply(answer);
+      clearSentLine();
+    };
     setAsking(true);
     setShowTranscript(true);
     setReply("");
     setNotice(speakerMutedRef.current ? "Adrian is answering. The reply will remain written while the speaker is muted." : "Adrian is answering. The reply will be spoken.");
     try {
-      const result = await props.onAsk(text, { canSpeak });
+      const result = await props.onAsk(text, { canSpeak, showAnswer });
       if (!isCurrent()) return;
       if (result && typeof result === "object") {
-        setReply(result.reply ?? "");
+        if (result.reply) showAnswer(result.reply);
         setNotice(result.error ?? (result.speech === "muted" ? "Reply saved. Speaker muted." : result.reply ? "Spoken." : "The reply did not include text."));
-        if (!result.error) setLine("");
+        if (!written && !result.error) clearSentLine();
       } else {
-        setReply("");
         setNotice(result ?? "Spoken.");
-        if (!result) setLine("");
+        if (!result) clearSentLine();
       }
     } catch {
       if (!isCurrent()) return;
-      setReply("");
-      setNotice("The reply did not finish. Nothing was spoken.");
+      setNotice(written ? "The written reply is saved. Playback did not finish." : "The reply did not finish. Nothing was spoken.");
     } finally {
       if (isCurrent()) setAsking(false);
     }
@@ -421,13 +429,17 @@ export function SpeakStage(props: {
         <div className="speak-call__symbol" aria-hidden="true"><AudioLines /></div>
         <h2>Speak with Adrian</h2>
         <p role="status" data-testid="speak-status">{status}</p>
-        {!props.live && props.onSelectedSpeak && <button type="button" className="speak-call__place" disabled={props.freeOnly || props.halted || connecting || recordingPending || props.recording || speakerMuted} onClick={() => { if (!props.signedIn) props.onSignIn(); else if (props.selectedBusy) props.onStopSelected?.(); else void props.onSelectedSpeak?.(); }}>{props.selectedBusy ? "Stop selected voice turn" : "Speak with chat model"}</button>}
+        {!props.live && props.onSelectedSpeak && <button type="button" className="speak-call__place" disabled={!props.selectedBusy && (props.freeOnly || props.halted || connecting || recordingPending || props.recording || asking)} onClick={() => { if (props.selectedBusy) props.onStopSelected?.(); else if (!props.signedIn) props.onSignIn(); else { setReply(""); setShowTranscript(true); void props.onSelectedSpeak?.(); } }}>{props.selectedBusy ? "Stop selected voice turn" : "Speak with chat model"}</button>}
         {!props.live && props.selectedRoute && <p className="speak-call__transcript">{props.selectedRoute}. One recorded turn uses these selected stages. Playback and transcription are reported separately.</p>}
-        {!props.live && <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" disabled={props.halted || props.selectedBusy || connecting || recordingPending || props.recording} onClick={() => void startLive()}>{!props.signedIn ? "Sign in for xAI realtime" : connecting ? "Connecting to xAI…" : "Start xAI realtime"}</button>}
+        {!props.live && <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" disabled={props.halted || props.selectedBusy || connecting || recordingPending || props.recording || asking} onClick={() => void startLive()}>{!props.signedIn ? "Sign in for xAI realtime" : connecting ? "Connecting to xAI…" : "Start xAI realtime"}</button>}
         {props.answerReceipt && <p className="speak-call__transcript">Answer from {props.answerReceipt}</p>}
         {props.callError && <p className="speak-call__transcript" role="alert">{props.callError}</p>}
+        {props.recovery && <div className="speak-call__transcript" data-testid="speak-stage-recovery">
+          {notice !== props.recovery.message && <p role="status">{props.recovery.message}</p>}
+          {props.recovery.retry && <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" disabled={props.halted || props.selectedBusy || asking || (props.recovery.needsSpeaker && (speakerMuted || volume === 0))} onClick={() => { setNotice(null); props.recovery?.retry?.(); }}>{props.recovery.retryLabel}</button>}
+        </div>}
         {notice && <p className="speak-call__transcript" data-testid="speak-speech-cut" role="status">{notice}</p>}
-        {showTranscript && transcript && <p className="speak-call__transcript" data-testid="speak-transcript">{transcript}</p>}
+        {(showTranscript || props.recovery) && transcript && <p className="speak-call__transcript" data-testid="speak-transcript">{transcript}</p>}
       </section>
       <div className="speak-call__dock">
       <details className="mx-2 mb-2 max-h-[34dvh] overflow-auto rounded-panel border border-line bg-surface p-2 text-fg"><summary className="min-h-10 cursor-pointer py-2 text-sm">Browser activity and screenshots</summary>{props.browserActivity}</details>
@@ -451,7 +463,7 @@ export function SpeakStage(props: {
       <form className="speak-call__bar" onSubmit={(event) => { event.preventDefault(); void ask(); }}>
         <button type="button" aria-label="Add a file" onClick={() => fileRef.current?.click()}><Plus /></button>
         <input aria-label="Ask Anything" placeholder="Ask Anything" value={line} onChange={(event) => setLine(event.target.value)} />
-        {(line.trim() || attachedNames.length > 0) && <button type="submit" aria-label="Send to Adrian" disabled={asking || props.halted}><ArrowUp /></button>}
+        {(line.trim() || attachedNames.length > 0) && <button type="submit" aria-label="Send to Adrian" disabled={asking || props.selectedBusy || props.halted}><ArrowUp /></button>}
         <button type="button" className="speak-call__end" aria-label="End call" onClick={() => { stopVideo(); props.onClose(); }}><PhoneOff /></button>
       </form>
       {attachedNames.length > 0 ? (
