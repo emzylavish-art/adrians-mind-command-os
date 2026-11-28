@@ -36,8 +36,64 @@ function destinationFor(method, inputs, saved) {
 function connectionDirty() {
   return destinationFor("POST", {base: baseInput.value, secret: secretInput.value}, verified).ok === false && Boolean(verified.base);
 }
+function fingerprint(value) {
+  let hash = 2166136261;
+  for (const char of String(value || "")) hash = Math.imul(hash ^ char.codePointAt(0), 16777619);
+  return (hash >>> 0).toString(16);
+}
+function editScope(base, secret) {
+  return String(base || "").trim().replace(/\/$/, "") + ":" + fingerprint(secret);
+}
+function draftStoreKey(scope) { return "adrian-draft-edits:" + scope; }
+function readDraftEdits(storage, scope) {
+  try { return JSON.parse(storage.getItem(draftStoreKey(scope)) || "{}"); }
+  catch { return {}; }
+}
+function writeDraftEdits(storage, scope, edits) {
+  storage.setItem(draftStoreKey(scope), JSON.stringify(edits || {}));
+}
+function shouldApplyRead(requested, current) {
+  return String(current?.base || "").trim() === String(requested?.base || "").trim()
+    && String(current?.secret || "").trim() === String(requested?.secret || "").trim();
+}
+function currentEditScope() {
+  return verified.base ? editScope(verified.base, verified.secret) : "";
+}
+let editScopeSeen = "";
+function syncEditScope() {
+  const scope = currentEditScope();
+  if (scope === editScopeSeen) return;
+  edited.clear();
+  editScopeSeen = scope;
+}
+function persistEdit(id, text, sourceText) {
+  const scope = currentEditScope();
+  if (!scope) return;
+  const edits = readDraftEdits(localStorage, scope);
+  edits[id] = {text, sourceText: sourceText ?? ""};
+  writeDraftEdits(localStorage, scope, edits);
+}
+function savedEdit(id) {
+  const scope = currentEditScope();
+  if (!scope) return null;
+  return readDraftEdits(localStorage, scope)[id] || null;
+}
 baseInput.value = stored(localStorage,"adrian-base") || (["localhost","127.0.0.1"].includes(location.hostname) ? location.origin : "");
 secretInput.value = secretMeta?.content || stored(sessionStorage,"adrian-secret") || "";
+function forgetDisplayedCustomers(note) {
+  activeRefresh?.abort();
+  fresh = false;
+  data.leads = [];
+  data.drafts = [];
+  syncEditScope();
+  paintList("#today-list", empty("Connection not verified", "Save the connection before sending this action."));
+  paintList("#lead-list", empty("Connection not verified", "Customer records from the previous host are hidden."));
+  paintList("#draft-list", empty("Connection not verified", "Save the connection before sending this action."));
+  document.querySelectorAll("[data-approve],[data-reject],[data-save]").forEach(button => button.disabled = true);
+  if (note) setNote(note);
+}
+baseInput.addEventListener("input", () => { if (verified.base && connectionDirty()) forgetDisplayedCustomers("Save the connection before sending this action."); });
+secretInput.addEventListener("input", () => { if (verified.base && connectionDirty()) forgetDisplayedCustomers("Save the connection before sending this action."); });
 function setNote(text) { $("#action-status").textContent = text; }
 function explain(error) { return error?.message || "The service could not finish this request."; }
 function paintList(selector, markup) {
@@ -127,8 +183,8 @@ function renderAbandoned(items) {
     return;
   }
   panel.hidden = false;
-  panel.innerHTML = '<article class="lead-row"><div><strong>Abandoned delivery attempts</strong><small>Reserved before an interruption. Not sent again automatically.</small></div><p class="excerpt">'
-    + rows.map(item => esc(item.draft_id) + " · " + esc(item.timestamp)).join("<br>")
+  panel.innerHTML = '<article class="lead-row"><div><strong>Delivery needs reconciliation</strong><small>Not sent again automatically.</small></div><p class="excerpt">'
+    + rows.map(item => esc(item.draft_id) + " · " + esc(item.reason || "abandoned_attempt") + " · " + esc(item.timestamp)).join("<br>")
     + '</p></article>';
 }
 function renderLeads() {
@@ -169,8 +225,13 @@ function renderReview() {
       : unsupported ? "No reply adapter for this source. Approval will not send it."
       : stale ? "A newer customer message arrived. Review it before approving this reply." : "";
     const unsaved = connectionDirty();
-    const shown = unsaved ? "Save the connection before sending this action." : notice;
-    const hold = d.action==="draft_held" || unsupported || unverified || stale || unsaved;
+    const saved = savedEdit(id);
+    if (!edited.has(id) && saved?.text) edited.set(id, saved.text);
+    const conflict = Boolean(saved?.sourceText && saved.sourceText !== d.draft_text);
+    const shown = unsaved ? "Save the connection before sending this action."
+      : conflict ? "This reply changed on the service. Review the saved edit before approving it."
+      : notice;
+    const hold = d.action==="draft_held" || unsupported || unverified || stale || unsaved || conflict;
     return '<article class="review-card">'+(shown?'<p class="badge urgent">'+esc(shown)+'</p>':'')+'<h3>'+esc(lead?.display_name || d.account_id)+'</h3><small>'+esc(lead?.campaign || "Campaign unknown")+' · '+esc(d.timestamp)+'</small><div class="review-columns"><div><small>Latest customer message</small><blockquote>'+esc(lead?.latest_message || "Open the conversation to verify its context.")+'</blockquote><button class="secondary" data-lead="'+esc(d.contact_id)+'">Conversation</button></div><label>Your reply<textarea data-draft="'+esc(id)+'" aria-label="Reply for '+esc(lead?.display_name || d.account_id)+'">'+esc(edited.get(id) ?? d.draft_text)+'</textarea></label></div><div class="actions"><button data-approve="'+esc(id)+'" '+(hold?'disabled data-held="true"':'')+'>Approve reply</button><button class="secondary" data-save="'+esc(id)+'">Save revision</button><button class="secondary" data-reject="'+esc(id)+'">Reject</button></div></article>';
   }).join("") || empty("All caught up","Replies appear here when the drafter has prepared them. New leads stay in Today while drafting is unavailable.");
   paintList("#draft-list", reviewMarkup);
@@ -415,8 +476,13 @@ async function refresh(replace = false) {
       "/api/leads", "/api/drafts", "/api/status?include_queues=false",
     ].map(path => call(path, {signal}, destination)));
     if (request.signal.aborted) return;
+    if (!shouldApplyRead(requested, {base: baseInput.value, secret: secretInput.value})) {
+      fresh = false;
+      return;
+    }
     fresh = true;
     verified = {base: destination.base, secret: destination.secret};
+    syncEditScope();
     data.leads = leads.items;
     data.drafts = drafts.items;
     const active = document.activeElement;
@@ -508,6 +574,12 @@ $("#review-next").onclick=()=>changeReview(1);
 $("#search").oninput=()=>{leadPage=0;renderLeads();};
 $("#lead-filter").onchange=()=>{campaignFilter="";renderLeads();};
 document.addEventListener("input",event=>{if(event.target.dataset.draft) edited.set(event.target.dataset.draft,event.target.value);});
+document.addEventListener("input",event=>{
+  if(!event.target.dataset.draft) return;
+  const id = event.target.dataset.draft;
+  const source = data.drafts.find(item => (item.jeff_output?.draft_id || item.id) === id);
+  persistEdit(id, event.target.value, source?.draft_text || "");
+});
 document.addEventListener("click",async event=>{
   const el=event.target.closest("button,a");
   if(!el) return;
@@ -538,6 +610,7 @@ document.addEventListener("click",async event=>{
     const field=el.closest("article")?.querySelector("[data-draft]");
     const body={draft_id:id,text:edited.get(id) ?? field?.value};
     if(el.dataset.acknowledge) body.acknowledge_conversation_at=el.dataset.acknowledge;
+    if(el.dataset.reviewLatest) body.review_latest=true;
     try {
       const result=await call("/api/drafts/revise",{method:"POST",body:JSON.stringify(body)});
       if(result?.status==="draft_pending") edited.delete(id);
@@ -554,6 +627,7 @@ document.addEventListener("click",async event=>{
           button.className="secondary";
           button.dataset.save=id;
           button.dataset.acknowledge=detail.conversation_at;
+          button.dataset.reviewLatest="true";
           button.textContent="I reviewed the new message. Save this reply against it.";
           card.querySelector(".actions").appendChild(button);
         }
