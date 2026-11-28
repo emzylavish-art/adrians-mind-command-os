@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useId, useState, type ReactNode } from "react";
 import { ArrowDown, ArrowUp, ListEnd, ListOrdered, X } from "lucide-react";
 import { CUE_LIMIT, CUE_TEXT_LIMIT, hasCueAttachments, type CuedMessage } from "@/lib/mind/message-cue";
 import { QueueTransferPanel } from "./queue-transfer-panel";
@@ -6,7 +6,7 @@ import type { QueueTransferBinding } from "@/lib/mind/queue-transfer";
 import { ModalOverlay } from "./modal-overlay";
 import "./composer-queue.css";
 
-export function ComposerQueue({ title, items, description, canQueue, canRestore, onQueue, onRemove, onMove, onEdit, onRestore, onPause, deviceTransfer }: {
+export function ComposerQueue({ title, items, description, canQueue, canRestore, onQueue, onRemove, onMove, onEdit, onEditStart, onRestore, onPause, deviceTransfer, renderFollowUp }: {
   title: string;
   items: CuedMessage[];
   description: string;
@@ -16,9 +16,11 @@ export function ComposerQueue({ title, items, description, canQueue, canRestore,
   onRemove: (id: string) => void;
   onMove: (id: string, offset: -1 | 1) => void;
   onEdit: (id: string, text: string) => void;
+  onEditStart?: (id: string) => void;
   onRestore: (id: string) => void;
   onPause?: () => void;
   deviceTransfer?: QueueTransferBinding;
+  renderFollowUp?: (item: CuedMessage) => ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const [edit, setEdit] = useState<{ id: string; text: string } | null>(null);
@@ -65,13 +67,14 @@ export function ComposerQueue({ title, items, description, canQueue, canRestore,
               {item.text && <p className="queue-message">{item.text}</p>}
               <div className="queue-actions">
                 {item.claimed ? <p className="queue-description">Check the conversation for this message before sending it again.</p> : <>
-                  <button type="button" className="queue-action" onClick={() => { onPause?.(); setEdit({ id: item.id, text: item.text }); }}>Edit</button>
+                  <button type="button" className="queue-action" onClick={() => { onPause?.(); onEditStart?.(item.id); setEdit({ id: item.id, text: item.text }); }}>Edit</button>
                   <button type="button" className="queue-action" disabled={!canRestore || (!item.text.trim() && !hasCueAttachments(item.attachments))} onClick={() => { onRestore(item.id); close(); }}>To draft</button>
                   <button type="button" className="queue-icon" aria-label={`Move queued message ${index + 1} up`} disabled={index === 0} onClick={() => onMove(item.id, -1)}><ArrowUp size={16} aria-hidden="true" /></button>
                   <button type="button" className="queue-icon" aria-label={`Move queued message ${index + 1} down`} disabled={index === items.length - 1} onClick={() => onMove(item.id, 1)}><ArrowDown size={16} aria-hidden="true" /></button>
                 </>}
                 <button type="button" className="queue-action" aria-label={`Remove queued message ${index + 1}`} onClick={() => onRemove(item.id)}>{item.claimed ? "Dismiss notice" : "Remove"}</button>
               </div>
+              {!item.claimed && renderFollowUp?.(item)}
             </>}
           </li>)}
         </ol>}

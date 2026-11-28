@@ -21,6 +21,7 @@ import type { ImageAttachment } from "@/lib/mind/media";
 import { ComposerMore, MenuCluster, menuChip } from "@/components/mind/menu-material";
 import { ComposerQueue } from "@/components/mind/composer-queue";
 import { cueMessage, dropCued, EMPTY_CUE, hasCueAttachments, moveCued, readCue, receiveTransferredCue, type CuedMessage, type CueAttachments, type CuedFile } from "@/lib/mind/message-cue";
+import { approvedPlan, canQueuePlan, type QueuedPlanApproval } from "@/lib/mind/kimi/queued-plan";
 import { useComposerDraft } from "@/lib/mind/use-composer-draft";
 import { chatTurnBody, loadModeInstructions } from "@/lib/mind/logic-routes";
 import { checkTurnReceipt, consumeMindTurn, prepareTurnId } from "@/lib/mind/live-turn";
@@ -201,6 +202,9 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
   const [planModel, setPlanModel] = useState("");
   const [planningTier, setPlanningTier] = useState<ModelTier | null>(null);
   const planFlight = useRef(false);
+  const activePlan = useRef<{ id: string; scope: string } | null>(null);
+  const queuedPlan = useRef<(QueuedPlanApproval & { buffers: typeof buffersRef.current; instruction: string }) | null>(null);
+  const [armedPlan, setArmedPlan] = useState<string | null>(null);
   const [legacyReview, setLegacyReview] = useState("");
   const [separatePlan, setSeparatePlan] = useState("");
   const planAttempts = useRef(new Map<string, string>());
@@ -244,6 +248,9 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
   const [mode, setMode] = useState<"default" | "plan" | "auto">("default");
   const [buildReceipt, setBuildReceipt] = useState<BuildStoredReceipt | null>(null);
   const [sessionId, setSessionId] = useState("");
+  const planScope = useRef<string | null>(null);
+  planScope.current = props.ownerId && !props.halted && !props.freeOnly && !sourceChatId
+    ? JSON.stringify([props.ownerId, projectId, cwd, branch, mode, planningTier ?? props.sharedTier ?? "Heavy", selectedFile]) : null;
 
   const assistantText = useMemo(
     () => events.map(updateText).filter(Boolean).join(""),
@@ -734,6 +741,28 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
     setNotice(null);
   }
 
+  function revokePlanApproval(id?: string) {
+    if (!queuedPlan.current || (id && id !== queuedPlan.current.itemId)) return;
+    queuedPlan.current = null;
+    setArmedPlan(null);
+  }
+
+  function renderPlanApproval(item: CuedMessage) {
+    const previous = activePlan.current;
+    if (!previous || previous.scope !== planScope.current || !canQueuePlan(item)) return null;
+    if (armedPlan === item.id) return <button className="queue-action" type="button" onClick={() => revokePlanApproval(item.id)}>Cancel approved follow-up</button>;
+    if (armedPlan) return null;
+    return <details>
+      <summary className="queue-action">Review automatic plan</summary>
+      <p className="queue-description">Send this exact text to Grok after the current plan succeeds in this open tab. This is one model request using the selected planning tier and may incur a charge.</p>
+      <button className="queue-action" type="button" onClick={() => {
+        if (activePlan.current !== previous || previous.scope !== planScope.current || queuedPlan.current) return;
+        queuedPlan.current = { predecessor: previous.id, scope: previous.scope, itemId: item.id, text: item.text, buffers: buffersRef.current, instruction: loadModeInstructions(preferenceStorage).build };
+        setArmedPlan(item.id);
+      }}>Approve one follow-up plan</button>
+    </details>;
+  }
+
   const canRestoreTask = !prompt.trim() && !sourceChatId && !props.composer?.staged && !props.composer?.images.length;
   function receiveDeviceTask(row: CuedMessage) {
     let accepted = false;
@@ -744,19 +773,22 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
     });
     return saved && accepted;
   }
-  const taskQueue = <ComposerQueue title="Work and Build queue" items={queuedTaskRows}
+  const taskQueue = <ComposerQueue title="Work and Build queue" items={armedPlan ? queuedTaskRows.map(row => row.id === armedPlan ? { ...row, paused: false } : row) : queuedTaskRows}
+    renderFollowUp={renderPlanApproval}
     deviceTransfer={props.ownerId && props.deviceQueueEnabled && draftHydrated ? { owner: props.ownerId, scope: { kind: "work", id: projectId }, receive: receiveDeviceTask } : undefined}
     description="Tasks wait in this project. Move one to the composer to review its branch, workspace and action before submitting."
     canQueue={Boolean(props.ownerId && draftHydrated && !props.halted && (prompt.trim() || props.composer?.staged || props.composer?.images.length))}
     canRestore={canRestoreTask && draftHydrated && Boolean(props.ownerId)}
     onQueue={queueTask}
-    onRemove={id => setQueuedTasks(previous => dropCued(readCue(previous), id))}
+    onRemove={id => { revokePlanApproval(id); setQueuedTasks(previous => dropCued(readCue(previous), id)); }}
     onMove={(id, offset) => setQueuedTasks(previous => moveCued(readCue(previous), id, offset))}
+    onEditStart={revokePlanApproval}
     onEdit={(id, text) => setQueuedTasks(previous => readCue(previous).map(row => row.id === id ? { ...row, text: text.trim() } : row))}
     onRestore={id => {
       const row = readCue(queuedTasks).find(item => item.id === id && !item.claimed);
       if (!row || !canRestoreTask || (!row.text.trim() && !hasCueAttachments(row.attachments))) return;
       if (hasCueAttachments(row.attachments) && !props.composer) return;
+      revokePlanApproval(id);
       if (!setQueuedTasks(previous => dropCued(readCue(previous), id))) return;
       setPrompt(row.text);
       props.composer?.replaceAttachments(row.attachments);
@@ -895,23 +927,28 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
     }
   }
 
-  async function planWithGrok(words = prompt, images: unknown[] = props.composer?.images ?? [], github = /^\/github(?:\s|$)/i.test(words)) {
+  async function planWithGrok(words = prompt, images: unknown[] = props.composer?.images ?? [], github = /^\/github(?:\s|$)/i.test(words), queued?: { scope: string; instruction: string; onDispatch: () => void }) {
     if (planFlight.current || props.halted) return;
     const owner = props.ownerId;
     if (props.freeOnly && !github) { setNotice("Free-only is selected. Build has no verified free coding model for this action."); return; }
-    const text = github ? words.trim() : withTaskFile(words);
+    const text = github || queued ? words.trim() : withTaskFile(words);
     if (!text) {
       setNotice("Describe the task before asking Grok for a plan.");
       return;
     }
     planFlight.current = true;
+    const previous = !queued && !github && planScope.current ? { id: crypto.randomUUID(), scope: planScope.current } : null;
+    activePlan.current = previous;
+    let succeeded = false;
+    const revokeWhenHidden = () => { if (document.hidden) revokePlanApproval(); };
+    if (previous) document.addEventListener("visibilitychange", revokeWhenHidden);
     setPlanning(true);
     setNotice(github ? "Contacting GitHub…" : "Asking Grok for a plan.");
     const controller = new AbortController();
     planningController.current = controller;
     const { signal, cleanup } = boundAbortSignal(controller.signal, 30_000);
     try {
-      const carried = github ? [] : workMedia?.images ?? [];
+      const carried = github || queued ? [] : workMedia?.images ?? [];
       if (carried.length + (github ? 0 : images.length) > MAX_IMAGES_PER_TURN) { setNotice("Choose up to four total planning images before submitting."); return; }
       let resolved: ImageAttachment[] = [];
       if (carried.length) {
@@ -922,6 +959,7 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
       if (!mounted.current || signal.aborted || planOwner.current !== owner) return;
       const body = chatTurnBody({
           text: github ? words : `Plan this Adrian Build task. Do not claim any file was written.\n\n${text}`,
+          projectId: github ? undefined : projectId,
           memory: "off",
           modeInstruction: github ? undefined : loadModeInstructions(preferenceStorage).build,
           halted: false,
@@ -957,10 +995,15 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
       setSeparatePlan("");
       id ??= await prepareTurnId("/api/mind/turn", headers, signal);
       if (!mounted.current || planOwner.current !== owner || signal.aborted) return;
+      if (queued && (document.hidden || haltedRef.current || planScope.current !== queued.scope || loadModeInstructions(preferenceStorage).build !== queued.instruction)) {
+        setNotice("The planning context changed. The follow-up is held for review.");
+        return;
+      }
       planAttempts.current.set(key, id);
       try { sessionStorage.setItem(key, id); } catch { /* retained in this tab */ }
       setPlan("");
       setPlanModel("");
+      queued?.onDispatch();
       const result = await consumeMindTurn({
         url: "/api/mind/turn",
         signal,
@@ -981,6 +1024,7 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
       setPlan(result.text);
       setPlanModel(result.model);
       setNotice(github ? "GitHub request completed." : "Grok returned a plan. No file was written.");
+      succeeded = Boolean(result.text.trim());
       return result.text;
     } catch {
       setNotice(github ? "GitHub did not confirm the request. Check the branch before retrying." : "The Grok plan could not be completed.");
@@ -989,7 +1033,32 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
       planningController.current = null;
       planFlight.current = false;
       setPlanning(false);
+      if (previous) document.removeEventListener("visibilitychange", revokeWhenHidden);
+      activePlan.current = null;
+      if (previous && queuedPlan.current?.predecessor === previous.id && mounted.current) {
+        void releaseApprovedPlan({ id: previous.id, succeeded: succeeded && !signal.aborted });
+      }
     }
+  }
+
+  async function releaseApprovedPlan(previous: { id: string; succeeded: boolean }) {
+    const approval = queuedPlan.current;
+    revokePlanApproval();
+    if (!approval || document.hidden || approval.buffers !== buffersRef.current || approval.instruction !== loadModeInstructions(preferenceStorage).build) return;
+    let claimed = false;
+    const saved = setQueuedTasks(current => {
+      const rows = readCue(current);
+      const item = approvedPlan(approval, previous, planScope.current, rows);
+      if (!item) return current;
+      claimed = true;
+      return rows.map(row => row.id === item.id ? { ...row, claimed: true, paused: true } : row);
+    });
+    if (!saved || !claimed) return;
+    let attempted = false;
+    const reply = await planWithGrok(approval.text, [], false, { scope: approval.scope, instruction: approval.instruction, onDispatch: () => { attempted = true; } });
+    if (!mounted.current || planOwner.current !== props.ownerId) return;
+    if (reply) setQueuedTasks(current => dropCued(readCue(current), approval.itemId));
+    else if (!attempted) setQueuedTasks(current => readCue(current).map(row => row.id === approval.itemId ? { ...row, claimed: false, paused: true } : row));
   }
 
   useEffect(() => {
