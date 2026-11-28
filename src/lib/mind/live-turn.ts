@@ -1,3 +1,4 @@
+import type { RequestedReasoningEffort } from "./model-tiers.ts";
 import type { SkillApplicationReceipt } from "./skill-activation.ts";
 import type { ContextReceipt } from "./conversation-context.ts";
 import type { ConsultEvidence, ConsultExecutionReceipt } from "./model-consult.ts";
@@ -12,7 +13,8 @@ export const STOPPED_REPLY = "Stopped listening for this reply. Any received par
 export { CHAT_TIMEOUT_REPLY, CHAT_DISCONNECT_REPLY };
 
 export type LiveTurnResult =
-  | ({ ok: true; text: string; model: string; usage: ModelUsage | null; usedIds: string[]; requestId: string | null; modelTier?: string; resolvedTier?: string; tierReason?: string; memorySaved?: boolean; savedMemoryId?: string | null; provider?: string; requestedModel?: string; credentialFallback?: string | null; contextReceipt?: ContextReceipt; consultation?: ConsultEvidence[]; skillReceipts?: SkillApplicationReceipt[]; delivery?: "streamed" | "buffered"; actualCostMicros?: number; currency?: "USD" } & TurnCallEvidence)
+  | ({ ok: true; text: string; model: string; usage: ModelUsage | null; usedIds: string[]; requestId: string | null; modelTier?: string; requestedReasoningEffort?: RequestedReasoningEffort;
+  resolvedTier?: string; tierReason?: string; memorySaved?: boolean; savedMemoryId?: string | null; provider?: string; requestedModel?: string; credentialFallback?: string | null; contextReceipt?: ContextReceipt; consultation?: ConsultEvidence[]; skillReceipts?: SkillApplicationReceipt[]; delivery?: "streamed" | "buffered"; actualCostMicros?: number; currency?: "USD" } & TurnCallEvidence)
   | ({ ok: false; error: string; code?: TurnErrorCode; deliveryUncertain?: true } & TurnCallEvidence);
 
 export function shouldStoreReply(result: LiveTurnResult): result is Extract<LiveTurnResult, { ok: true }> {
@@ -200,6 +202,7 @@ export async function consumeMindTurn(input: {
           usedIds: event.usedIds,
           requestId: event.requestId,
           modelTier: event.modelTier,
+          requestedReasoningEffort: event.requestedReasoningEffort,
           resolvedTier: event.resolvedTier,
           tierReason: event.tierReason,
           memorySaved: event.memorySaved === true,

@@ -829,6 +829,7 @@ async function dispatchMindTurn(request: Request, userId: string, data: Record<s
         consultation,
         delivery: "streamed",
         modelTier: prepared.modelTier.selected,
+        requestedReasoningEffort: prepared.modelTier.params.reasoning_effort,
         resolvedTier: prepared.modelTier.resolved,
         tierReason: prepared.modelTier.reason,
         images: prepared.images.length,

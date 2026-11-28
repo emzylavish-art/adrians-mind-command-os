@@ -91,6 +91,11 @@ export function NuanceCallCard(props: { halted: boolean }) {
   const generation = useRef(0);
   const mintOnce = useRef(false);
   const tokenIssued = useRef(false);
+  const statusRequest = useRef(0);
+  const saving = useRef(false);
+  const [savingKey, setSavingKey] = useState(false);
+  const [providerReady, setProviderReady] = useState(false);
+  const [checking, setChecking] = useState(false);
   const [configured, setConfigured] = useState(false);
   const [personas, setPersonas] = useState<readonly NuancePersonaChoice[]>(NUANCE_PERSONAS);
   const [persona, setPersona] = useState("sonia");
@@ -102,6 +107,7 @@ export function NuanceCallCard(props: { halted: boolean }) {
   const [live, setLive] = useState(false);
   const [openingMic, setOpeningMic] = useState(false);
   const [transcript, setTranscript] = useState("");
+  const [hasTranscript, setHasTranscript] = useState(false);
 
   async function releaseServerCall(id: string) {
     return fetch("/api/mind/nuance/session", {
@@ -131,6 +137,7 @@ export function NuanceCallCard(props: { halted: boolean }) {
       } catch {
         ended = !!current.id && await releaseServerCall(current.id);
       }
+      if (!ended && generation.current === closing) setProviderReady(false);
       if (generation.current === closing) setStatus(ended ? "The video call ended." : "The connection closed. The provider could not confirm the call ended.");
     }
   }
@@ -148,47 +155,62 @@ export function NuanceCallCard(props: { halted: boolean }) {
     if (props.halted) void hangUp();
   }, [props.halted]);
 
+  async function checkStatus() {
+    const request = ++statusRequest.current;
+    setChecking(true);
+    setProviderReady(false);
+    try {
+      const response = await fetch("/api/mind/nuance/session", { credentials: "same-origin", headers: callHeaders(), cache: "no-store" });
+      if (!response.ok) throw Error();
+      const data = await response.json();
+      if (request !== statusRequest.current) return;
+      const saved = data.configured === true;
+      setConfigured(saved);
+      if (Array.isArray(data.personas) && data.personas.length) setPersonas(data.personas);
+      const ready = saved && data.providerState === "verified" && data.active === 0;
+      setProviderReady(ready);
+      setStatus(!saved ? "Paste a Nuance key to start a video call." : ready
+        ? "Key saved for this account. Nuance verified there are no open calls."
+        : data.active > 0 ? "A video call is already open. End that call, then check again."
+          : data.providerDetail || "The key is saved. Nuance call status is unavailable.");
+    } catch {
+      if (request === statusRequest.current) setStatus("The key and provider status could not be confirmed. Check again.");
+    } finally {
+      if (request === statusRequest.current) setChecking(false);
+    }
+  }
+
   useEffect(() => {
-    let stop = false;
-    void fetch("/api/mind/nuance/session", { credentials: "same-origin", headers: callHeaders(), cache: "no-store" })
-      .then((response) => { if (!response.ok) throw new Error(); return response.json(); })
-      .then((data: { configured?: boolean; personas?: NuancePersonaChoice[]; active?: number | null; providerState?: string; providerDetail?: string | null }) => {
-        if (stop) return;
-        const saved = data.configured === true;
-        setConfigured(saved);
-        if (Array.isArray(data.personas) && data.personas.length > 0) setPersonas(data.personas);
-        const open = typeof data.active === "number" && data.active > 0;
-        setStatus(open
-          ? "A video call is already open. Hang up before starting another."
-          : !saved ? "Paste a Nuance key to start a video call."
-            : data.providerState === "verified" ? "Key saved for this account. Nuance verified there are no open calls."
-              : data.providerDetail || "Key saved for this account. Nuance call status is unavailable.");
-      })
-      .catch(() => {
-        if (!stop) setStatus("The key status could not be read.");
-      });
-    return () => { stop = true; };
+    void checkStatus();
+    return () => { statusRequest.current++; };
   }, []);
 
   async function saveKey() {
+    if (saving.current || live || openingMic) return;
+    saving.current = true;
+    const request = ++statusRequest.current;
+    setChecking(false);
+    setProviderReady(false);
+    setSavingKey(true);
     setStatus("Saving the key.");
     try {
-    const response = await fetch("/api/mind/nuance/key", {
-      method: "POST",
-      credentials: "same-origin",
-      headers: callHeaders(),
-      body: JSON.stringify({ key: keyDraft.trim() }),
-    });
-    const data = await response.json() as { ok?: boolean; configured?: boolean; error?: string };
-    if (!response.ok || data.ok !== true || data.configured !== true) {
-      setStatus(data.error || "The key was not saved.");
-      return;
-    }
-    setConfigured(true);
-    setKeyDraft("");
-    setStatus("Key saved securely for this account.");
+      const response = await fetch("/api/mind/nuance/key", {
+        method: "POST", credentials: "same-origin", headers: callHeaders(),
+        body: JSON.stringify({ key: keyDraft.trim() }),
+      });
+      const data = await response.json();
+      if (request !== statusRequest.current) return;
+      if (!response.ok || data.ok !== true || data.configured !== true) {
+        setStatus(data.error || "The key save could not be confirmed. Check status before retrying.");
+        return;
+      }
+      setKeyDraft("");
+      await checkStatus();
     } catch {
-      setStatus("Save could not be confirmed. Reload to check the saved key.");
+      if (request === statusRequest.current) setStatus("Save could not be confirmed. Check status before retrying.");
+    } finally {
+      saving.current = false;
+      setSavingKey(false);
     }
   }
 
@@ -211,7 +233,7 @@ export function NuanceCallCard(props: { halted: boolean }) {
   }
 
   async function start() {
-    if (props.halted || live || mintOnce.current) return;
+    if (props.halted || !providerReady || saving.current || live || mintOnce.current) return;
     const choice = personas.find((item) => item.id === persona);
     if (!choice?.available) {
       setStatus(choice?.reason || "That persona is not on the Nuance API. Nothing was started.");
@@ -250,7 +272,7 @@ export function NuanceCallCard(props: { halted: boolean }) {
           });
           const data = await response.json() as { token?: string; error?: string };
           if (!response.ok || typeof data.token !== "string") {
-            throw new Error(data.error || "The video call could not start. Nothing was started.");
+            throw new Error(data.error || "The session request could not be confirmed. Check call status before retrying.");
           }
           if (attempt !== generation.current) throw new Error("The call was canceled.");
           return data.token;
@@ -262,12 +284,14 @@ export function NuanceCallCard(props: { halted: boolean }) {
       });
       conversationRef.current = conversation;
       let receivedText = false;
+      let greeted = false;
       conversation.onInterfaceEvent((event) => {
         if (attempt !== generation.current) return;
-        if (event.type === "session.output_transcript.delta" && typeof event.delta === "string") {
+        if (event.type === "session.output_transcript.delta" && typeof event.delta === "string" && event.delta.length > 0) {
           const delta = event.delta;
           const first = !receivedText;
           receivedText = true;
+          if (first) setHasTranscript(true);
           setTranscript(current => (first ? delta : current + delta));
         }
       });
@@ -286,9 +310,13 @@ export function NuanceCallCard(props: { halted: boolean }) {
         if (event.type === "avatar-presented") {
           setStatus(`${choice.name} is on the call. ${choice.name} is an AI.`);
           setMic(conversation.user.audioTrack && !conversation.user.isMuted ? "Microphone is live." : "Waiting for microphone audio.");
+          if (greeted) return;
+          greeted = true;
           void conversation.sendInterfaceEvent({
             type: "response.create",
             response: { instructions: `Greet the owner in one short sentence and say you are ${choice.name}, an AI.` },
+          }).catch(() => {
+            if (attempt === generation.current) setStatus("The greeting could not be confirmed. You can still speak or hang up.");
           });
         }
         if (event.type === "session-ended") {
@@ -307,9 +335,11 @@ export function NuanceCallCard(props: { halted: boolean }) {
       await conversation.connect();
     } catch (error) {
       if (attempt !== generation.current) return;
+      const requestedSession = tokenIssued.current;
+      if (requestedSession) setProviderReady(false);
       const closing = generation.current + 1;
       await hangUp();
-      if (generation.current === closing) setStatus(safeStatus(error, callError(error)));
+      if (generation.current === closing) setStatus(requestedSession ? "The call connection could not be confirmed. Check key and call status before retrying." : safeStatus(error, callError(error)));
     }
   }
 
@@ -323,7 +353,9 @@ export function NuanceCallCard(props: { halted: boolean }) {
       <audio ref={audioRef} autoPlay />
       <p className="mt-2 text-sm" role="status" data-testid="nuance-status">{props.halted ? "Emergency stop is on. The video call stays off." : status}</p>
       <p className="mt-1 text-sm" data-testid="nuance-mic">{mic}</p>
-      {transcript ? <p className="mt-2 text-sm" data-testid="nuance-transcript">{transcript}</p> : null}
+      {hasTranscript && <label className="mt-2 block text-sm">Editable call transcript
+        <textarea className="mt-1 block min-h-24 w-full rounded-panel border border-line bg-transparent p-2" data-testid="nuance-transcript" value={transcript} onChange={event => setTranscript(event.target.value)} />
+      </label>}
       <label className="mt-3 block text-sm" htmlFor="nuance-persona">Persona</label>
       <select
         id="nuance-persona"
@@ -347,15 +379,16 @@ export function NuanceCallCard(props: { halted: boolean }) {
             <button type="button" className="min-h-11 rounded-panel border border-line px-4 text-sm" data-testid="nuance-hangup" onClick={() => void hangUp()}>Hang up</button>
           </>
         ) : (
-          <button type="button" className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50" data-testid="nuance-start" disabled={props.halted || !configured} onClick={() => void start()}>Start video call</button>
+          <button type="button" className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50" data-testid="nuance-start" disabled={props.halted || !configured || !providerReady || savingKey || checking} onClick={() => void start()}>Start video call</button>
         )}
       </div>
+      {!live && !openingMic && <button type="button" className="min-h-11 px-3 text-sm" disabled={savingKey || checking} onClick={() => void checkStatus()}>{checking ? "Checking call status…" : "Check key and call status"}</button>}
       <details className="mt-4 rounded-panel border border-line p-3">
         <summary className="min-h-11 cursor-pointer text-sm">Key</summary>
       <form className="mt-2" aria-label="Nuance key" onSubmit={(event) => { event.preventDefault(); void saveKey(); }}>
         <label className="text-sm" htmlFor="nuance-key">Nuance API key</label>
-        <input id="nuance-key" type="password" autoComplete="off" aria-label="Nuance API key" value={keyDraft} onChange={(event) => setKeyDraft(event.target.value)} placeholder="Paste a new key" className="mt-2 min-h-11 w-full rounded-panel border border-line bg-transparent px-3 text-sm" />
-        <button type="submit" className="mt-2 min-h-11 rounded-panel border border-line px-3 text-sm" data-testid="nuance-save-key">Save key</button>
+        <input id="nuance-key" disabled={savingKey || live || openingMic} type="password" autoComplete="off" aria-label="Nuance API key" value={keyDraft} onChange={(event) => setKeyDraft(event.target.value)} placeholder="Paste a new key" className="mt-2 min-h-11 w-full rounded-panel border border-line bg-transparent px-3 text-sm" />
+        <button type="submit" className="mt-2 min-h-11 rounded-panel border border-line px-3 text-sm" data-testid="nuance-save-key" disabled={savingKey || live || openingMic || !keyDraft.trim()}>{savingKey ? "Saving…" : "Save key"}</button>
       </form>
       </details>
     </section>

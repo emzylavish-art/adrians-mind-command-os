@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import type { Workspace } from "@/lib/mind/types";
 import type { AppUser } from "@/lib/auth/use-current-user";
-import { profileActivity, type ChartInterval } from "@/lib/mind/profile-activity";
+import { profileActivity, profileInsights, type ChartInterval } from "@/lib/mind/profile-activity";
 import { useAccountPreferences } from "./account-preferences-context";
 import { UsageHistory } from "./usage-history";
 
@@ -41,6 +41,7 @@ export function WorkspaceProfile({ account, workspace, onBuild }: { account: App
   const [preview, setPreview] = useState(false);
   const [interval, setInterval] = useState<ChartInterval>("Daily");
   const stats = useMemo(() => profileActivity(workspace, interval), [workspace.usage, workspace.runs, interval]);
+  const insights = useMemo(() => profileInsights(workspace), [workspace.chats, workspace.runs]);
   const max = Math.max(...stats.buckets.map(bucket => bucket.known), 1);
   const projects = workspace.projects.filter(project => !project.archived && project.lifecycle !== "archived");
   const featured = projects.filter(project => profile.projects.includes(project.id));
@@ -88,6 +89,22 @@ export function WorkspaceProfile({ account, workspace, onBuild }: { account: App
       <div role="group" aria-label="Chart interval" className="flex flex-wrap gap-1">{(["Daily", "Weekly", "Cumulative"] as const).map(value => <button className={control + " aria-pressed:bg-fg aria-pressed:text-bg"} type="button" key={value} aria-pressed={interval === value} onClick={() => setInterval(value)}>{value}</button>)}</div>
       <div className="mt-3 flex h-20 items-end gap-px" aria-hidden="true">{stats.buckets.map(bucket => <span key={bucket.date} className="min-w-0 flex-1 rounded-t-sm" style={{ height: Math.max(2, 100 * bucket.known / max) + "%", backgroundColor: bucket.known ? "var(--accent, currentColor)" : "currentColor", opacity: bucket.known ? 1 : .16 }} />)}</div>
       <details className="mt-2 text-xs"><summary className="cursor-pointer py-2">Read chart values</summary><div className="max-h-52 overflow-auto"><table><thead><tr><th>Period (UTC)</th><th>Known tokens</th><th>Receipts</th><th>Incomplete receipts</th></tr></thead><tbody>{stats.buckets.map(bucket => <tr key={bucket.date}><td>{bucket.date}{interval === "Weekly" && " – " + bucket.end}</td><td>{bucket.known}</td><td>{bucket.receipts}</td><td>{bucket.partial}</td></tr>)}</tbody></table></div></details>
+    </section>
+    <section className="rounded-panel border border-line p-4">
+      <h3 className="font-semibold">Top plugins</h3>
+      <p className="text-xs text-muted">Successful Gmail, browser and web search operations in retained agent runs.</p>
+      {insights.plugins.length ? <ol className="list-inside list-decimal">{insights.plugins.map(plugin =>
+        <li key={plugin.name}>{plugin.name} · {plugin.count} {plugin.count === 1 ? "operation" : "operations"}</li>
+      )}</ol> : <p>No matching operation receipts.</p>}
+    </section>
+    <section className="rounded-panel border border-line p-4">
+      <h3 className="font-semibold">Insights</h3>
+      <p className="text-xs text-muted">All retained non-temporary Chat replies in this workspace, excluding inherited copies.</p>
+      <dl>
+        <dt>Fast mode</dt><dd>{insights.tierReceipts ? Math.round(100 * insights.fast / insights.tierReceipts) + "% · " + insights.fast + " of " + insights.tierReceipts + " replies with a recorded tier" : "No resolved tiers recorded."}</dd>
+        <dt>Most requested reasoning effort</dt><dd>{insights.effortReports ? insights.topEfforts.join(" / ") + " · " + Math.round(100 * insights.peakEffort / insights.effortReports) + "% per level among " + insights.effortReports + " completed replies with an explicit request setting" : "No completed replies with a recorded reasoning effort."}</dd>
+        <dt>Skills applied</dt><dd>{insights.skillReports ? insights.distinctSkills + " distinct skills · " + insights.appliedSkills + " instruction applications across " + insights.skillReports + " replies with skill reports" : "No skill reports recorded."}</dd>
+      </dl>
     </section>
     <section className="rounded-panel border border-line p-4"><h3 className="font-semibold">Showcase</h3>{featured.length ? <ul>{featured.map(project => <li key={project.id}>{project.name}</li>)}</ul> : <p className="text-sm text-muted">Choose a project in Edit profile to feature it here.</p>}<button className={control + " mt-2"} type="button" onClick={onBuild}>Create a site in Build</button></section>
     {!account.isDevFallback && <UsageHistory ownerId={account.id} />}

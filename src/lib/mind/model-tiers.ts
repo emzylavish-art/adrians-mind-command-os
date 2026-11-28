@@ -6,6 +6,10 @@ import { environmentModelReadiness, type EnvironmentModelCatalog } from "./envir
  */
 
 export const MODEL_TIERS = ["Auto", "Fast", "Expert", "Heavy", "Build"] as const;
+export type RequestedReasoningEffort = "low" | "medium" | "high" | "xhigh";
+export function readRequestedReasoningEffort(value: unknown): RequestedReasoningEffort | undefined {
+  return value === "low" || value === "medium" || value === "high" || value === "xhigh" ? value : undefined;
+}
 export type ModelTier = (typeof MODEL_TIERS)[number];
 /** Chat models returned by the live xAI key. Image and video models stay out of chat. */
 export const CONNECTED_GROK_MODELS = ["grok-4.3", "grok-4.5", "grok-4.6", "grok-4.7"] as const;

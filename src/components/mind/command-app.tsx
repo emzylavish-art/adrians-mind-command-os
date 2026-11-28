@@ -66,8 +66,9 @@ import { accountOriginalFileStore, prepareLibraryDocument, readAccountOriginal, 
 import { createResearchRunGuard, loadResearchReports, makeResearchReport, researchAttachment, researchReferencesInText, saveResearchReport, type ResearchReport } from "@/lib/mind/research-reports";
 import type { ResearchResult } from "@/lib/mind/research";
 import { WorkspaceProfile } from "./workspace-profile";
+import { useBrowserNotices } from "./browser-notices";
 import { NotificationInbox } from "./notification-inbox";
-import { workspaceNotices, isQuietHour, DEFAULT_NOTIFICATION_PREFERENCES, type NotificationPreferences } from "@/lib/mind/notifications";
+import { workspaceNotices, isQuietHour, notificationIds, readNotificationPreferences, type NotificationPreferences } from "@/lib/mind/notifications";
 import { ARCHIVE_CATEGORIES, selectArchiveCategories, type ArchiveCategory, deleteLocalFile, deleteProject, refreshBotChat } from "@/lib/mind/workspace";
 import { WorkspaceDialog as Overlay } from "./workspace-dialog";
 import type { NotionPage } from "@/lib/mind/notion";
@@ -1480,28 +1481,40 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
   const [accountOpen, setAccountOpen] = chromeMenus.bind("account");
   const accountLabel = account?.isDevFallback ? "Local workspace" : account?.displayName || account?.primaryEmail || "Guest";
   const [bellOpen, setBellOpen] = chromeMenus.bind("notifications");
-  const [readNotices, setReadNotices] = useState<string[]>([]);
-  const [dismissedNotices, setDismissedNotices] = useState<string[]>([]);
-  const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreferences>(DEFAULT_NOTIFICATION_PREFERENCES);
+  function loadNoticeState() {
+    return {
+      owner: preferenceStorage,
+      read: notificationIds(preferenceStorage, "notifications.read.v1"),
+      dismissed: notificationIds(preferenceStorage, "notifications.dismissed.v1"),
+      preferences: readNotificationPreferences(preferenceStorage),
+    };
+  }
+  const [storedNotices, setStoredNotices] = useState(loadNoticeState);
+  const noticeState = storedNotices.owner === preferenceStorage ? storedNotices : loadNoticeState();
+  const { read: readNotices, dismissed: dismissedNotices, preferences: notificationPreferences } = noticeState;
   useEffect(() => {
-    try {
-      const dismissed: unknown = JSON.parse(preferenceStorage.getItem("notifications.dismissed.v1") || "[]");
-      if (Array.isArray(dismissed)) setDismissedNotices(dismissed.filter((id): id is string => typeof id === "string"));
-      const read: unknown = JSON.parse(preferenceStorage.getItem("notifications.read.v1") || "[]");
-      if (Array.isArray(read)) setReadNotices(read.filter((id): id is string => typeof id === "string"));
-      const prefs = JSON.parse(preferenceStorage.getItem("notifications.preferences.v1") || "null") as NotificationPreferences | null;
-      if (prefs) setNotificationPreferences({ completedRuns: prefs.completedRuns !== false, activity: prefs.activity !== false, research: prefs.research !== false, media: prefs.media !== false, quietStart: Number.isInteger(prefs.quietStart) && prefs.quietStart! >= 0 && prefs.quietStart! < 24 ? prefs.quietStart : null, quietEnd: Number.isInteger(prefs.quietEnd) && prefs.quietEnd! >= 0 && prefs.quietEnd! < 24 ? prefs.quietEnd : null });
-    } catch { /* Use visible defaults if browser storage is unavailable. */ }
+    setStoredNotices(loadNoticeState());
+    const keys = ["notifications.read.v1", "notifications.dismissed.v1", "notifications.preferences.v1"]
+      .map(key => preferenceStorage.keyFor?.(key));
+    function sync(event: StorageEvent) {
+      if (event.key === null || keys.includes(event.key)) setStoredNotices(loadNoticeState());
+    }
+    window.addEventListener("storage", sync);
+    return () => window.removeEventListener("storage", sync);
   }, [preferenceStorage]);
   const notifications = useMemo(() => workspaceNotices(ws, notificationPreferences, researchHistory), [ws.runs, ws.schedules, ws.audit, ws.agents, ws.chats, notificationPreferences, researchHistory]);
+  const browserNotices = useBrowserNotices(preferenceStorage, notifications, notificationPreferences);
   const unreadNoticeCount = notifications.filter((entry) => !readNotices.includes(entry.id) && !dismissedNotices.includes(entry.id) && (entry.urgent || !isQuietHour(notificationPreferences, new Date().getHours()))).length;
-  function markNoticesRead(ids: string[]) {
-    const retained = [...new Set([...readNotices, ...ids])].slice(-5000);
-    setReadNotices(retained);
-    try { preferenceStorage.setItem("notifications.read.v1", JSON.stringify(retained)); } catch { setNotice("Read marks apply for this session; browser storage is unavailable."); }
+  function markNotices(field: "read" | "dismissed", ids: string[]) {
+    const key = "notifications." + field + ".v1";
+    const next = [...new Set([...noticeState[field], ...notificationIds(preferenceStorage, key), ...ids])].slice(-5000);
+    setStoredNotices({ ...noticeState, [field]: next });
+    try { preferenceStorage.setItem(key, JSON.stringify(next)); }
+    catch { setNotice("Notification marks apply for this session. Device storage is unavailable."); }
   }
+  function markNoticesRead(ids: string[]) { markNotices("read", ids); }
   function changeNotificationPreferences(next: NotificationPreferences) {
-    setNotificationPreferences(next);
+    setStoredNotices({ ...noticeState, preferences: next });
     try { preferenceStorage.setItem("notifications.preferences.v1", JSON.stringify(next)); } catch { setNotice("Notification preferences apply for this session; browser storage is unavailable."); }
   }
 
@@ -3586,6 +3599,7 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
             consultation: result.consultation,
             skillReceipts: result.skillReceipts,
             deliveryMode: result.delivery,
+            requestedReasoningEffort: result.requestedReasoningEffort,
             resolvedTier: ["Fast", "Expert", "Heavy", "Build"].includes(result.resolvedTier || "") ? result.resolvedTier as Exclude<ModelTier, "Auto"> : undefined,
                       routingMode,
                       ...(result.provider ? { provider: result.provider } : {}),
@@ -7222,7 +7236,7 @@ ${message.content}`;
               {ws.schedules.some((job) => job.lastError) && <button type="button" className="min-h-11 px-3 text-left text-sm text-danger" onClick={() => { setView("scheduled"); closeMenus(); }}>Schedules need attention · Review individual jobs below</button>}
               {!ws.halted && !searchIssue && !alertFailure && !ws.schedules.some((job) => job.lastError) && <p className="px-3 py-2 text-sm text-muted">No current warnings.</p>}
             </MenuGroup>
-            <NotificationInbox notices={notifications} read={readNotices} dismissed={dismissedNotices} onDismiss={(id) => { const next = [...new Set([...dismissedNotices, id])]; setDismissedNotices(next); try { preferenceStorage.setItem("notifications.dismissed.v1", JSON.stringify(next)); } catch { setNotice("Dismissal applies to this session; device storage is unavailable."); } }} onRead={markNoticesRead} onOpen={(entry) => {
+            <NotificationInbox notices={notifications} read={readNotices} dismissed={dismissedNotices} onDismiss={(id) => markNotices("dismissed", [id])} onRead={markNoticesRead} onOpen={(entry) => {
               if (entry.view === "runs") setFocusRunId(entry.target);
               if (entry.view === "activity") { setFocusAuditId(entry.target); setActivityQuery(""); }
               if (entry.view === "scheduled") setCardFocus({ id: `schedule-${entry.target}` });
@@ -7230,14 +7244,17 @@ ${message.content}`;
               if (entry.view === "research") { const report = researchHistory.find((item) => item.id === entry.target); if (report) { setActiveResearchId(report.id); setResearchText(report.question); setResearchReportQuestion(report.question); setResearchNote(report.summary); setResearchCitations(report.citations); setResearchSteps(report.steps); setResearchBand("search"); } }
               setView(entry.view); closeMenus();
             }} />
-            <details className="p-3 text-xs"><summary>Delivery preferences</summary>
+            <details className="p-3 text-xs"><summary>Inbox notification preferences</summary>
               <label className="flex min-h-11 items-center gap-2"><input type="checkbox" checked={notificationPreferences.completedRuns} onChange={(event) => changeNotificationPreferences({ ...notificationPreferences, completedRuns: event.target.checked })} />Completed runs</label>
               <label className="flex min-h-11 items-center gap-2"><input type="checkbox" checked={notificationPreferences.activity} onChange={(event) => changeNotificationPreferences({ ...notificationPreferences, activity: event.target.checked })} />Activity updates</label>
               <label className="flex min-h-11 items-center gap-2"><input type="checkbox" checked={notificationPreferences.research !== false} onChange={(event) => changeNotificationPreferences({ ...notificationPreferences, research: event.target.checked })} />Research reports</label>
               <label className="flex min-h-11 items-center gap-2"><input type="checkbox" checked={notificationPreferences.media !== false} onChange={(event) => changeNotificationPreferences({ ...notificationPreferences, media: event.target.checked })} />Generated media</label>
               <label className="block">Quiet hours start <select className="min-h-11" value={notificationPreferences.quietStart ?? ""} onChange={(event) => changeNotificationPreferences({ ...notificationPreferences, quietStart: event.target.value === "" ? null : Number(event.target.value) })}><option value="">Off</option>{Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{h}:00</option>)}</select></label>
               <label className="block">Quiet hours end <select className="min-h-11" value={notificationPreferences.quietEnd ?? ""} onChange={(event) => changeNotificationPreferences({ ...notificationPreferences, quietEnd: event.target.value === "" ? null : Number(event.target.value) })}><option value="">Off</option>{Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{h}:00</option>)}</select></label>
-              <p>Uses this device's time zone. Approvals and errors remain visible. Push notifications are not enabled by these controls.</p>
+              <button type="button" className="min-h-11 rounded-panel border border-line px-3" disabled={!browserNotices.available} aria-pressed={browserNotices.enabled} onClick={() => void browserNotices.toggle()}>{browserNotices.enabled ? "Disable open-browser alerts" : "Enable open-browser alerts"}</button>
+              <p>{browserNotices.available ? "Browser alerts use the selected inbox events while Adrian is open." : "Open-browser alerts are unavailable in this browser."}</p>
+              {browserNotices.status && <p role="status">{browserNotices.status}</p>}
+              <p>Quiet hours use this device's time zone. Approvals and errors remain visible. Email and closed-browser push delivery are unavailable here.</p>
             </details>
           </AnchoredCard>
         )}

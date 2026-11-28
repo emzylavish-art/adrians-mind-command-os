@@ -1,4 +1,4 @@
-export type PreferenceStorage = Pick<Storage, "getItem" | "setItem" | "removeItem"> & { keyFor?: (key: string) => string };
+export type PreferenceStorage = Pick<Storage, "getItem" | "setItem" | "removeItem"> & { persistent?: boolean; keyFor?: (key: string) => string };
 
 export function accountPreferenceKey(ownerId: string | null, key: string) {
   return `amcos.account-preferences.v1.${encodeURIComponent(ownerId ?? "guest")}.${encodeURIComponent(key)}`;
@@ -8,6 +8,7 @@ export function accountPreferenceKey(ownerId: string | null, key: string) {
 export function accountPreferences(storage: PreferenceStorage | null, ownerId: string | null): PreferenceStorage {
   const transient = new Map<string, string>();
   return {
+    persistent: storage !== null,
     keyFor: (key) => accountPreferenceKey(ownerId, key),
     getItem(key) { return storage ? storage.getItem(accountPreferenceKey(ownerId, key)) : transient.get(key) ?? null; },
     setItem(key, value) { if (storage) storage.setItem(accountPreferenceKey(ownerId, key), value); else transient.set(key, value); },

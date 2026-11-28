@@ -20,8 +20,13 @@ export function StorageSettings({ ws, ready, onOpen }: { ws: Workspace; ready: b
   }
   const bytes = (value:number) => value < 1024 ? value+" B" : value < 1024*1024 ? (value / 1024).toFixed(1)+" KB" : (value / (1024*1024)).toFixed(1)+" MB";
   const totals=Array.from(images.values()), missing=totals.filter(n=>n===null).length;
+  const knownFileSizes = files.map(file => file.bytes).filter(size => Number.isSafeInteger(size) && size >= 0);
+  const fileBytes = knownFileSizes.reduce((sum, size) => sum + size, 0);
+  const imageBytes = totals.reduce<number>((sum, size) => sum + (size ?? 0), 0);
+  const unknownFiles = files.length - knownFileSizes.length;
   return <section className="settings-card rounded-panel p-4 text-sm space-y-3"><h3>Workspace storage</h3>
-    <div className="settings-row"><div><strong>Files</strong><p>{files.length} documents · {bytes(files.reduce((sum,file)=>sum + file.bytes,0))} in recorded file sizes</p></div><button className="min-h-11 rounded-panel border border-line px-3" type="button" onClick={()=>onOpen("files")}>Manage files</button></div>
-    <div className="settings-row"><div><strong>Images</strong><p>{images.size} distinct image references · {bytes(totals.reduce<number>((sum,n)=>sum+(n??0),0))} measured{missing>0 ? ` · ${missing} sizes unavailable`:""}</p></div><button className="min-h-11 rounded-panel border border-line px-3" type="button" onClick={()=>onOpen("media")}>Manage media</button></div>
+    <p>{bytes(fileBytes + imageBytes)} in measured documents and image references. {unknownFiles + missing > 0 && (unknownFiles + missing) + " sizes unavailable. "} Account quota unavailable.</p>
+    <div className="settings-row"><div><strong>Files</strong><p>{files.length} documents · {bytes(fileBytes)} in recorded file sizes{unknownFiles > 0 && " · " + unknownFiles + " sizes unavailable"}</p></div><button className="min-h-11 rounded-panel border border-line px-3" type="button" onClick={()=>onOpen("files")}>Manage files</button></div>
+    <div className="settings-row"><div><strong>Images</strong><p>{images.size} distinct image references · {bytes(imageBytes)} measured{missing>0 ? ` · ${missing} sizes unavailable`:""}</p></div><button className="min-h-11 rounded-panel border border-line px-3" type="button" onClick={()=>onOpen("media")}>Manage media</button></div>
   </section>;
 }

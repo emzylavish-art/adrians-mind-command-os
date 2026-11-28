@@ -32,3 +32,20 @@ export function isQuietHour(preferences: NotificationPreferences, hour: number) 
   if (start === null || end === null || start === end) return false;
   return start < end ? hour >= start && hour < end : hour >= start || hour < end;
 }
+
+export function notificationIds(storage: Pick<Storage, "getItem">, key: string): string[] {
+  try {
+    const ids: unknown = JSON.parse(storage.getItem(key) ?? "[]");
+    return Array.isArray(ids) ? ids.filter((id): id is string => typeof id === "string").slice(-5000) : [];
+  } catch { return []; }
+}
+
+export function readNotificationPreferences(storage: Pick<Storage, "getItem">): NotificationPreferences {
+  try {
+    const value = JSON.parse(storage.getItem("notifications.preferences.v1") ?? "null");
+    if (!value || typeof value !== "object" || Array.isArray(value)) return DEFAULT_NOTIFICATION_PREFERENCES;
+    const hour = (n: unknown) => typeof n === "number" && Number.isInteger(n) && n >= 0 && n < 24 ? n : null;
+    return { completedRuns: value.completedRuns !== false, activity: value.activity !== false,
+      research: value.research !== false, media: value.media !== false, quietStart: hour(value.quietStart), quietEnd: hour(value.quietEnd) };
+  } catch { return DEFAULT_NOTIFICATION_PREFERENCES; }
+}

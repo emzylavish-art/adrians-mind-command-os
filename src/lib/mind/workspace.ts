@@ -12,7 +12,7 @@ import { normalizeConsultation, normalizeConsultAttempts } from "./model-consult
 import { workspaceArchiveManifest } from "./workspace-archive-manifest.ts";
 import { retainActivity } from "./connection-attention.ts";
 import { normalizeRecovery } from "./recovery-inbox.ts";
-import { isModelTier, isConnectedGrokModel } from "./model-tiers.ts";
+import { readRequestedReasoningEffort, isModelTier, isConnectedGrokModel } from "./model-tiers.ts";
 import { emptyFleet, readFleet } from "./fleet.ts";
 import { normalizeBotModel } from "./bot-model.ts";
 import { normalizeBotKnowledge } from "./bot-model.ts";
@@ -277,6 +277,7 @@ function normalizeChat(row: unknown): Chat | null {
         content: msg.content,
         at: str(msg.at, new Date(0).toISOString()),
         model: typeof msg.model === "string" ? msg.model : undefined,
+        ...(readRequestedReasoningEffort(msg.requestedReasoningEffort) ? { requestedReasoningEffort: readRequestedReasoningEffort(msg.requestedReasoningEffort) } : {}),
         ...(isModelTier(msg.resolvedTier) && msg.resolvedTier !== "Auto" ? { resolvedTier: msg.resolvedTier } : {}),
         ...(normalizeContextReceipt(msg.contextReceipt) ? { contextReceipt: normalizeContextReceipt(msg.contextReceipt)! } : {}),
         ...(msg.role === "assistant" && workflowKind(msg.workflowKind) ? { workflowKind: workflowKind(msg.workflowKind) } : {}),
