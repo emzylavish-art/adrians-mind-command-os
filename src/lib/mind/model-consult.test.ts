@@ -91,6 +91,9 @@ it("C2 AA044/090: simple requests make no helper calls, and paid helpers require
   }
   const denied = planModelConsult({ orchestrator: "grok", modules, question: "Review this", helperIds: ["openai"] });
   assert.equal(denied.ok, false);
+  if (!denied.ok) assert.match(denied.error, /OpenAI.*Remove it.*Nothing was sent/);
+  const withoutHelpers = planModelConsult({ orchestrator: "grok", modules, question: "Review this", helperIds: [] });
+  assert.equal(withoutHelpers.ok && withoutHelpers.plan.helpers.length, 0);
   assert.equal(planModelConsult({ orchestrator: "grok", modules, question: "Review this", helperIds: ["openai"], allowPaidHelpers: true }).ok, true);
   assert.equal(planModelConsult({ orchestrator: "grok", modules, question: "Review this", freeOnly: true }).ok, false);
 });

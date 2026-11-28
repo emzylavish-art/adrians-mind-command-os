@@ -548,8 +548,8 @@ export function ChatPane({
               {msg.partialReply ? <details className="mb-3 rounded-panel border border-line p-3" open><summary>Incomplete response · not included as a completed answer</summary><MessageBody text={msg.partialReply} /><button type="button" className="min-h-11 px-3 text-xs" onClick={() => { void navigator.clipboard?.writeText(msg.partialReply!).then(() => setCopiedId(msg.id)).catch(() => setCopyError("Copy failed. Select the text and copy it manually.")); }}>{copiedId === msg.id ? "Copied incomplete response" : "Copy incomplete response"}</button></details> : null}
               {msg.delivery && !(busy && msg.delivery === "submitted" && last?.id === msg.id) && (
                 <p className="mb-1 text-xs text-muted" role="status">
-                  {msg.deliveryRoute && <span>{msg.deliveryRoute.provider} · {msg.deliveryRoute.model ?? msg.deliveryRoute.tier}. </span>}
-                  {msg.delivery === "stopped" ? "Stopped. Received text is retained as incomplete. The provider outcome may still be unknown." : msg.delivery === "failed" ? "The provider did not complete this reply." : "No finished reply was saved. The provider may already have received this message."}
+                  {msg.deliveryRoute && <span>Requested {msg.deliveryRoute.provider} · {msg.deliveryRoute.model ?? msg.deliveryRoute.tier}. </span>}
+                  {msg.delivery === "stopped" ? "Stopped. Received text is retained as incomplete. The provider outcome may still be unknown." : msg.delivery === "failed" ? "No completed reply was saved for this message." : "No finished reply was saved. The provider may already have received this message."}
                 </p>
               )}
               {editingId === msg.id ? (
