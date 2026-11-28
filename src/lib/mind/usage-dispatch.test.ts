@@ -9,6 +9,7 @@ import { test } from "node:test";
 import { runInNewContext } from "node:vm";
 import ts from "typescript";
 import { readJsonObjectBody } from "./request-body.ts";
+import { parseModeInstruction } from "./mode-instructions.ts";
 import { decideFetchSite } from "./request-guard.ts";
 import { recoverableTurnResponse, readTurnRecovery } from "./turn-recovery.ts";
 import { turnErrorCode } from "./turn-error.ts";
@@ -219,7 +220,7 @@ test("C5 actual orchestration records two helpers and one primary without losing
       createChatTurnPreflight: () => async () => null,
       modulesConnectedNow: async () => ["custom:fixture:primary", "openai", "gemini"].map(id => ({ id, label: id, connected: true })),
       planModelConsult, collectConsultHelp, orchestratorInstruction,
-      sanitizeAttachments: () => [], parseModelTierField: () => ({ ok: true }), resolveRequestedRoute: () => ({ ok: true, route: null }),
+      sanitizeAttachments: () => [], parseModeInstruction, parseModelTierField: () => ({ ok: true }), resolveRequestedRoute: () => ({ ok: true, route: null }),
       parseCustomProviderChoice: () => ({ ok: true, model: "primary" }), isHistory: () => true, isNote: () => true,
       checkTurnSize: () => ({ ok: true }), envCheck: () => ({ ok: true }),
       assembleTurn: (body: { consultHelp: string }) => ({ ok: true, messages: [{ role: "system", content: body.consultHelp }], usedIds: [] }),
