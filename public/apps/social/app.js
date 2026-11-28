@@ -151,11 +151,14 @@ $("#sign-out").onclick = () => {
   editScopeSeen = "";
   verified = {base: "", secret: ""};
   secretInput.value = "";
+  baseInput.value = "";
   forget(sessionStorage, "adrian-secret");
+  forget(localStorage, "adrian-secret");
+  forget(localStorage, "adrian-base");
   fresh = false;
   activeRefresh?.abort();
   data = {leads:[], drafts:[], campaigns:[], pipeline:[]};
-  forgetDisplayedCustomers("Signed out. Unsaved replies for this connection were discarded.");
+  forgetDisplayedCustomers("Signed out. The remembered service address and unsaved replies were discarded.");
 };
 async function call(path, options={}, destination=null) {
   const choice = destination || destinationFor(options.method, {base: baseInput.value, secret: secretInput.value}, verified);

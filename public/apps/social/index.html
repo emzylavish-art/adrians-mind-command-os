@@ -135,28 +135,28 @@
 <article class="card"><strong>Permanent stop</strong><p class="meta">A clear stop locks the contact. An ordinary toggle cannot clear it. Write: yes. Send: no.</p></article>
 </div>
 </section></details><details><summary>Diagnostics</summary><section class="panel" data-group="record" id="tools">
-<p class="lead">These are the tools in the application. This page can show them before the PC is connected. None of them delivers a message by itself.</p>
+<p class="lead">These names describe tools on the PC. This list is not a second send path. It does not start a run, queue a reply, approve a draft, or deliver a message.</p>
 <h2>Operate</h2>
 <div class="map">
-<button data-panel="run" type="button"><span>Run</span><strong>Start, Pause, Stop</strong><em>Bookkeeping on the PC. Not a send.</em></button>
-<button data-panel="run" type="button"><span>Run</span><strong>Check for update</strong><em>Asks only. It does not download or install.</em></button>
-<button data-panel="connect" type="button"><span>Connect</span><strong>Save connection</strong><em>Stores the tunnel address and local secret in this browser. A wrong secret writes nothing.</em></button>
+<article class="card"><span>Run</span><strong>Start, Pause, Stop</strong><p>Bookkeeping on the PC. Not a send, and not a control on this page.</p></article>
+<article class="card"><span>Run</span><strong>Check for update</strong><p>Asks only. It does not download or install, and this row does not start that check.</p></article>
+<article class="card"><span>Connect</span><strong>Save connection</strong><p>The real control is in Connections. This row does not store an address or a secret.</p></article>
 </div>
 <h2>Inbox</h2>
 <div class="map">
-<button data-panel="accounts" type="button"><span>Accounts</span><strong>Add account</strong><em>Up to ten. It does not log in and does not send.</em></button>
-<button data-panel="accounts" type="button"><span>Accounts</span><strong>Start, Pause, Stop, Resume</strong><em>One account only. Resume is accepted only after a kill.</em></button>
-<button data-panel="queue" type="button"><span>Queue</span><strong>Refresh score</strong><em>Recalculates a ready contact. It does not send.</em></button>
-<button data-panel="drafts" type="button"><span>Drafts</span><strong>Approve and Reject</strong><em>Approve queues a line. It is sent only after the saved session shows it.</em></button>
+<article class="card"><span>Accounts</span><strong>Add account</strong><p>Up to ten. This row does not log in and does not send.</p></article>
+<article class="card"><span>Accounts</span><strong>Start, Pause, Stop, Resume</strong><p>One account only. This row does not change an account.</p></article>
+<article class="card"><span>Queue</span><strong>Refresh score</strong><p>A score refresh belongs on the PC. This row does not queue or send.</p></article>
+<article class="card"><span>Drafts</span><strong>Approve and Reject</strong><p>Approval stays on the review card. This row does not approve, reject, or send.</p></article>
 </div>
 <h2>Guard and Record</h2>
 <div class="map">
-<button data-panel="limits" type="button"><span>Guard</span><strong>Ceilings and timing</strong><em>Writes settings. It does not send.</em></button>
-<button data-panel="machine" type="button"><span>Guard</span><strong>Machine meters</strong><em>Read only. Blank until the PC answers.</em></button>
-<button data-panel="records" type="button"><span>Record</span><strong>Export and Import</strong><em>Settings text. A bad import fails. It does not send.</em></button>
-<button data-panel="records" type="button"><span>Record</span><strong>Screen capture</strong><em>Not wired. It records nothing.</em></button>
-<button data-panel="records" type="button"><span>Record</span><strong>Local backup, download, restore</strong><em>The file stays encrypted. A wrong restore restores nothing. Nothing is sent.</em></button>
-<button data-panel="records" type="button"><span>Record</span><strong>Remote backup</strong><em>Sends nothing until a remote key is already on the PC.</em></button>
+<article class="card"><span>Guard</span><strong>Ceilings and timing</strong><p>Settings stay on their own controls. This row does not write them and does not send.</p></article>
+<article class="card"><span>Guard</span><strong>Machine meters</strong><p>Read only. Blank until the PC answers. This row does not send.</p></article>
+<article class="card"><span>Record</span><strong>Export and Import</strong><p>The export box is above. This row does not import and does not send.</p></article>
+<article class="card"><span>Record</span><strong>Screen capture</strong><p>Not wired. This row records nothing and sends nothing.</p></article>
+<article class="card"><span>Record</span><strong>Local backup, download, restore</strong><p>The backup controls are above. This row does not restore and does not send.</p></article>
+<article class="card"><span>Record</span><strong>Remote backup</strong><p>Sends nothing until a remote key is already on the PC. This row does not start that backup.</p></article>
 </div>
 <p class="hint">Headed login, the secret command, and the tunnel stay on the PC. The two Jeff files are not downloaded by this page. A blank proof line is not a pass.</p>
 </section></details></section>
