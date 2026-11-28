@@ -27,6 +27,7 @@ import { Route as ApiMindDesktopUpdateRouteImport } from './routes/api/mind/desk
 import { Route as ApiMindDispatchPolicyRouteImport } from './routes/api/mind/dispatch-policy'
 import { Route as ApiMindMemoryPolicyRouteImport } from './routes/api/mind/memory-policy'
 import { Route as ApiMindProvidersRouteImport } from './routes/api/mind/providers'
+import { Route as ApiMindQueueTransferRouteImport } from './routes/api/mind/queue-transfer'
 import { Route as ApiMindReceiptsRouteImport } from './routes/api/mind/receipts'
 import { Route as ApiMindResearchReportsRouteImport } from './routes/api/mind/research-reports'
 import { Route as ApiMindResourcesRouteImport } from './routes/api/mind/resources'
@@ -191,6 +192,11 @@ const ApiMindMemoryPolicyRoute = ApiMindMemoryPolicyRouteImport.update({
 const ApiMindProvidersRoute = ApiMindProvidersRouteImport.update({
   id: '/api/mind/providers',
   path: '/api/mind/providers',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMindQueueTransferRoute = ApiMindQueueTransferRouteImport.update({
+  id: '/api/mind/queue-transfer',
+  path: '/api/mind/queue-transfer',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiMindReceiptsRoute = ApiMindReceiptsRouteImport.update({
@@ -598,6 +604,7 @@ export interface FileRoutesByFullPath {
   '/api/mind/dispatch-policy': typeof ApiMindDispatchPolicyRoute
   '/api/mind/memory-policy': typeof ApiMindMemoryPolicyRoute
   '/api/mind/providers': typeof ApiMindProvidersRoute
+  '/api/mind/queue-transfer': typeof ApiMindQueueTransferRoute
   '/api/mind/receipts': typeof ApiMindReceiptsRoute
   '/api/mind/research-reports': typeof ApiMindResearchReportsRoute
   '/api/mind/resources': typeof ApiMindResourcesRoute
@@ -693,6 +700,7 @@ export interface FileRoutesByTo {
   '/api/mind/dispatch-policy': typeof ApiMindDispatchPolicyRoute
   '/api/mind/memory-policy': typeof ApiMindMemoryPolicyRoute
   '/api/mind/providers': typeof ApiMindProvidersRoute
+  '/api/mind/queue-transfer': typeof ApiMindQueueTransferRoute
   '/api/mind/receipts': typeof ApiMindReceiptsRoute
   '/api/mind/research-reports': typeof ApiMindResearchReportsRoute
   '/api/mind/resources': typeof ApiMindResourcesRoute
@@ -789,6 +797,7 @@ export interface FileRoutesById {
   '/api/mind/dispatch-policy': typeof ApiMindDispatchPolicyRoute
   '/api/mind/memory-policy': typeof ApiMindMemoryPolicyRoute
   '/api/mind/providers': typeof ApiMindProvidersRoute
+  '/api/mind/queue-transfer': typeof ApiMindQueueTransferRoute
   '/api/mind/receipts': typeof ApiMindReceiptsRoute
   '/api/mind/research-reports': typeof ApiMindResearchReportsRoute
   '/api/mind/resources': typeof ApiMindResourcesRoute
@@ -886,6 +895,7 @@ export interface FileRouteTypes {
     | '/api/mind/dispatch-policy'
     | '/api/mind/memory-policy'
     | '/api/mind/providers'
+    | '/api/mind/queue-transfer'
     | '/api/mind/receipts'
     | '/api/mind/research-reports'
     | '/api/mind/resources'
@@ -981,6 +991,7 @@ export interface FileRouteTypes {
     | '/api/mind/dispatch-policy'
     | '/api/mind/memory-policy'
     | '/api/mind/providers'
+    | '/api/mind/queue-transfer'
     | '/api/mind/receipts'
     | '/api/mind/research-reports'
     | '/api/mind/resources'
@@ -1076,6 +1087,7 @@ export interface FileRouteTypes {
     | '/api/mind/dispatch-policy'
     | '/api/mind/memory-policy'
     | '/api/mind/providers'
+    | '/api/mind/queue-transfer'
     | '/api/mind/receipts'
     | '/api/mind/research-reports'
     | '/api/mind/resources'
@@ -1172,6 +1184,7 @@ export interface RootRouteChildren {
   ApiMindDispatchPolicyRoute: typeof ApiMindDispatchPolicyRoute
   ApiMindMemoryPolicyRoute: typeof ApiMindMemoryPolicyRoute
   ApiMindProvidersRoute: typeof ApiMindProvidersRoute
+  ApiMindQueueTransferRoute: typeof ApiMindQueueTransferRoute
   ApiMindReceiptsRoute: typeof ApiMindReceiptsRoute
   ApiMindResearchReportsRoute: typeof ApiMindResearchReportsRoute
   ApiMindResourcesRoute: typeof ApiMindResourcesRoute
@@ -1375,6 +1388,13 @@ declare module '@tanstack/react-router' {
       path: '/api/mind/providers'
       fullPath: '/api/mind/providers'
       preLoaderRoute: typeof ApiMindProvidersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/queue-transfer': {
+      id: '/api/mind/queue-transfer'
+      path: '/api/mind/queue-transfer'
+      fullPath: '/api/mind/queue-transfer'
+      preLoaderRoute: typeof ApiMindQueueTransferRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/mind/receipts': {
@@ -1924,6 +1944,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiMindDispatchPolicyRoute: ApiMindDispatchPolicyRoute,
   ApiMindMemoryPolicyRoute: ApiMindMemoryPolicyRoute,
   ApiMindProvidersRoute: ApiMindProvidersRoute,
+  ApiMindQueueTransferRoute: ApiMindQueueTransferRoute,
   ApiMindReceiptsRoute: ApiMindReceiptsRoute,
   ApiMindResearchReportsRoute: ApiMindResearchReportsRoute,
   ApiMindResourcesRoute: ApiMindResourcesRoute,

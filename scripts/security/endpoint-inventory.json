@@ -1309,6 +1309,34 @@
       ]
     },
     {
+      "file": "src/routes/api/mind/queue-transfer.ts",
+      "path": "/api/mind/queue-transfer",
+      "methods": [
+        "POST"
+      ],
+      "policy": "owner_origin",
+      "notes": "Authenticated same-origin transfer of held drafts inside the original owner and workspace scope. It confers no execution or connector permission.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/queue-transfer.ts",
+          "requires": [
+            "assertSameOrigin(request)",
+            "requireUserId",
+            "parsed.body.owner !== owner",
+            "runQueueTransfer(await getSql(), owner"
+          ]
+        },
+        {
+          "file": "src/lib/mind/queue-transfer.server.ts",
+          "requires": [
+            "readSnapshot(sql, owner)",
+            "where user_id=$1 and scope=$2",
+            "claim_id=$4"
+          ]
+        }
+      ]
+    },
+    {
       "file": "src/routes/api/mind/receipts.ts",
       "path": "/api/mind/receipts",
       "methods": [

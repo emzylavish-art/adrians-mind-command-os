@@ -323,7 +323,7 @@ import { COMPOSER_MODES, effortForModelTier, effortModelTier, loadComposerEffort
 import { ADRIAN_MIND_IDENTITY, builtinModules, customModules, loadConsultModel, planModelConsult, saveConsultModel, type ConsultModule } from "@/lib/mind/model-consult";
 import { planRouting, readRatings, readRoutingMode, readRoutingPanel, ROUTING_MODE_LABEL, saveRating, writeRoutingMode, writeRoutingPanel, type ResponseRating, type RoutingMode } from "@/lib/mind/routing-modes";
 import { canSend } from "@/lib/mind/send-gate";
-import { cueMessage, dropCued, EMPTY_CUE, hasCueAttachments, moveCued, readCue, type CuedFile, type CuedMessage } from "@/lib/mind/message-cue";
+import { cueMessage, dropCued, EMPTY_CUE, hasCueAttachments, moveCued, readCue, receiveTransferredCue, type CuedFile, type CuedMessage } from "@/lib/mind/message-cue";
 import { saveFailureMessage } from "@/lib/mind/save-error";
 import { resetVoice } from "@/lib/mind/settings-reset";
 import { FirstSteps } from "@/components/mind/first-steps";
@@ -4100,6 +4100,16 @@ ${message.content}`;
     });
   }
 
+  function receiveDeviceCue(row: CuedMessage) {
+    let accepted = false;
+    const persisted = setQueuedDrafts(previous => {
+      const next = receiveTransferredCue(previous, row);
+      accepted = next !== null;
+      return next ?? previous;
+    });
+    return persisted && accepted;
+  }
+
   function holdChatQueue() {
     setQueuedDrafts(holdQueueRows);
   }
@@ -7680,7 +7690,7 @@ ${message.content}`;
                       {voiceListening ? <Square className="size-4" /> : <Mic className="size-4" />}
                     </button></div>
 
-                    <ComposerQueue title="New chat queue" items={queuedRows}
+                    <ComposerQueue title="New chat queue" items={queuedRows} deviceTransfer={draftOwner && account && !account.isDevFallback && !draftPrivate ? { owner: draftOwner, scope: { kind: "home" }, receive: receiveDeviceCue } : undefined}
                       description="Keep drafts for future conversations. Move one to the composer when you want to review and send it."
                       canQueue={Boolean(draftOwner && !accountPending && !ws.halted && (draft.trim() || staged || pendingImages.length))}
                       canRestore={!draft.trim() && !staged && !pendingImages.length}
@@ -7925,6 +7935,7 @@ ${message.content}`;
               onPickModule={pickModule}
               onPick={(id) => setActiveId(id)}
               onSend={() => void sendInChat()}
+              deviceQueue={draftOwner && account && !account.isDevFallback && active && !active.temporary && !active.archived ? { owner: draftOwner, scope: { kind: "chat", id: active.id }, receive: receiveDeviceCue } : undefined}
               cue={queuedRows.map(row => ({ ...row, paused: ws.halted || row.paused || !cueRef.current.has(row.id) }))}
               canQueue={Boolean(!active?.archived && draftOwner && selectionLoaded && !accountPending && !ws.halted && (draft.trim() || staged || pendingImages.length))}
               onQueue={() => addChatQueue(turnChat?.chatId === active?.id && turnChat?.ownerId === draftOwner && turnInFlight.current)}
@@ -8627,7 +8638,7 @@ ${message.content}`;
                 onFile: () => fileRef.current?.click(), onPhoto: () => imageInputRef.current?.click(), onCamera: () => setCameraOpen(true), onPlugins: browseComposerPlugins,
                 replaceAttachments: (attachments) => { setStaged(attachments?.file ?? null); setPendingImages(attachments?.images ?? []); },
                 removeFile: () => setStaged(null), removeImage: index => setPendingImages(current => current.filter((_, i) => i !== index)),
-              }} plannerRef={buildPlanner} enabledSkills={enabledSkills} freeOnly={researchFreeOnly} key={draftOwner ?? "signed-out"} ownerId={draftOwner ?? undefined} onDiscuss={(text) => handToHumanCode(text, "From Build")} onOpenSourceChat={(id) => {
+              }} plannerRef={buildPlanner} enabledSkills={enabledSkills} freeOnly={researchFreeOnly} key={draftOwner ?? "signed-out"} ownerId={draftOwner ?? undefined} deviceQueueEnabled={Boolean(account && !account.isDevFallback)} onDiscuss={(text) => handToHumanCode(text, "From Build")} onOpenSourceChat={(id) => {
                 const source = wsRef.current.chats.find(chat => chat.id === id && !chat.temporary);
                 if (!source) { setNotice("This link points at a conversation that is no longer available."); return; }
                 setActiveId(source.id);

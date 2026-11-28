@@ -1,6 +1,7 @@
 import type { Chat } from "@/lib/mind/types";
 import { CONVERSATIONAL_PERSONALITIES, type PersonalityId } from "@/lib/mind/personalities";
 import { type ModuleSuggestion } from "@/lib/intent/module-suggestions";
+import type { QueueTransferBinding } from "@/lib/mind/queue-transfer";
 import { type CuedMessage } from "@/lib/mind/message-cue";
 import { ComposerQueue } from "./composer-queue";
 export { ComposerQueue };
@@ -72,6 +73,7 @@ export function ChatPane({
   onPick,
   onSend,
   cue,
+  deviceQueue,
   canQueue,
   onQueue,
   onDropCue,
@@ -200,6 +202,7 @@ export function ChatPane({
   onPick: (id: string) => void;
   onSend: () => void;
   cue: CuedMessage[];
+  deviceQueue?: QueueTransferBinding;
   canQueue: boolean;
   onQueue: () => void;
   onDropCue: (id: string) => void;
@@ -847,7 +850,7 @@ export function ChatPane({
               {speaking ? "Stop" : "Read aloud"}
             </button></div>
 
-            <ComposerQueue title="Chat queue" items={cue} canQueue={canQueue}
+            <ComposerQueue title="Chat queue" items={cue} deviceTransfer={deviceQueue} canQueue={canQueue}
               description="Waiting messages follow a successful reply in this conversation. Held messages return to the composer for review."
               canRestore={!draft.trim() && pendingImages.length === 0 && !stagedName}
               onQueue={onQueue} onRemove={onDropCue} onMove={onMoveCue} onEdit={onEditCue} onPause={onHoldCue} onRestore={onRestoreCue} />

@@ -103,3 +103,12 @@ export function moveCued<T extends CuedMessage>(queue: T[], id: string, offset: 
   [next[index], next[index + offset]] = [next[index + offset], next[index]];
   return next;
 }
+
+export function receiveTransferredCue(previous: CuedMessage[], draft: CuedMessage) {
+  const rows = readCue(previous);
+  const [incoming] = readCue([{ ...draft, paused: true, claimed: false }]);
+  if (!incoming || incoming.attachmentsUnavailable) return null;
+  const existing = rows.find(item => item.id === draft.id);
+  if (!existing) return rows.length < CUE_LIMIT ? [...rows, incoming] : null;
+  return JSON.stringify(existing) === JSON.stringify(incoming) ? previous : null;
+}

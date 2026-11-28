@@ -2,7 +2,7 @@
 
 This checked-in inventory covers every direct route handler and exported TanStack server function discovered from TypeScript AST. A new route, HTTP method, RPC export, removed guard marker or undocumented public exception fails the normal test runner. Guard-source checks establish code reachability contracts; they do not substitute for live penetration testing or prove that a browser/provider/device was exercised.
 
-82 routes · 120 HTTP method contracts · 65 RPC exports.
+83 routes · 121 HTTP method contracts · 65 RPC exports.
 
 ## Shared policies
 
@@ -95,6 +95,7 @@ This checked-in inventory covers every direct route handler and exported TanStac
 | `/api/mind/pc/result` | POST | paired_device | Agent token and exact device/job association required; job transitions preserve halt/cancel/outcome authority. Sources: `src/routes/api/mind/pc/result.ts` |
 | `/api/mind/pc/status` | GET, POST | owner_origin | Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation. Sources: `src/routes/api/mind/pc/status.ts` |
 | `/api/mind/providers` | GET, POST | owner_origin | Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation. Sources: `src/routes/api/mind/providers.ts` |
+| `/api/mind/queue-transfer` | POST | owner_origin | Authenticated same-origin transfer of held drafts inside the original owner and workspace scope. It confers no execution or connector permission. Sources: `src/routes/api/mind/queue-transfer.ts`, `src/lib/mind/queue-transfer.server.ts` |
 | `/api/mind/receipts` | POST | owner_origin | Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation. Sources: `src/routes/api/mind/receipts.ts` |
 | `/api/mind/research-reports` | DELETE, GET, PATCH | owner_origin | Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation. Sources: `src/lib/mind/research-http.server.ts` |
 | `/api/mind/resources` | GET, PUT | owner_fetch_metadata | Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation. Sources: `src/lib/mind/resource-http.server.ts` |

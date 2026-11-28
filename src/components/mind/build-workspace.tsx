@@ -20,7 +20,7 @@ import type { ModelTier, ModelTierCatalogRow } from "@/lib/mind/model-tiers";
 import type { ImageAttachment } from "@/lib/mind/media";
 import { ComposerMore, MenuCluster, menuChip } from "@/components/mind/menu-material";
 import { ComposerQueue } from "@/components/mind/composer-queue";
-import { cueMessage, dropCued, EMPTY_CUE, hasCueAttachments, moveCued, readCue, type CueAttachments, type CuedFile } from "@/lib/mind/message-cue";
+import { cueMessage, dropCued, EMPTY_CUE, hasCueAttachments, moveCued, readCue, receiveTransferredCue, type CuedMessage, type CueAttachments, type CuedFile } from "@/lib/mind/message-cue";
 import { useComposerDraft } from "@/lib/mind/use-composer-draft";
 import { chatTurnBody, loadModeInstructions } from "@/lib/mind/logic-routes";
 import { checkTurnReceipt, consumeMindTurn, prepareTurnId } from "@/lib/mind/live-turn";
@@ -107,6 +107,7 @@ type BuildWorkspaceProps = {
   };
   plannerRef?: { current: ((words: string, images: unknown[]) => Promise<string | undefined>) | null };
   ownerId?: string;
+  deviceQueueEnabled?: boolean;
   projectId?: string | null;
   runId?: string | null;
   workProjects?: { id: string; name: string }[];
@@ -734,7 +735,17 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
   }
 
   const canRestoreTask = !prompt.trim() && !sourceChatId && !props.composer?.staged && !props.composer?.images.length;
+  function receiveDeviceTask(row: CuedMessage) {
+    let accepted = false;
+    const saved = setQueuedTasks(previous => {
+      const next = receiveTransferredCue(previous, row);
+      accepted = next !== null;
+      return next ?? previous;
+    });
+    return saved && accepted;
+  }
   const taskQueue = <ComposerQueue title="Work and Build queue" items={queuedTaskRows}
+    deviceTransfer={props.ownerId && props.deviceQueueEnabled && draftHydrated ? { owner: props.ownerId, scope: { kind: "work", id: projectId }, receive: receiveDeviceTask } : undefined}
     description="Tasks wait in this project. Move one to the composer to review its branch, workspace and action before submitting."
     canQueue={Boolean(props.ownerId && draftHydrated && !props.halted && (prompt.trim() || props.composer?.staged || props.composer?.images.length))}
     canRestore={canRestoreTask && draftHydrated && Boolean(props.ownerId)}

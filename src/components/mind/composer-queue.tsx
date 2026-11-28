@@ -1,10 +1,12 @@
 import { useId, useState } from "react";
 import { ArrowDown, ArrowUp, ListEnd, ListOrdered, X } from "lucide-react";
 import { CUE_LIMIT, CUE_TEXT_LIMIT, hasCueAttachments, type CuedMessage } from "@/lib/mind/message-cue";
+import { QueueTransferPanel } from "./queue-transfer-panel";
+import type { QueueTransferBinding } from "@/lib/mind/queue-transfer";
 import { ModalOverlay } from "./modal-overlay";
 import "./composer-queue.css";
 
-export function ComposerQueue({ title, items, description, canQueue, canRestore, onQueue, onRemove, onMove, onEdit, onRestore, onPause }: {
+export function ComposerQueue({ title, items, description, canQueue, canRestore, onQueue, onRemove, onMove, onEdit, onRestore, onPause, deviceTransfer }: {
   title: string;
   items: CuedMessage[];
   description: string;
@@ -16,6 +18,7 @@ export function ComposerQueue({ title, items, description, canQueue, canRestore,
   onEdit: (id: string, text: string) => void;
   onRestore: (id: string) => void;
   onPause?: () => void;
+  deviceTransfer?: QueueTransferBinding;
 }) {
   const [open, setOpen] = useState(false);
   const [edit, setEdit] = useState<{ id: string; text: string } | null>(null);
@@ -42,6 +45,7 @@ export function ComposerQueue({ title, items, description, canQueue, canRestore,
           <button type="button" className="queue-icon" aria-label="Close queue" onClick={close}><X size={18} aria-hidden="true" /></button>
         </header>
         <p className="queue-description">{description} {items.length} of {CUE_LIMIT} slots used.</p>
+        {deviceTransfer && <QueueTransferPanel key={JSON.stringify([deviceTransfer.owner, deviceTransfer.scope])} binding={deviceTransfer} local={items} />}
         {onPause && items.some(item => item.paused === false) && <button type="button" className="queue-action" onClick={onPause}>Hold waiting messages</button>}
         {items.length === 0 ? <p className="queue-empty">The queue is empty.</p> : <ol className="queue-list">
           {items.map((item, index) => <li key={item.id} className="queue-row" data-testid="cued-message">
