@@ -9,6 +9,7 @@ import { safeRedirectPath } from "./safe-redirect";
 import { buildAuthCallbackUrl } from "./oauth-redirect";
 import { decideDashboardGate, type SupabaseGateUser } from "./gate";
 import { passkeyConfiguration } from "@/lib/auth/passkey-policy";
+import { accountMailConfiguration } from "@/lib/auth/account-mail";
 import {
   dashboardLoginSearch,
   isOwnerBrokerConfigured,
@@ -77,12 +78,19 @@ export type AuthUserResult = {
   brokerConfigured: boolean;
   supabaseOAuthProviders: SupabaseOAuthProviderId[];
   passkeysConfigured?: boolean;
+  accountRecoveryConfigured?: boolean;
 };
 
 export const getSupabaseAuthUser = createServerFn({ method: "GET" }).handler(
   async (): Promise<AuthUserResult> => {
-    const config = passkeyConfiguration(process.env);
-    return { ...await probeAuthUser(), passkeysConfigured: Boolean(config && config.origin === await requestOrigin()) };
+    const passkeys = passkeyConfiguration(process.env);
+    const mail = accountMailConfiguration(process.env);
+    const origin = passkeys || mail ? await requestOrigin() : null;
+    return {
+      ...await probeAuthUser(),
+      passkeysConfigured: Boolean(passkeys && passkeys.origin === origin),
+      accountRecoveryConfigured: Boolean(mail && mail.origin === origin),
+    };
   },
 );
 

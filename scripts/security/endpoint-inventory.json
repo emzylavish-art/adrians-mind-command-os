@@ -10,7 +10,7 @@
         "POST"
       ],
       "policy": "framework_auth",
-      "notes": "Better Auth and explicit trusted origins own login and callbacks. Passkey routes check the configured origin and protect account credential changes with a fresh verified session.",
+      "notes": "Better Auth and explicit trusted origins own login and callbacks. Passkey routes check the configured origin and protect account credential changes with a fresh verified session. Authenticator changes use the canonical account and login challenges are verified by Better Auth. Account email is origin-bound, and address verification is scoped to the signed-in credential account.",
       "evidence": [
         {
           "file": "src/routes/api/auth/$.ts",
@@ -19,7 +19,11 @@
             "passkeyConfiguration",
             "assertSameOrigin(request)",
             "session.user.id !== owner.id",
-            "freshPasskeySession"
+            "freshPasskeySession",
+            "guardAuthenticator(request",
+            "guardAccountMail(request",
+            "parsed.body.email !== session.user.email",
+            "session.user.id !== canonical.id"
           ]
         },
         {

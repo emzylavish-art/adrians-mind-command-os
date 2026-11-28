@@ -5,6 +5,7 @@ import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import { createInterface } from "node:readline";
 import { isAbsolute, relative, resolve } from "node:path";
+import { once } from "node:events";
 
 const args = new Map();
 for (let i = 2; i < process.argv.length; i += 1) {
@@ -46,13 +47,16 @@ async function post(path, body) {
     method: "POST",
     headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(10_000),
   });
   if (!response.ok) throw new Error(`${path} returned HTTP ${response.status}`);
   return response.json().catch(() => ({}));
 }
 
 async function jobStatus() {
-  const response = await fetch(`${dashboardUrl}/api/mind/pc/jobs?jobId=${encodeURIComponent(job.id)}`, { headers: { authorization: `Bearer ${token}` } });
+  const response = await fetch(`${dashboardUrl}/api/mind/pc/jobs?jobId=${encodeURIComponent(job.id)}`, {
+    headers: { authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(5_000),
+  });
   if (!response.ok) return null;
   return response.json();
 }
@@ -188,6 +192,49 @@ let output = "";
 let child;
 let closed = false;
 let cancellationTimer;
+let cancellationPollPending = false;
+let stopRequested = false;
+let stopConfirmed = false;
+let forceStopTimer;
+
+function rejectPending(error) {
+  for (const item of pending.values()) {
+    clearTimeout(item.timer);
+    item.reject(error);
+  }
+  pending.clear();
+}
+
+function stopCodingProcess() {
+  if (closed || stopRequested || !child?.pid) return;
+  stopRequested = true;
+  if (process.platform === "win32") {
+    void exec("taskkill.exe", ["/PID", String(child.pid), "/T", "/F"], { timeout: 5000, windowsHide: true })
+      .catch(() => { if (!closed) child.kill(); });
+  } else {
+    child.kill();
+    forceStopTimer = setTimeout(() => { if (!closed) child.kill("SIGKILL"); }, 2000);
+  }
+}
+
+async function checkCancellation() {
+  if (cancellationPollPending || closed || stopRequested) return;
+  cancellationPollPending = true;
+  try {
+    if ((await jobStatus())?.job?.status === "cancel_requested") stopCodingProcess();
+  } catch { /* A transient dashboard failure will be checked at the next poll. */ }
+  finally { cancellationPollPending = false; }
+}
+
+async function requirePromptAuthorization() {
+  const status = (await jobStatus())?.job?.status;
+  if (!closed && (stopRequested || status === "cancel_requested")) {
+    const exit = once(child, "exit");
+    stopCodingProcess();
+    await exit;
+  }
+  if (closed || status !== "running") throw Error("Job authorization changed before the coding prompt was submitted.");
+}
 
 function send(message) {
   if (!child?.stdin.writable) throw new Error("Kimi ACP stdin is closed.");
@@ -202,7 +249,13 @@ function request(method, params, timeoutMs = 120_000) {
       reject(new Error(`Timed out waiting for ACP method ${method}.`));
     }, timeoutMs);
     pending.set(id, { resolve: resolvePromise, reject, timer, method });
-    send({ jsonrpc: "2.0", id, method, params });
+    try {
+      send({ jsonrpc: "2.0", id, method, params });
+    } catch (error) {
+      clearTimeout(timer);
+      pending.delete(id);
+      reject(error);
+    }
   });
 }
 
@@ -271,16 +324,16 @@ async function main() {
   });
   child.stderr.setEncoding("utf8");
   child.stderr.on("data", (chunk) => console.error(String(chunk).trimEnd()));
-  child.on("error", (error) => {
-    for (const item of pending.values()) { clearTimeout(item.timer); item.reject(error); }
-    pending.clear();
-  });
+  child.on("error", rejectPending);
+  child.stdin.on("error", error => { if (!stopRequested) rejectPending(error); });
   child.on("exit", (code, signal) => {
     closed = true;
     if (cancellationTimer) clearInterval(cancellationTimer);
-    if (code !== 0) for (const item of pending.values()) { clearTimeout(item.timer); item.reject(new Error(`Kimi ACP exited with code=${code} signal=${signal || "none"}.`)); }
-    if (code !== 0) console.error(`kimi acp exited with code=${code} signal=${signal || "none"}`);
+    if (forceStopTimer) clearTimeout(forceStopTimer);
+    stopConfirmed = stopRequested && (Boolean(signal) || code !== 0);
+    rejectPending(new Error(`Kimi ACP exited with code=${code} signal=${signal || "none"}.`));
   });
+  cancellationTimer = setInterval(() => void checkCancellation(), 1_000);
 
   const lines = createInterface({ input: child.stdout, crlfDelay: Infinity });
   lines.on("line", async (line) => {
@@ -315,23 +368,16 @@ async function main() {
   const sessionId = session?.sessionId;
   if (!sessionId) throw new Error("Kimi ACP did not return a sessionId.");
   await event("session_created", { sessionId });
-  cancellationTimer = setInterval(async () => {
-    try {
-      const status = await jobStatus();
-      if (status?.job?.status === "cancel_requested" && child && !closed) {
-        await event("session_cancelled", { sessionId });
-        child.kill();
-      }
-    } catch { /* transient dashboard failure; the next poll retries */ }
-  }, 1_000);
-  if ((await jobStatus())?.job?.status !== "running") throw Error("Job authorization changed before the coding prompt was submitted.");
+  await requirePromptAuthorization();
   const review = await verifyReviewedSource();
   if (review) {
-    await post("/api/mind/pc/events", { jobId: job.id, type: "source_verified", payload: review });
-    if ((await jobStatus())?.job?.status !== "running") throw Error("Job authorization changed after source verification.");
+    const acknowledgement = await post("/api/mind/pc/events", { jobId: job.id, type: "source_verified", payload: review });
+    if (acknowledgement.ok !== true) throw Error("The dashboard did not acknowledge the reviewed source.");
+    await requirePromptAuthorization();
     const finalReview = await verifyReviewedSource();
     if (finalReview?.head !== review.head) throw Error("The checkout commit changed after source verification.");
   }
+  if (closed || stopRequested) throw Error("The coding process stopped before the prompt was submitted.");
   await request("session/prompt", { sessionId, prompt: [{ type: "text", text: prompt }] }, 900_000);
   await event("session_complete", { sessionId, outputChars: output.length });
   try { await request("session/close", { sessionId }, 30_000); } catch { /* best effort */ }
@@ -419,21 +465,29 @@ async function deliver() {
     if (!result) {
       try {
         const status = await jobStatus();
-        if (status?.job?.status !== "running") throw new Error("Job is no longer active or its status could not be verified.");
-        result = { jobId: job.id, ok: true, output: await main() };
+        if (status?.job?.status === "cancel_requested") {
+          result = { jobId: job.id, ok: false, cancelled: true };
+        } else {
+          if (status?.job?.status !== "running") throw new Error("Job is no longer active or its status could not be verified.");
+          result = { jobId: job.id, ok: true, output: await main() };
+        }
       } catch (error) {
         if (cancellationTimer) clearInterval(cancellationTimer);
         if (child && !closed) child.kill();
-        const message = error instanceof Error ? error.message : String(error);
-        await event("runtime_error", { error: message });
-        result = { jobId: job.id, ok: false, error: message };
+        if (stopConfirmed) {
+          result = { jobId: job.id, ok: false, cancelled: true, output };
+        } else {
+          const message = error instanceof Error ? error.message : String(error);
+          await event("runtime_error", { error: message });
+          result = { jobId: job.id, ok: false, error: message };
+        }
       }
     }
     await writeFile(resultPath + ".new", JSON.stringify(result), { mode: 0o600, flush: true });
     await rename(resultPath + ".new", resultPath);
   }
-  const ack = await post("/api/mind/pc/result", result);
-  if (!ack.ok) throw new Error("Dashboard did not acknowledge the saved outcome.");
+  const ack = await post("/api/mind/pc/result", { ...result, receiptId: job.receiptId });
+  if (ack.ok !== true) throw new Error("Dashboard did not acknowledge the saved outcome.");
 }
 
 try { await deliver(); }

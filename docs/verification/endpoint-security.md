@@ -29,7 +29,7 @@ This checked-in inventory covers every direct route handler and exported TanStac
 
 | Route | Methods | Policy | Guard source / ownership boundary |
 |---|---|---|---|
-| `/api/auth/$` | GET, POST | framework_auth | Better Auth and explicit trusted origins own login and callbacks. Passkey routes check the configured origin and protect account credential changes with a fresh verified session. Sources: `src/routes/api/auth/$.ts`, `src/lib/auth/server.ts` |
+| `/api/auth/$` | GET, POST | framework_auth | Better Auth and explicit trusted origins own login and callbacks. Passkey routes check the configured origin and protect account credential changes with a fresh verified session. Authenticator changes use the canonical account and login challenges are verified by Better Auth. Account email is origin-bound, and address verification is scoped to the signed-in credential account. Sources: `src/routes/api/auth/$.ts`, `src/lib/auth/server.ts` |
 | `/api/mind/agent` | POST | owner_fetch_metadata | Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation. Sources: `src/lib/mind/agent-run.server.ts` |
 | `/api/mind/build/browser` | DELETE, GET, POST | owner_origin | Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation. Build and legacy Kimi aliases share the named runtime-specific handler; target selection is explicit. Sources: `src/lib/mind/kimi/hosted/browser-route.server.ts` |
 | `/api/mind/build/cancel` | POST | owner_origin | Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation. Build and legacy Kimi aliases share the named runtime-specific handler; target selection is explicit. Sources: `src/routes/api/mind/build/cancel.ts` |

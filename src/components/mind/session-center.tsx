@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { getBearerToken } from "@/lib/auth/client";
+import { authClient, getBearerToken } from "@/lib/auth/client";
 import { PasskeySettings } from "./passkey-settings";
+import { AuthenticatorSettings } from "./authenticator-settings";
 
 type Device = { id: string; current: boolean; device: string; lastActiveAt: string; expiresAt: string };
 
@@ -10,6 +11,24 @@ export function SessionCenter() {
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const [passkeys, setPasskeys] = useState(false);
+  const [authenticator, setAuthenticator] = useState<boolean | null>(null);
+  const [recoveryEmail, setRecoveryEmail] = useState<{ address: string; verified: boolean } | null>(null);
+
+  async function verifyEmail(address: string) {
+    if (busy) return;
+    setBusy(true);
+    setNotice("");
+    setError("");
+    try {
+      const result = await authClient.sendVerificationEmail({ email: address });
+      if (result.error || result.data?.status !== true) throw Error(result.error?.message || "Verification email could not be sent.");
+      setNotice("The sender accepted your verification email. Open the link in your inbox, then refresh verified sessions.");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Verification email could not be sent.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function load(revokeId?: string, lockdownId?: string) {
     if (busy) return;
@@ -48,6 +67,9 @@ export function SessionCenter() {
       if (!response.ok || !body.ok || !Array.isArray(body.sessions)) throw new Error(body.error || "Session details are unavailable.");
       setDevices(body.sessions);
       setPasskeys(body.passkeys === true);
+      setAuthenticator(typeof body.passwordAuthenticator === "boolean" ? body.passwordAuthenticator : null);
+      setRecoveryEmail(typeof body.recoveryEmail?.address === "string" && typeof body.recoveryEmail.verified === "boolean"
+        ? body.recoveryEmail : null);
       if (revokeId) {
         setNotice(body.sessions.some((row: Device) => row.id === revokeId)
           ? "The provider acknowledged revocation. This session still appears in its list."
@@ -55,6 +77,9 @@ export function SessionCenter() {
       }
     } catch (caught) {
       setDevices(null);
+      setPasskeys(false);
+      setAuthenticator(null);
+      setRecoveryEmail(null);
       if (revokeConfirmed) setNotice("The provider acknowledged revocation. Refresh to verify the current list.");
       else if (revokeId) setNotice("Refresh the list before retrying revocation.");
       else if (lockdownId) setNotice("Refresh the list before retrying session lockdown.");
@@ -84,5 +109,12 @@ export function SessionCenter() {
       {!device.current && <button type="button" disabled={busy} className="min-h-11 text-warning" onClick={() => void load(device.id)}>Revoke this session</button>}
     </article>)}
     {passkeys && <PasskeySettings />}
+    {authenticator !== null && <AuthenticatorSettings enabled={authenticator} refresh={() => load()} />}
+    {recoveryEmail && <section className="space-y-2 rounded-panel border border-line p-3" aria-label="Recovery email">
+      <h4 className="font-medium">Recovery email</h4>
+      <p className="break-all">{recoveryEmail.address} · {recoveryEmail.verified ? "Verified" : "Verification required"}</p>
+      {!recoveryEmail.verified && <button type="button" disabled={busy} className="min-h-11 rounded-panel border border-line px-3"
+        onClick={() => void verifyEmail(recoveryEmail.address)}>Send verification email</button>}
+    </section>}
   </section>;
 }

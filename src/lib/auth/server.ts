@@ -31,7 +31,7 @@
  */
 import { betterAuth } from "better-auth";
 import { passkey } from "@better-auth/passkey";
-import { bearer, genericOAuth } from "better-auth/plugins";
+import { bearer, genericOAuth, twoFactor } from "better-auth/plugins";
 import { tanstackStartCookies } from "better-auth/tanstack-start";
 import { getCookie } from "@tanstack/react-start/server";
 import { randomBytes } from "node:crypto";
@@ -39,6 +39,8 @@ import { ensureDbReady, getPglite } from "../db";
 import { resolveDatabaseUrl } from "../env.server.ts";
 import { emailAndPasswordEnabled } from "./email-password";
 import { passkeyConfiguration } from "./passkey-policy";
+import { accountMailConfiguration } from "./account-mail";
+import { sendAccountMail } from "./account-mail.server";
 import { postgresPool } from "./pg-pool";
 import { vercelRuntimeHosts } from "./runtime-origins";
 import { GATE_PROVIDER_ID, gateIdentitySessions } from "./gate-session.server";
@@ -99,6 +101,7 @@ export const authConfigured =
 // the broker's preview client accepts.
 const explicitBaseURL = env("BETTER_AUTH_URL");
 const passkeys = passkeyConfiguration(process.env);
+const accountMail = accountMailConfiguration(process.env);
 // Explicit `string[]` (not a readonly tuple) — Better Auth's DynamicBaseURLConfig
 // requires a mutable `allowedHosts: string[]`.
 const previewAllowedHosts: string[] = [...PREVIEW_ALLOWED_HOSTS];
@@ -222,7 +225,35 @@ function createAuth() {
   session: { cookieCache: { enabled: false } },
 
   // Local email/password — toggled only via `./email-password` (not a plugin).
-  ...(emailAndPasswordEnabled ? { emailAndPassword: { enabled: true } } : {}),
+  ...(emailAndPasswordEnabled ? { emailAndPassword: {
+    enabled: true,
+    ...(accountMail ? {
+      revokeSessionsOnPasswordReset: true,
+      resetPasswordTokenExpiresIn: 900,
+      sendResetPassword: async ({ user, token }: { user: { id: string; email: string; emailVerified: boolean }; token: string }) => {
+        const credential = user.emailVerified ? await (await auth.$context).internalAdapter.findCredentialAccount(user.id) : null;
+        if (credential?.password) {
+          // Return the same public response for eligible and ineligible accounts.
+          if (!await sendAccountMail(accountMail, "reset", user.email, token)) console.warn("Password recovery email was not acknowledged.");
+        }
+      },
+      onPasswordReset: async ({ user }: { user: { id: string } }) => {
+        const { adapter } = await auth.$context;
+        for (const prefix of ["reset-password:", "2fa-"]) {
+          await adapter.deleteMany({ model: "verification", where: [
+            { field: "value", value: user.id },
+            { field: "identifier", operator: "starts_with", value: prefix },
+          ] });
+        }
+      },
+    } : {}),
+  } } : {}),
+  ...(accountMail ? { emailVerification: {
+    expiresIn: 1800,
+    sendVerificationEmail: async ({ user, token }: { user: { email: string }; token: string }) => {
+      if (!await sendAccountMail(accountMail, "verify", user.email, token)) throw Error("Verification email was not acknowledged.");
+    },
+  } } : {}),
 
   // `__Host-` prefixed cookies: the browser REFUSES any same-named cookie that
   // carries a `Domain` attribute, so a sibling `*.grok.me` app cannot "toss" a
@@ -240,11 +271,18 @@ function createAuth() {
       account_data: { name: "__Host-grok-auth.account_data" },
       dont_remember: { name: "__Host-grok-auth.dont_remember" },
       passkey_challenge: { name: "__Host-adrian.passkey_challenge" },
+      two_factor: { name: "__Host-adrian.two_factor" },
     },
   },
 
   plugins: [
     gateIdentitySessions(),
+    twoFactor({
+      issuer: "Adrian's Mind",
+      allowPasswordless: false,
+      skipVerificationOnEnable: false,
+      backupCodeOptions: { storeBackupCodes: "encrypted" },
+    }),
     ...(passkeys ? [passkey({
       rpID: passkeys.rpID, rpName: "Adrian's Mind", origin: passkeys.origin,
       advanced: { webAuthnChallengeCookie: "passkey_challenge" },
