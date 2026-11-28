@@ -37,14 +37,18 @@ async function handle(request: Request) {
       const rows = await sql.query("update mind_chat_shared_link set revoked_at=coalesce(revoked_at, now()) where owner_id=$1 and link_hash=$2 returning link_hash as id", [owner, id]);
       return rows.length ? reply({ revoked: id }) : unavailable();
     }
-    if (typeof token !== "string" || !hex.test(token)) return unavailable();
-    const hash = createHash("sha256").update(token).digest("hex");
-    if (action === "open") {
+    const hash = typeof token === "string" && hex.test(token) ? createHash("sha256").update(token).digest("hex") : null;
+    if (action === "open" || action === "review") {
+      const ownerReview = action === "review";
+      const reviewId = typeof id === "string" && hex.test(id) ? id : null;
+      const lookup = ownerReview ? reviewId : hash;
+      if (!lookup) return unavailable();
       const [row] = await sql.query<{ payload: unknown; chat_id: string; content_hash: string }>(
-        "select s.payload,l.chat_id,l.content_hash from mind_chat_shared_link l join mind_snapshot s on s.user_id=l.owner_id where l.link_hash=$1 and l.revoked_at is null", [hash]);
+        "select s.payload,l.chat_id,l.content_hash from mind_chat_shared_link l join mind_snapshot s on s.user_id=l.owner_id where l.link_hash=$1 and l.revoked_at is null and ($2::text is null or l.owner_id=$2)", [lookup, ownerReview ? owner : null]);
       const text = row && snapshotText(parsedPayload(row.payload), row.chat_id);
       return text && await chatTextDigest(text) === row.content_hash ? reply({ text }) : unavailable();
     }
+    if (!hash) return unavailable();
     if (action !== "create" || typeof chatId !== "string" || chatId.length > 200 || typeof digest !== "string" || !hex.test(digest)) return reply({ error: "Review a saved conversation first." }, 400);
     const text = snapshotText(await readSnapshot(sql, owner), chatId);
     if (!text || await chatTextDigest(text) !== digest) return reply({ error: "The saved text differs from your preview. Sync the conversation and review again." }, 409);

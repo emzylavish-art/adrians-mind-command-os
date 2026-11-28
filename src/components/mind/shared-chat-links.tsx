@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { shareRequest } from "@/lib/mind/chat-share-client";
-import { chatTextDigest, shareableChatText } from "@/lib/mind/chat-share";
+import { chatTextDigest, shareableChatText, type SharedText } from "@/lib/mind/chat-share";
 import type { Chat } from "@/lib/mind/types";
 
 type LinkRow = { id: string; chatId: string; createdAt: string };
@@ -9,6 +9,7 @@ export function SharedChatLinks({ owner, chats, initialChatId }: { owner: string
   const [selected, setSelected] = useState(initialChatId ?? "");
   const attempt = useRef<{ chatId: string; digest: string; token: string } | null>(null);
   const [created, setCreated] = useState<{ url: string; preview: string } | null>(null);
+  const [review, setReview] = useState<{ id: string; text: SharedText } | null>(null);
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
   const inFlight = useRef(false);
@@ -34,11 +35,14 @@ export function SharedChatLinks({ owner, chats, initialChatId }: { owner: string
     setSelected(id); setStatus(""); setCreated(null);
     attempt.current = null;
   }
-  async function change(action: "create" | "revoke", id?: string) {
+  async function change(action: "create" | "revoke" | "review", id?: string) {
     if (inFlight.current) return;
-    inFlight.current = true; setBusy(true); setStatus("");
+    inFlight.current = true; setBusy(true); setStatus(""); setReview(null);
     try {
-      if (action === "revoke") {
+      if (action === "review" && id) {
+        const result = await shareRequest({ action, ownerId: owner, id });
+        setReview({ id, text: result.text });
+      } else if (action === "revoke") {
         const result = await shareRequest({ action, ownerId: owner, id });
         if (result.revoked !== id) throw Error("Revocation could not be confirmed.");
         select(""); setStatus("Link revoked.");
@@ -63,7 +67,11 @@ export function SharedChatLinks({ owner, chats, initialChatId }: { owner: string
     {links?.length === 0 && <p>No active shared links.</p>}
     <ul>{links?.map(link => <li key={link.id} className="flex flex-wrap items-center justify-between gap-2">
       <span>{chats.find(item => item.id === link.chatId)?.title || "Saved conversation"} · {new Date(link.createdAt).toLocaleString()}</span>
+      <button type="button" disabled={busy} className="min-h-11 underline" onClick={() => void change("review", link.id)}>Review shared text</button>
       <button type="button" disabled={busy} className="min-h-11 underline" onClick={() => void change("revoke", link.id)}>Revoke link</button>
+      {review?.id === link.id && <div aria-label="Text available through this link" className="w-full whitespace-pre-wrap break-words">
+        <strong>{review.text.title}</strong>{review.text.messages.map((m,i) => <p key={i}><b>{m.role === "user" ? "You" : "Adrian"}</b> {m.text}</p>)}
+      </div>}
     </li>)}</ul>
     <label className="block">Conversation to share <select value={selected} disabled={busy} onChange={e => select(e.target.value)} className="min-h-11 max-w-full">
       <option value="">Choose a conversation</option>{chats.filter(c => !c.temporary).map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
