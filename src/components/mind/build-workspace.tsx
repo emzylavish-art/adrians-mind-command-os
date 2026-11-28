@@ -29,6 +29,8 @@ import { boundAbortSignal } from "@/lib/mind/turn-timeouts";
 import { applyBuildSave, buildBufferKey as bufferKey, buildDraftKey, buildResultHandoff, matchesBuildSave, parseBuildDraft, serializeBuildDraft, type BuildPlanReply, type BuildEditorBuffer as EditorBuffer, type BuildFileTarget as FileTarget } from "@/lib/mind/kimi/build-review";
 import { buildResultKey, canReturnBuildResult, parseBuildResult, readBuildReturnSource, serializeBuildResult, type BuildReturnSource, type BuildStoredReceipt, type BuildStoredResult } from "@/lib/mind/kimi/build-result";
 import type { BuildSourceReceipt } from "@/lib/mind/kimi/source-receipt";
+import { buildArtifactHref, buildArtifactName, type BuildArtifactStatus } from "@/lib/mind/kimi/build-artifact";
+import { buildRunPath } from "@/lib/mind/app-location";
 import { buildBranchName, workRunStorageKey, workStorageKey } from "@/lib/mind/kimi/build-scope";
 import { buildHandoffKey, normalizeWorkMedia, parseChatBuildHandoff, workImageKey, type ChatBuildHandoff, type WorkImageRef, type WorkMedia, type WorkOriginalRef } from "@/lib/mind/kimi/build-handoff";
 import { MAX_IMAGES_PER_TURN } from "@/lib/mind/media/types";
@@ -137,13 +139,20 @@ export function BuildWorkspace(props: BuildWorkspaceProps = {}) {
   return <BuildWorkspaceSession key={key} {...props} projectId={projectId} />;
 }
 
+function BuildArtifactLink({ artifact, runId, projectId }: { artifact: BuildArtifactStatus; runId: string; projectId: string | null }) {
+  return artifact.status === "saved"
+    ? <a href={buildArtifactHref(runId, projectId)} className="inline-flex min-h-11 items-center underline">Download {artifact.name} · {artifact.bytes.toLocaleString()} bytes</a>
+    : <p role="status">The Build finished. The Companion could not save {artifact.name}.</p>;
+}
+
 function BuildRunReview({ owner, projectId, runId, onBack }: { owner?: string; projectId: string | null; runId: string; onBack: () => void }) {
   const [result, setResult] = useState<BuildStoredResult | null>();
   useEffect(() => {
     const accountId = owner;
     if (!accountId) { setResult(null); return; }
     const controller = new AbortController();
-    const matchesRun = (saved: BuildStoredResult | null) => saved?.source?.runId === runId && canReturnBuildResult(saved.job, saved.source);
+    const matchesRun = (saved: BuildStoredResult | null) => saved?.job.status === "done" &&
+      ((saved.source?.runId === runId && canReturnBuildResult(saved.job, saved.source)) || (saved.job.id === runId && Boolean(saved.receipt?.artifact)));
     try {
       const saved = parseBuildResult(localStorage.getItem(workRunStorageKey(accountId, projectId, runId)), accountId, projectId);
       if (matchesRun(saved)) { setResult(saved); return; }
@@ -163,7 +172,7 @@ function BuildRunReview({ owner, projectId, runId, onBack }: { owner?: string; p
   return <section className="dense-card min-w-0 space-y-3" aria-label="Saved Build run">
     <button type="button" className="min-h-11 underline" onClick={onBack}>Back to Work draft</button>
     <h2 className="font-semibold">Build run receipt</h2>
-    {result ? <>{result.receipt?.verifiedBranch && <p className="text-sm text-muted">Git branch verified before dispatch · {result.receipt.verifiedBranch}</p>}<div className="build-reading-result">{buildResultHandoff(result.receipt?.filesChanged || [], result.job.output, result.receipt?.operationId || runId, { outputComplete: result.receipt?.outputComplete })}</div></>
+    {result ? <>{result.receipt?.verifiedBranch && <p className="text-sm text-muted">Git branch verified before dispatch · {result.receipt.verifiedBranch}</p>}{result.receipt?.artifact && <BuildArtifactLink artifact={result.receipt.artifact} runId={runId} projectId={projectId} />}<div className="build-reading-result">{buildResultHandoff(result.receipt?.filesChanged || [], result.job.output, result.receipt?.operationId || runId, { outputComplete: result.receipt?.outputComplete })}</div></>
       : <p role="status">{result === undefined ? "Loading saved receipt…" : "This receipt is unavailable for the current account, project, or browser. No task was started."}</p>}
   </section>;
 }
@@ -206,6 +215,7 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
   }, [props.halted]);
   const [cwd, setCwd] = useState("");
   const [branch, setBranch] = useState("");
+  const [artifactName, setArtifactName] = useState("");
   const [job, setJob] = useState<BuildJob | null>(null);
   const [resultSource, setResultSource] = useState<BuildReturnSource>();
   const pendingSource = useRef<BuildReturnSource | undefined>(undefined);
@@ -886,6 +896,12 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
     const workspace = selectedBuffer?.workspace ?? companion.onlineAgentIds?.[0] ?? "hosted";
     const agentId = workspace === "hosted" ? undefined : workspace;
     const targetCwd = selectedBuffer?.cwd ?? cwd.trim();
+    const artifactInput = artifactName.trim();
+    if (artifactInput && (!agentId || !targetCwd || !buildArtifactName(artifactInput))) {
+      submittingBuild.current = false;
+      setNotice("Choose a paired checkout and enter a supported output filename such as report.pdf.");
+      return;
+    }
     const expectedBranch = branch.trim();
     if (expectedBranch && (!buildBranchName(expectedBranch) || policy === "save")) {
       submittingBuild.current = false;
@@ -943,7 +959,7 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
         method: "POST",
         credentials: "include",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ prompt: text, modeInstruction: loadModeInstructions(preferenceStorage).build || undefined, skillApplications: collectAccountSkillApplications(preferenceStorage, text, props.enabledSkills, "build"), sourceReceipt: receipt, agentId: workspace, jobKey, operationId: runId, projectId, sourceChatId: runSource?.runtime === "paired" ? runSource.chatId : undefined, expectedBranch: expectedBranch || undefined, cwd: targetCwd || undefined, mode, resumeSessionId: expectedBranch ? undefined : sessionId || undefined }),
+        body: JSON.stringify({ prompt: text, modeInstruction: loadModeInstructions(preferenceStorage).build || undefined, skillApplications: collectAccountSkillApplications(preferenceStorage, text, props.enabledSkills, "build"), sourceReceipt: receipt, agentId: workspace, jobKey, operationId: runId, projectId, sourceChatId: runSource?.runtime === "paired" ? runSource.chatId : undefined, expectedBranch: expectedBranch || undefined, artifactName: artifactInput || undefined, cwd: targetCwd || undefined, mode, resumeSessionId: expectedBranch ? undefined : sessionId || undefined }),
       });
       const data = (await response.json()) as BuildStoredReceipt & { ok?: boolean; jobId?: string; receipt?: BuildStoredReceipt | null; executed?: boolean; error?: string; output?: string; package?: string; sessionId?: string; mode?: string; resumed?: boolean; forkedSessionId?: string; processAlive?: boolean; reused?: boolean };
       if (!mounted.current) return;
@@ -976,6 +992,7 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
       }
       ++pollSequence.current;
       if (data.jobId !== jobKey) { setNotice("The accepted Build job did not match the submitted run. Check session history before retrying."); return; }
+      if (artifactInput) setArtifactName((current) => current.trim() === artifactInput ? "" : current);
       setJob({ id: data.jobId, status: "queued", output: "", error: "", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
       setBuildReceipt(data.receipt ?? null);
       setResultSource(runSource);
@@ -1418,6 +1435,12 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
           <input value={branch} maxLength={160} aria-label="Target Git branch" aria-describedby="work-branch-help" placeholder="Optional branch name" onChange={event => setBranch(event.target.value)} className="min-h-11 max-w-full rounded-panel border border-line bg-transparent px-2" />
         </label>
         <p id="work-branch-help" className="text-xs text-muted">Saved with this Work project. A named branch requires a runtime that can verify its active checkout.</p>
+        {props.deviceQueueEnabled && <div>
+          <label className="flex min-h-11 flex-wrap items-center gap-2 text-sm">Save Build output to account
+            <input value={artifactName} maxLength={80} aria-describedby="work-output-help" placeholder="Optional · report.pdf" onChange={event => setArtifactName(event.target.value)} className="min-h-11 max-w-full rounded-panel border border-line bg-transparent px-2" />
+          </label>
+          <p id="work-output-help" className="text-xs text-muted">Run Build can save one new file from the paired checkout’s artifacts folder, up to 1 MiB. Requires an updated Companion. Supported files include PDF, ZIP, images, BIN and WASM.</p>
+        </div>}
         {job && <button type="button" className="min-h-11 underline" onClick={() => { setPanel("agent"); setBand("editor"); }}>Open latest Build run</button>}
         <div className="flex flex-wrap items-center gap-2" aria-label="Build planning tools">
           {Boolean(props.planningCatalog?.length) && <label className="flex flex-wrap items-center gap-2 text-sm">Planning model
@@ -1510,6 +1533,10 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
                 const link = document.createElement("a"); link.href = url; link.download = `build-${buildReceipt?.operationId || job.id}.json`; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
               }}>Download full receipt</button> : null}
               {props.onReturnResult && canReturnBuildResult(job, resultSource) && <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={returnResultToChat}>Return result to source chat</button>}
+              {job?.status === "done" && buildReceipt?.artifact && <div className="space-y-2">
+                <BuildArtifactLink artifact={buildReceipt.artifact} runId={job.id} projectId={projectId} />
+                <a href={buildRunPath(projectId, job.id)} className="block min-h-11 underline">Open saved Build result</a>
+              </div>}
               {sessionId ? <button type="button" onClick={() => void endCodingSession()} className="min-h-10 rounded-panel border border-line px-3 text-sm">End coding session</button> : null}
               {job?.error ? <p className="text-sm text-danger" role="alert">{job.error}</p> : null}
             </> : null}

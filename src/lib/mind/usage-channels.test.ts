@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { isShareId } from "./app-location.ts";
+import { buildArtifactName } from "./kimi/build-artifact.ts";
+import { buildArtifactBytes } from "./kimi/build-artifact.server.ts";
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { join } from "node:path";
@@ -74,6 +77,9 @@ function buildHandlerFixture() {
     "./hosted/file-receipts.ts": { readCodingFileSnapshot: () => ({ ok: true, exists: true, content: "fixture source" }) },
     "./build-guidance.ts": { prepareBuildTask: (prompt: string) => ({ ok: true, prompt, skillReceipts: [] }) },
     "./build-scope.ts": { buildBranchName },
+    "../app-location.ts": { isShareId },
+    "./build-artifact.ts": { buildArtifactName },
+    "./build-artifact.server.ts": { buildArtifactBytes },
     "./paired-build-receipt.ts": { pairedBuildPayload: () => ({}), pairedBuildReceipt: () => null },
     "../media/xai-key.ts": { resolveXaiInferenceApiKey: () => "fixture" },
     "../dispatch-attempt.ts": { dispatchContext: () => ({ operationId: "build:fixture-" + runtimeCalls }), reserveDispatchAttempt: async () => ({ok:true}), runSettledDispatch: async (_owner: string, _id: string, work: () => Promise<unknown>) => work() },

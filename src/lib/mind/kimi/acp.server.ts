@@ -16,6 +16,9 @@ import { pairedBuildPayload, pairedBuildReceipt, pairedBuildReviewScope, pairedB
 import { dispatchContext, reserveDispatchAttempt, runSettledDispatch } from "../dispatch-attempt.ts";
 import { resolveXaiInferenceApiKey } from "../media/xai-key.ts";
 import { buildBranchName } from "./build-scope.ts";
+import { isShareId } from "../app-location.ts";
+import { buildArtifactName } from "./build-artifact.ts";
+import { buildArtifactBytes } from "./build-artifact.server.ts";
 
 const MAX_CWD = 500;
 
@@ -51,7 +54,7 @@ export async function handleKimiSession(request: Request, deps: { recordUsage?: 
     if (!origin.ok) return json({ ok: false, error: origin.error }, 403);
     try {
       const ownerId = await ownerIdFromRequest(request);
-      const body = (await request.json().catch(() => ({}))) as { prompt?: unknown; modeInstruction?: unknown; skillApplications?: unknown; cwd?: unknown; mode?: unknown; resumeSessionId?: unknown; fork?: unknown; action?: unknown; agentId?: unknown; jobKey?: unknown; operationId?: unknown; taskId?: unknown; projectId?: unknown; sourceChatId?: unknown; sourceReceipt?: unknown; expectedBranch?: unknown };
+      const body = (await request.json().catch(() => ({}))) as { prompt?: unknown; modeInstruction?: unknown; skillApplications?: unknown; cwd?: unknown; mode?: unknown; resumeSessionId?: unknown; fork?: unknown; action?: unknown; agentId?: unknown; jobKey?: unknown; operationId?: unknown; taskId?: unknown; projectId?: unknown; sourceChatId?: unknown; sourceReceipt?: unknown; expectedBranch?: unknown; artifactName?: unknown };
       if ((body as { action?: unknown }).action === "close") {
         if (ownerId !== "dev-user") return json({ ok: false, error: machineRequired }, 409);
         const sessionId = typeof body.resumeSessionId === "string" ? body.resumeSessionId.trim().slice(0, 80) : "";
@@ -84,6 +87,15 @@ export async function handleKimiSession(request: Request, deps: { recordUsage?: 
       if (expectedBranch && resumeSessionId) return json({ ok: false, error: "A target branch requires a new coding session." }, 409);
       if (expectedBranch && agent && (!sourceReceipt?.files.length || sourceReceipt.policy !== "saved" || !requestedCwd || !body.jobKey)) {
         return json({ ok: false, error: "Review at least one saved source file before queuing a branch-checked Build job." }, 409);
+      }
+      const artifactName = body.artifactName === undefined ? undefined : body.artifactName;
+      if (artifactName !== undefined) {
+        if (!buildArtifactName(artifactName) || (body.projectId != null && (typeof body.projectId !== "string" || !isShareId(body.projectId)))) {
+          return json({ ok: false, error: "Enter a supported filename and valid Work project for the output." }, 400);
+        }
+        if (!agent || !requestedCwd || !sourceReceipt || !body.jobKey) {
+          return json({ ok: false, error: "A saved output requires a specific paired checkout and a reviewed Build job." }, 409);
+        }
       }
       if (!agent) {
         if (ownerId !== "dev-user") return json({ ok: false, executed: false, error: machineRequired }, 409);
@@ -160,8 +172,9 @@ export async function handleKimiSession(request: Request, deps: { recordUsage?: 
           package: packageLabel(hosted.command),
         }, accepted ? 200 : hosted.status === "not_configured" ? 503 : 409);
       }
-      const reviewScope = body.sourceChatId === undefined ? null : pairedBuildReviewScope(body.projectId, body.sourceChatId, body.jobKey);
-      if (body.sourceChatId !== undefined && !reviewScope) return json({ ok: false, error: "The Build result link has an invalid chat, project or run. Nothing was started." }, 400);
+      const sourceScope = body.sourceChatId === undefined ? null : pairedBuildReviewScope(body.projectId, body.sourceChatId, body.jobKey);
+      if (body.sourceChatId !== undefined && !sourceScope) return json({ ok: false, error: "The Build result link has an invalid chat, project or run. Nothing was started." }, 400);
+      const reviewScope = sourceScope ?? (artifactName ? { projectId: body.projectId ?? null, source: null } : null);
       const job = await enqueueJob({
         jobKey: typeof body.jobKey === "string" ? body.jobKey : undefined,
         ownerId,
@@ -169,7 +182,7 @@ export async function handleKimiSession(request: Request, deps: { recordUsage?: 
         kind: "kimi-acp",
         command: "kimi acp",
         confirm: false,
-        payload: { ...pairedBuildPayload(prompt, prepared.skillReceipts, requestedCwd), sourceReceipt, ...(expectedBranch ? { expectedBranch } : {}), ...(reviewScope ? { reviewScope } : {}) },
+        payload: { ...pairedBuildPayload(prompt, prepared.skillReceipts, requestedCwd), sourceReceipt, ...(expectedBranch ? { expectedBranch } : {}), ...(reviewScope ? { reviewScope } : {}), ...(artifactName ? { artifactName } : {}) },
       });
       await observePairedJob(ownerId, job, record);
       return json({
@@ -198,6 +211,15 @@ export async function handleKimiSession(request: Request, deps: { recordUsage?: 
       const reviewProject = params.get("reviewProject");
       const review = reviewProject === null ? null : pairedBuildRunResult(job, ownerId, reviewProject || null);
       if (reviewProject !== null && !review) return json({ ok: false, error: "Build run receipt not found for this project." }, 404);
+      if (params.get("artifact") === "1") {
+        const artifact = review?.receipt?.artifact;
+        const bytes = artifact?.status === "saved" ? buildArtifactBytes(job.buildArtifact) : null;
+        if (!bytes || !artifact) return json({ ok: false, error: "Build output is unavailable." }, 404);
+        return new Response(new Uint8Array(bytes), { headers: {
+          "content-type": "application/octet-stream", "content-disposition": 'attachment; filename="' + artifact.name + '"',
+          "cache-control": "private, no-store", "x-content-type-options": "nosniff",
+        } });
+      }
       if (!review) await observePairedJob(ownerId, job, record);
       const sourceReceipt = readBuildSourceReceipt(job.payload?.sourceReceipt);
       const events = await listJobEvents(ownerId, job.id);

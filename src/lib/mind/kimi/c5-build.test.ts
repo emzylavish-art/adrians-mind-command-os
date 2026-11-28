@@ -136,7 +136,7 @@ test("C5 actual Build handler distinguishes saved execution, verified save and f
   const body = ts.transpileModule(`
     const props = { ownerId: "owner-A", freeOnly: false, composer: { staged: { name: "brief.txt", text: "review brief contents" }, images: [] } }; const haltedRef = { current: false }; const planOwner = { current: "owner-A" };
     const prompt = "Inspect fixture file"; const cwd = "/fixture"; const mode = "plan"; const sessionId = "";
-    const branch = ""; const sourceChatId = undefined; const workMedia = undefined; const projectId = null;
+    const branch = ""; const artifactName = ""; const sourceChatId = undefined; const workMedia = undefined; const projectId = null;
     const ownerKey = props.ownerId; const pendingSource = { current: undefined }; const pendingSourceKey = "pending"; const lastJobKey = "last";
     const mounted = {current:true}; const selectedFile = "f"; const preferenceStorage = { getItem: () => null }; const collectAccountSkillApplications = () => [];
     const companion = { onlineAgentIds: ["fixture-pc"] }; const active = false;

@@ -37,7 +37,7 @@ function Test-AgentIntegrity {
 
 function Invoke-PendingJob {
   $uri = $cfg.dashboardUrl.TrimEnd("/") + "/api/mind/pc/jobs"
-  $headers = @{ Authorization = "Bearer $jobToken"; "X-Adrian-Build-Review" = "1" }
+  $headers = @{ Authorization = "Bearer $jobToken"; "X-Adrian-Build-Review" = "1"; "X-Adrian-Build-Artifact" = "1" }
   if (-not (Test-Path $pendingFile)) {
     # An offer leaves the server record queued until our local receipt is durable.
     $offer = Invoke-RestMethod -Method Get -Uri ($uri + "?delivery=offer") -Headers $headers

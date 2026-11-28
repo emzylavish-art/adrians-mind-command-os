@@ -2,6 +2,7 @@ import { normalizeSkillReceipts } from "../skill-activation.ts";
 import type { PcJob } from "../pc-pairing/store.ts";
 import { isShareId } from "../app-location.ts";
 import { readBuildReturnSource, type BuildStoredReceipt, type BuildStoredResult } from "./build-result.ts";
+import { buildArtifactName, readBuildArtifactStatus } from "./build-artifact.ts";
 
 /** The immutable job payload carries selection reasons, never a claim that a tool ran. */
 export function pairedBuildPayload(prompt: string, skillReceipts: unknown, cwd?: string): Record<string, unknown> {
@@ -9,10 +10,12 @@ export function pairedBuildPayload(prompt: string, skillReceipts: unknown, cwd?:
 }
 
 /** Only an owning account can recover the queue's original instruction-selection receipt. */
-export function pairedBuildReceipt(job: Pick<PcJob, "id" | "ownerId" | "kind" | "payload"> | null, ownerId: string): BuildStoredReceipt | null {
+export function pairedBuildReceipt(job: Pick<PcJob, "id" | "ownerId" | "kind" | "payload" | "buildArtifact"> | null, ownerId: string): BuildStoredReceipt | null {
   if (!job || job.ownerId !== ownerId || job.kind !== "kimi-acp") return null;
+  const artifact = readBuildArtifactStatus(job.buildArtifact);
   return {
     operationId: job.id,
+    ...(artifact ? { artifact } : {}),
     skillReceipts: normalizeSkillReceipts(job.payload?.skillReceipts) ?? [],
     verification: {
       implementation: "unverified",
@@ -37,7 +40,8 @@ export function pairedBuildRunResult(job: PcJob, ownerId: string, projectId: str
   if (job.ownerId !== ownerId || job.kind !== "kimi-acp" || job.status !== "done") return null;
   const scope = job.payload?.reviewScope as Record<string, unknown> | undefined;
   const source = readBuildReturnSource(scope?.source);
-  if (scope?.projectId !== projectId || source?.runtime !== "paired" || source.runId !== job.id) return null;
+  if (!scope || scope.projectId !== projectId) return null;
+  if (source ? source.runtime !== "paired" || source.runId !== job.id : scope.source !== null || !buildArtifactName(job.payload?.artifactName)) return null;
   return {
     owner: ownerId, projectId, source, receipt: pairedBuildReceipt(job, ownerId),
     job: { id: job.id, status: job.status, createdAt: job.createdAt, updatedAt: job.updatedAt, output: job.output || "", error: job.error || "" },

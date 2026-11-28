@@ -2,11 +2,13 @@ import { normalizeSkillReceipts, type SkillApplicationReceipt } from "../skill-a
 import { isShareId } from "../app-location.ts";
 import type { Workspace } from "../types.ts";
 import { buildBranchName, buildRunId, workStorageKey } from "./build-scope.ts";
+import { readBuildArtifactStatus, type BuildArtifactStatus } from "./build-artifact.ts";
 
 export type BuildStoredJob = { id: string; status: "queued" | "running" | "cancel_requested" | "cancelled" | "done" | "error" | "timeout"; output: string; error: string; createdAt: string; updatedAt: string };
 export type BuildStoredReceipt = {
   operationId?: string; outputComplete?: boolean; requestDispatched?: boolean;
   verifiedBranch?: string;
+  artifact?: BuildArtifactStatus;
   fileReviewScope?: string; fileReviewWarnings?: string[];
   filesChanged?: { path: string; before: string; after: string; previousPath?: string; beforeExists?: boolean; afterExists?: boolean }[];
   skillReceipts?: SkillApplicationReceipt[];
@@ -62,6 +64,8 @@ export function parseBuildResult(raw: string | null, owner: string, projectId: s
   const receipt: BuildStoredReceipt = {};
   if (typeof source.operationId === "string") receipt.operationId = source.operationId;
   if (buildBranchName(source.verifiedBranch)) receipt.verifiedBranch = source.verifiedBranch;
+  const artifact = readBuildArtifactStatus(source.artifact);
+  if (artifact) receipt.artifact = artifact;
   if (typeof source.outputComplete === "boolean") receipt.outputComplete = source.outputComplete;
   if (typeof source.requestDispatched === "boolean") receipt.requestDispatched = source.requestDispatched;
   if (typeof source.fileReviewScope === "string") receipt.fileReviewScope = source.fileReviewScope;

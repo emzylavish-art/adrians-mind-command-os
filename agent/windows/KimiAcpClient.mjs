@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { mkdir, readdir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
+import { lstat, mkdir, open, readdir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
@@ -73,6 +73,55 @@ async function event(type, payloadValue = {}) {
 // edits and inode reuse. Keep the token opaque to the editor.
 function fileRevision(info) {
   return createHash("sha256").update([info.dev, info.ino, info.birthtimeNs, info.ctimeNs, info.size].join(":")).digest("hex");
+}
+
+const artifactLimit = 1024 * 1024;
+let reviewedArtifact;
+
+async function artifactDirectory(workspace) {
+  const directory = resolve(workspace, "artifacts");
+  const info = await lstat(directory);
+  if (!info.isDirectory() || relative(directory, await realpath(directory)) !== "") throw Error("Build output directory must be a real folder.");
+  return directory;
+}
+
+async function prepareBuildArtifact(name) {
+  if (typeof name !== "string" || name.length > 80 || !/^[a-z0-9][a-z0-9_-]*\.(?:bin|pdf|zip|png|jpe?g|webp|gif|wasm)$/i.test(name) ||
+    /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])\./i.test(name)) throw Error("The reviewed Build output name is invalid.");
+  const workspace = await realpath(root);
+  const allowed = await Promise.all(allowedRoots.map(path => realpath(resolve(path)).catch(() => null)));
+  if (!allowed.some(path => path && isWithin(workspace, path))) throw Error("The Build output workspace is outside the approved roots.");
+  try {
+    const directory = await artifactDirectory(workspace);
+    await lstat(resolve(directory, name));
+    throw Error("The Build output file already exists. Choose a new filename.");
+  } catch (error) { if (error.code !== "ENOENT") throw error; }
+  return { workspace, name };
+}
+
+async function readBuildArtifact({ workspace, name }) {
+  const unavailable = { name, status: "unavailable" };
+  if (stopRequested) return unavailable;
+  try {
+    if (relative(workspace, await realpath(root)) !== "") return unavailable;
+    const directory = await artifactDirectory(workspace);
+    const path = resolve(directory, name);
+    const before = await lstat(path, { bigint: true });
+    if (!before.isFile() || before.nlink !== 1n || before.size < 1n || before.size > BigInt(artifactLimit)) return unavailable;
+    const revision = fileRevision(before);
+    const file = await open(path, "r");
+    try {
+      if (fileRevision(await file.stat({ bigint: true })) !== revision) return unavailable;
+      const buffer = Buffer.alloc(Number(before.size) + 1);
+      const { bytesRead } = await file.read(buffer, 0, buffer.length, 0);
+      await artifactDirectory(workspace);
+      if (stopRequested || bytesRead !== Number(before.size) ||
+        fileRevision(await file.stat({ bigint: true })) !== revision ||
+        fileRevision(await lstat(path, { bigint: true })) !== revision) return unavailable;
+      const bytes = buffer.subarray(0, bytesRead);
+      return { name, status: "saved", bytes: bytesRead, sha256: createHash("sha256").update(bytes).digest("hex"), base64: bytes.toString("base64") };
+    } finally { await file.close(); }
+  } catch { return unavailable; }
 }
 
 async function listWorkspace(directory, prefix = "", output = []) {
@@ -378,7 +427,10 @@ async function main() {
     if (finalReview?.head !== review.head) throw Error("The checkout commit changed after source verification.");
   }
   if (closed || stopRequested) throw Error("The coding process stopped before the prompt was submitted.");
-  await request("session/prompt", { sessionId, prompt: [{ type: "text", text: prompt }] }, 900_000);
+  if (payload.artifactName !== undefined) reviewedArtifact = await prepareBuildArtifact(payload.artifactName);
+  if (closed || stopRequested) throw Error("The coding process stopped before the prompt was submitted.");
+  const reviewedPrompt = reviewedArtifact ? prompt + "\n\nSave the approved output as a new file at artifacts/" + reviewedArtifact.name + " (up to 1 MiB)." : prompt;
+  await request("session/prompt", { sessionId, prompt: [{ type: "text", text: reviewedPrompt }] }, 900_000);
   await event("session_complete", { sessionId, outputChars: output.length });
   try { await request("session/close", { sessionId }, 30_000); } catch { /* best effort */ }
   child.stdin.end();
@@ -470,6 +522,7 @@ async function deliver() {
         } else {
           if (status?.job?.status !== "running") throw new Error("Job is no longer active or its status could not be verified.");
           result = { jobId: job.id, ok: true, output: await main() };
+          if (reviewedArtifact) result.buildArtifact = await readBuildArtifact(reviewedArtifact);
         }
       } catch (error) {
         if (cancellationTimer) clearInterval(cancellationTimer);

@@ -29,6 +29,9 @@ export const Route = createFileRoute("/api/mind/pc/jobs")({
         }
         if (await haltIsOn(agent.ownerId)) return json({ ok: false, error: "Emergency stop is on or unavailable." }, 423);
         const offeredJob = await readJob(body.jobId);
+        if (offeredJob?.agentId === agent.id && offeredJob.payload?.artifactName && request.headers.get("x-adrian-build-artifact") !== "1") {
+          return json({ ok: false, error: "Update the Companion before claiming this Build output job." }, 409);
+        }
         if (offeredJob?.agentId === agent.id && offeredJob.payload?.expectedBranch &&
             request.headers.get("x-adrian-build-review") !== "1") {
           return json({ ok: false, error: "Update the Companion before claiming this reviewed Build job." }, 409);
@@ -54,6 +57,9 @@ export const Route = createFileRoute("/api/mind/pc/jobs")({
         await recordFileProtocol(agent.id, offer);
         const job = offer ? await offerNextJob(agent.id) : await claimNextJob(agent.id);
         if (!job) return json({ ok: true, job: null });
+        if (job.payload?.artifactName && request.headers.get("x-adrian-build-artifact") !== "1") {
+          return json({ ok: true, job: null, detail: "This Build output job is held for an updated Companion." });
+        }
         if (job.payload?.expectedBranch && request.headers.get("x-adrian-build-review") !== "1") {
           return json({ ok: true, job: null, detail: "A reviewed Build job is held for an updated Companion." });
         }
